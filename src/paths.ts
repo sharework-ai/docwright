@@ -1,17 +1,53 @@
+import { spawnSync } from 'node:child_process'
 import { relative, resolve } from 'node:path'
 import { DEFAULT_MATERIALS_ROOT, DEFAULT_OUTPUT_ROOT } from './config.ts'
 
+const WINDOWS_DRIVE_PATH = /^([A-Za-z]):[\\/](.*)$/
+
+/** Per-binary availability cache for the wslpath probe (memoized lazily). */
+const wslpathAvailable = new Map<string, boolean>()
+
+/**
+ * Translate one Windows drive-letter path through the WSL-native `wslpath`
+ * binary, which honors the distro's actual mount configuration. Returns
+ * `undefined` when the binary is missing, fails, or times out — the regex
+ * fallback then applies. `bin` exists so tests can exercise the failure path.
+ */
+export function wslpathTranslate(ref: string, bin = 'wslpath'): string | undefined {
+  let available = wslpathAvailable.get(bin)
+  if (available === undefined) {
+    available = spawnSync(bin, ['-u', 'C:\\'], { shell: false, timeout: 2000 }).status === 0
+    wslpathAvailable.set(bin, available)
+  }
+  if (!available) return undefined
+  const result = spawnSync(bin, ['-u', ref], { shell: false, timeout: 2000, encoding: 'utf8' })
+  if (result.status !== 0) return undefined
+  const out = result.stdout.trim()
+  return out.length > 0 ? out : undefined
+}
+
+/** Regex translation for default-mounted drives: `D:\x\y` → `/mnt/d/x/y`. */
+function regexWindowsToWsl(ref: string): string {
+  const match = WINDOWS_DRIVE_PATH.exec(ref)!
+  return `/mnt/${match[1]!.toLowerCase()}/${match[2]!.replace(/\\/g, '/')}`
+}
+
 /**
  * Normalize a Windows drive-letter path (`D:\x\y` or `D:/x/y`) to its WSL
- * mount (`/mnt/d/x/y`), because a Linux-side tool otherwise treats the whole
- * backslash string as one filename. Only applied on Linux (a Windows host
- * resolves drive paths natively); everything else passes through unchanged.
+ * mount, because a Linux-side tool otherwise treats the whole backslash
+ * string as one filename. Prefers the `wslpath` binary (respects custom
+ * mount roots in /etc/wsl.conf) and falls back to the default-mount regex.
+ * Only applied on Linux (a Windows host resolves drive paths natively);
+ * everything else passes through unchanged. The subprocess only runs for
+ * drive-letter-shaped references, never for ordinary POSIX paths.
  */
-export function normalizeWindowsPath(ref: string): string {
+export function normalizeWindowsPath(
+  ref: string,
+  wslpath: (ref: string) => string | undefined = wslpathTranslate,
+): string {
   if (process.platform !== 'linux') return ref
-  const match = /^([A-Za-z]):[\\/](.*)$/.exec(ref)
-  if (match === null) return ref
-  return `/mnt/${match[1]!.toLowerCase()}/${match[2]!.replace(/\\/g, '/')}`
+  if (!WINDOWS_DRIVE_PATH.test(ref)) return ref
+  return wslpath(ref) ?? regexWindowsToWsl(ref)
 }
 
 /** Minimal execution-context shape hanzeep reads; avoids importing dsh types. */

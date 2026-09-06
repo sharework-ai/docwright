@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { effectiveWorkspaceRoot, normalizeWindowsPath, resolveRootWithin } from '../src/paths.ts'
+import { effectiveWorkspaceRoot, normalizeWindowsPath, resolveRootWithin, wslpathTranslate } from '../src/paths.ts'
 import { defineDocGenerateTool } from '../src/tools.ts'
 import { loadPacks } from '../src/pack-loader.ts'
 import { fileURLToPath } from 'node:url'
@@ -26,13 +26,27 @@ describe('effectiveWorkspaceRoot', () => {
   })
 })
 
-describe('normalizeWindowsPath (WSL ergonomics)', () => {
-  it('maps drive-letter paths to their WSL mounts', () => {
+describe('normalizeWindowsPath (wslpath subprocess with regex fallback)', () => {
+  it('uses the real wslpath binary on WSL (default mounts)', () => {
     expect(normalizeWindowsPath('D:\\projects\\lab\\需求 说明.md')).toBe('/mnt/d/projects/lab/需求 说明.md')
     expect(normalizeWindowsPath('d:/x/y.md')).toBe('/mnt/d/x/y.md')
   })
 
-  it('passes POSIX paths and plain filenames through unchanged', () => {
+  it('falls back to the regex translation when wslpath is unavailable', () => {
+    expect(normalizeWindowsPath('d:/x/y.md', () => undefined)).toBe('/mnt/d/x/y.md')
+    expect(normalizeWindowsPath('D:\\a\\b.md', () => undefined)).toBe('/mnt/d/a/b.md')
+  })
+
+  it('prefers the wslpath result over the regex when both exist', () => {
+    expect(normalizeWindowsPath('D:\\x\\y.md', () => '/custom/root/d/x/y.md')).toBe('/custom/root/d/x/y.md')
+  })
+
+  it('a failing wslpath binary reports unavailable and the regex takes over', () => {
+    expect(wslpathTranslate('D:\\x\\y.md', 'definitely-not-a-real-wslpath')).toBeUndefined()
+    expect(normalizeWindowsPath('D:\\x\\y.md', ref => wslpathTranslate(ref, 'definitely-not-a-real-wslpath'))).toBe('/mnt/d/x/y.md')
+  })
+
+  it('passes POSIX paths and plain filenames through unchanged (no subprocess)', () => {
     expect(normalizeWindowsPath('/mnt/d/x.md')).toBe('/mnt/d/x.md')
     expect(normalizeWindowsPath('req.md')).toBe('req.md')
     expect(normalizeWindowsPath('D:nope.md')).toBe('D:nope.md')
