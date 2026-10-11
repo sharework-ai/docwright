@@ -29,6 +29,7 @@ npx tsc -b tsconfig.json  # typecheck only
 - `@deepseek-ai/*` are peerDependencies; devDependencies use local `link:` targets under `../deepseek-harness` (bare symlinks; a sibling dsh checkout must be installed and `build:lib:host`-built first) because the published npm line is incomplete (see README Development note).
 - Errors follow problem + cause + fix, with available options where applicable (unknown pack lists packs; bad language lists supported ones).
 - The repair loop is the product: every change to loop.ts needs a deterministic test (scripted LlmPort; no live model in unit tests).
+- Docs discipline: specs stay current-state (no design history); design docs lead with the final design and record rejected approaches in a closed appendix as named veto principles (see docs/designs/*).
 
 ## Testing policy
 
