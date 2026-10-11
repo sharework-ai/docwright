@@ -46,6 +46,22 @@ describe('normalizeWindowsPath (wslpath subprocess with regex fallback)', () => 
     expect(normalizeWindowsPath('D:\\x\\y.md', ref => wslpathTranslate(ref, 'definitely-not-a-real-wslpath'))).toBe('/mnt/d/x/y.md')
   })
 
+  it('a working wslpath binary translates through the subprocess (fake executable)', async () => {
+    // Probe (-u C:\) succeeds and translations echo a fixed mount.
+    const fakeEcho = join(tmpdir(), `fake-wslpath-echo-${Date.now()}`)
+    await writeFile(fakeEcho, '#!/bin/sh\necho "/fake/mnt/$2"\n', { mode: 0o755 })
+    expect(wslpathTranslate('D:\\x\\y.md', fakeEcho)).toBe('/fake/mnt/D:\\x\\y.md')
+    expect(normalizeWindowsPath('D:\\x\\y.md', ref => wslpathTranslate(ref, fakeEcho))).toBe('/fake/mnt/D:\\x\\y.md')
+  })
+
+  it('a wslpath binary whose translation fails falls back to the regex', async () => {
+    // Probe succeeds, every translation exits non-zero.
+    const fakeFail = join(tmpdir(), `fake-wslpath-fail-${Date.now()}`)
+    await writeFile(fakeFail, '[ "$2" = "C:\\" ] && exit 0\nexit 1\n', { mode: 0o755 })
+    expect(wslpathTranslate('D:\\x\\y.md', fakeFail)).toBeUndefined()
+    expect(normalizeWindowsPath('D:\\x\\y.md', ref => wslpathTranslate(ref, fakeFail))).toBe('/mnt/d/x/y.md')
+  })
+
   it('passes POSIX paths and plain filenames through unchanged (no subprocess)', () => {
     expect(normalizeWindowsPath('/mnt/d/x.md')).toBe('/mnt/d/x.md')
     expect(normalizeWindowsPath('req.md')).toBe('req.md')
