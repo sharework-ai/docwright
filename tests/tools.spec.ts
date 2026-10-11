@@ -2,7 +2,7 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { defineDocGenerateTool, defineDocValidateTool } from '../src/tools.ts'
+import { defineDocGenerateTool, defineDocPacksTool, defineDocValidateTool } from '../src/tools.ts'
 import { loadPacks } from '../src/pack-loader.ts'
 import { fileURLToPath } from 'node:url'
 
@@ -35,6 +35,26 @@ async function makeDeps(overrides: Record<string, unknown> = {}) {
   }
 }
 
+describe('doc_packs tool', () => {
+  it('lists installed packs with discovery fields', async () => {
+    const deps = await makeDeps()
+    const tool = defineDocPacksTool(deps)
+    const packs = await tool.execute({} as never, { signal } as never) as Array<{ name: string; version: string; description: string; languages: string[]; consumes: string[] }>
+    expect(packs).toHaveLength(1)
+    expect(packs[0]).toMatchObject({ name: 'cosmic-plan', version: '0.1.0', languages: ['zh-CN', 'en-US'], consumes: [] })
+    expect(packs[0]!.description.length).toBeGreaterThan(0)
+  })
+
+  it('renders its value as text content', async () => {
+    const deps = await makeDeps()
+    const tool = defineDocPacksTool(deps)
+    const value = await tool.execute({} as never, { signal } as never)
+    const rendered = tool.output.render({}, value as never) as Array<{ type: string; text: string }>
+    expect(rendered[0]).toMatchObject({ type: 'text' })
+    expect(rendered[0]!.text).toContain('cosmic-plan')
+  })
+})
+
 describe('doc_generate tool', () => {
   it('walks the loop and returns artifact + receipt inline', async () => {
     const deps = await makeDeps()
@@ -47,10 +67,10 @@ describe('doc_generate tool', () => {
     expect(out.markdownPath.endsWith('.md')).toBe(true)
   })
 
-  it('fails loud on an unknown pack with the available list', async () => {
+  it('fails loud on an unknown pack with the discovery hint and available list', async () => {
     const deps = await makeDeps()
     const tool = defineDocGenerateTool(deps)
-    await expect(tool.execute({ pack: 'nope', materials: ['#!inline\nx'] } as never, { signal } as never)).rejects.toThrow(/available: cosmic-plan/)
+    await expect(tool.execute({ pack: 'nope', materials: ['#!inline\nx'] } as never, { signal } as never)).rejects.toThrow(/unknown pack "nope"; discover installed packs via doc_packs \(available: cosmic-plan\)/)
   })
 
   it('fails loud on an unsupported language at call time', async () => {

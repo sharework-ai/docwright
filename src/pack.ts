@@ -32,6 +32,8 @@ export interface RuleIssue {
 export interface PackManifest {
   readonly name: string
   readonly version: string
+  /** One line naming the document this pack generates; `doc_packs` shows it to the model. */
+  readonly description: string
   /** Artifact type names this pack consumes (chained generation); root packs use []. */
   readonly consumes: readonly string[]
   /** IETF-ish language tags the pack provides prompts/templates/keyword rules for. */

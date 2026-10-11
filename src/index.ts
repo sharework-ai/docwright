@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { join } from 'node:path'
 import { Config, type Config as HanzeepConfig } from './config.ts'
 import { loadPacks } from './pack-loader.ts'
-import { defineDocGenerateTool, defineDocValidateTool } from './tools.ts'
+import { defineDocGenerateTool, defineDocPacksTool, defineDocValidateTool } from './tools.ts'
 
 /**
  * hanzeep — closed-loop document generation for deepseek-harness.
@@ -40,6 +40,7 @@ export async function registerTools(ctx: Context, config: HanzeepConfig, builtin
     }
   }
   const deps = { packs, config, ctx }
+  ctx.tools.register(defineDocPacksTool(deps))
   ctx.tools.register(defineDocGenerateTool(deps))
   ctx.tools.register(defineDocValidateTool(deps))
 }

@@ -22,6 +22,10 @@ You get an all-green receipt in seconds — zero LLM calls. This is the determin
 
 ## Tools
 
+### `doc_packs`
+
+Zero-arg discovery tool: lists installed packs as `[{ name, version, description, languages, consumes }]`. The model-facing descriptions of `doc_generate`/`doc_validate` carry a static invitation to call `doc_packs` first; unknown-pack errors also point there. Descriptions never change with the pack set (pull-based progressive disclosure).
+
 ### `doc_generate`
 
 | Parameter | Type | Notes |
@@ -67,7 +71,7 @@ Hybrid packs: declarative JSON rules for simple families, JS functions for cross
 
 ```
 packs/cosmic-plan/
-├── manifest.json     # name, version, consumes, languages
+├── manifest.json     # name, version, description (one line, shown to models by doc_packs), consumes, languages
 ├── schema.json       # draft-07 JSON Schema
 ├── rules/zh-CN.json  # declarative: minLength / maxLength / forbiddenKeywords / pattern
 ├── rules/functions.js# export const rules = [{ id, severity, suggestion, check(artifact) }]
@@ -76,7 +80,7 @@ packs/cosmic-plan/
 └── samples/golden.json  # must pass all-green; feeds mutation tests
 ```
 
-**Pack contract:** every ERROR rule carries a `suggestion`; every language in `manifest.languages` provides rules + prompt + template; golden sample + per-rule-family mutations are mandatory (a checker that cannot catch a deliberately broken sample is decoration).
+**Pack contract:** `manifest.description` is a required one-liner naming the document this pack generates (load-time enforced; `doc_packs` returns it verbatim to the model); every ERROR rule carries a `suggestion`; every language in `manifest.languages` provides rules + prompt + template; golden sample + per-rule-family mutations are mandatory (a checker that cannot catch a deliberately broken sample is decoration).
 
 ## Docs
 

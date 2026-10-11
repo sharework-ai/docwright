@@ -51,14 +51,14 @@ describe('llm port', () => {
 })
 
 describe('plugin apply', () => {
-  it('registers both tools against a minimal fake context', async () => {
+  it('registers all three tools against a minimal fake context', async () => {
     const { name, inject, apply } = await import('../src/index.ts')
     expect(name).toBe('hanzeep')
     expect(inject).toContain('tools')
     const registered: string[] = []
     const ctx = { tools: { register: (t: { name: string }) => { registered.push(t.name) } } }
     await apply(ctx as never, { provider: 'p', model: 'm' })
-    expect(registered).toEqual(['doc_generate', 'doc_validate'])
+    expect(registered).toEqual(['doc_packs', 'doc_generate', 'doc_validate'])
   })
 
   it('fails loud when defaultLanguage is missing from a pack', async () => {
@@ -72,6 +72,6 @@ describe('plugin apply', () => {
     const registered: string[] = []
     const ctx = { tools: { register: (t: { name: string }) => { registered.push(t.name) } } }
     await apply(ctx as never, { packsDir: '/nonexistent-hanzeep-packs', provider: 'p', model: 'm' })
-    expect(registered).toEqual(['doc_generate', 'doc_validate'])
+    expect(registered).toEqual(['doc_packs', 'doc_generate', 'doc_validate'])
   })
 })

@@ -24,10 +24,13 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
   const m = raw as Partial<PackManifest>
   if (typeof m.name !== 'string' || m.name.length === 0) throw new Error(`pack ${dir}: manifest.name must be a non-empty string`)
   if (typeof m.version !== 'string' || m.version.length === 0) throw new Error(`pack ${dir}: manifest.version must be a non-empty string`)
+  if (typeof m.description !== 'string' || m.description.length === 0) {
+    throw new Error(`pack ${dir}: manifest.description must be a non-empty string (one line naming the document this pack generates; doc_packs shows it to the model)`)
+  }
   if (!Array.isArray(m.languages) || m.languages.length === 0) throw new Error(`pack ${dir}: manifest.languages must be a non-empty array`)
   if (m.languages.some(l => typeof l !== 'string' || l.length === 0)) throw new Error(`pack ${dir}: manifest.languages entries must be non-empty strings`)
   if (m.consumes !== undefined && !Array.isArray(m.consumes)) throw new Error(`pack ${dir}: manifest.consumes must be an array when present`)
-  return { name: m.name, version: m.version, consumes: m.consumes ?? [], languages: m.languages }
+  return { name: m.name, version: m.version, description: m.description, consumes: m.consumes ?? [], languages: m.languages }
 }
 
 /**

@@ -85,7 +85,7 @@ async function makeChainDeps(overrides: Record<string, unknown> = {}, consumes =
   const root = await mkdtemp(join(tmpdir(), 'hanzeep-chain-'))
   const dir = join(root, 'chain-pack')
   for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
-  await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'chain-pack', version: '2', consumes: [consumes], languages: ['zh-CN'] }), 'utf8')
+  await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'chain-pack', version: '2', description: 'd', consumes: [consumes], languages: ['zh-CN'] }), 'utf8')
   await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
   await writeFile(join(dir, 'rules', 'zh-CN.json'), '[]', 'utf8')
   await writeFile(join(dir, 'prompts', 'zh-CN.md'), 'T {{materials}} {{upstream}}', 'utf8')
