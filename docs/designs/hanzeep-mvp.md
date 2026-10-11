@@ -206,6 +206,8 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 
 ## 7. 当前限制与路线（未实现，按优先级参考 TODOS.md）
 
+- 能力发现机制（manifest 自描述 + `doc_packs` 工具 + 静态邀请文案）：已设计待实施，见 docs/designs/capability-discovery.md——当前新装 pack 仅能靠报错兜底被发现。
+- 收敛检测三层机制（pack 评分 > 内置严重度评分 > 指纹兜底）：已设计待实施，见 docs/designs/convergence-detection.md——当前指纹机制对"修好 A 坏了 B"型空转失明、对原地踏步过敏。
 - 真实 LLM 的闭环端到端尚未验证（无 API key 环境，确定性路径全覆盖）。
 - 闭环每轮数据目前只进回执；独立的 doc-gen-round session 事件（model-visible ⟺ logged 的专项审计流）延后。
 - 草稿续修（从红回执草稿断点继续修）工具、MCP 包装（宿主无关分发）、pack npm 分发、cosmic Req/Func/Tech 后续阶段 pack——均未启动。
