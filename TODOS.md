@@ -4,7 +4,7 @@ Source: functional spec at docs/designs/hanzeep-mvp.md. 本文件记录真正待
 
 ## Open
 
-- [ ] **E2E-real-llm** — 真实 LLM 闭环端到端（zai coding plan key 已提供，必要时升级 dsh 以识别该 provider）：headless 会话跑通 doc_generate 全流程并断言绿回执；顺带用 cosmic-claude 历史产物校准 D2 默认评分权重（10/3/1）与 stagnation/decline 阈值（设计开放问题 1/4）
+- [ ] **E2E-real-llm** — 真实 LLM 闭环端到端。**管道已验证（2026-10-11）**：zai-coding-cn / glm-4.7 走 headless 会话，doc_generate 1 轮全绿（round score 100）+ doc_validate 复验 hashMatches=true（runbook：docs/testing/e2e-real-llm.md，无需升级 dsh）。**剩余**：多轮修复路径的实测观测（构造违规素材触发 repair/stagnation），用 cosmic-claude 历史产物校准 D2 默认评分权重（10/3/1）与 stagnation/decline 阈值（设计开放问题 1/4）
 - [ ] **T2-core** — doc-gen-round session 事件（prompt hash + artifact 引用的最小载荷）：回执已承载每轮数据，独立的专项审计流仍缺（model-visible ⟺ logged 的闭环专项）
 - [ ] **host-smoke** — 宿主冒烟脚本入库：/tmp/hanzeep-qa/smoke-host.mts（tarball → 新 profile → runProfile boot → 工具断言）参数化为 scripts/host-smoke.mts，作预发布检查
 

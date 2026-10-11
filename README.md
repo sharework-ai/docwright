@@ -97,7 +97,8 @@ packs/cosmic-plan/
 ## Docs
 
 - [Functional spec](docs/designs/hanzeep-mvp.md) — current-state behavior: tool semantics, loop and receipt details, and the plugin-vs-pack responsibility boundary (what the engine does vs. what a pack author writes).
-- [Design proposals](docs/designs/) — D1 pack discovery, D2 convergence detection, D3 parameter bridge (PROPOSED, not yet implemented).
+- [Design docs](docs/designs/) — D1 pack discovery, D2 convergence detection, D3 parameter bridge (all implemented; kept for rationale and veto principles).
+- [Real-LLM e2e runbook](docs/testing/e2e-real-llm.md) — reproduce the closed loop against a live provider (zai coding plan).
 
 ## Development
 
