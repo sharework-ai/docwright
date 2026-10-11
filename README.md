@@ -81,6 +81,7 @@ packs/cosmic-plan/
 ## Docs
 
 - [Functional spec](docs/designs/hanzeep-mvp.md) — current-state behavior: tool semantics, loop and receipt details, and the plugin-vs-pack responsibility boundary (what the engine does vs. what a pack author writes).
+- [Design proposals](docs/designs/) — D1 pack discovery, D2 convergence detection, D3 parameter bridge (PROPOSED, not yet implemented).
 
 ## Development
 

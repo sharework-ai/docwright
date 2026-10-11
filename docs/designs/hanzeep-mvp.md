@@ -4,7 +4,7 @@ Status: CURRENT — 本文描述插件现状，与代码不一致时以代码为
 Repo: sharework-ai/dsh-plugin-hanzeep
 Updated: 2026-10-11
 
-> 本文前身是 2026-08-27 /office-hours + /autoplan 产出的设计决策文档（含 44 条决策审计、评审报告）。现已重写为 current-state 功能说明书；原决策过程记录只在 git 历史中（`git log -- docs/designs/hanzeep-mvp.md`），第 8 节保留一段设计沿革。
+> 本文前身是 2026-08-27 /office-hours + /autoplan 产出的设计决策文档（含 44 条决策审计、评审报告）。现已重写为 current-state 功能说明书；遵循"规格零历史"纪律，正文不含设计推演——原决策过程记录只在 git 历史中（`git log -- docs/designs/hanzeep-mvp.md`），进行中的设计提案见 docs/designs/ 下各 PROPOSED 文档。
 
 ## 1. 产品定位
 
@@ -213,7 +213,3 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 - 闭环每轮数据目前只进回执；独立的 doc-gen-round session 事件（model-visible ⟺ logged 的专项审计流）延后。
 - 草稿续修（从红回执草稿断点继续修）工具、MCP 包装（宿主无关分发）、pack npm 分发、cosmic Req/Func/Tech 后续阶段 pack——均未启动。
 - 同名产物的并发写入无跨文件锁（单文件原子，artifact/receipt 对可能交错，last-writer-wins）。
-
-## 8. 设计沿革
-
-MVP 设计于 2026-08-27 经 /office-hours + /autoplan 批准（Approach A：ajv + 规则引擎 bake-off 裁决为自研微型引擎——spectral-core CJS 包装与自定义函数接线成本高于 ~100 行引擎；混合 pack 形态——JSON 声明式规则 + JS 函数清单；Plan 阶段先行、核心 API 按链式设计留 4 阶段扩展位）。实现完成于 Sprint 3-5（2026-08-27/28），期间经 /review、/qa 补齐链式绿回执校验、staleness、防篡改、分发层修复 44+3 项。被否路线：自研全部 + 4 阶段全量迁移（过度工程）、cosmic-claude Python 子进程桥（规则仍硬编码、Python 分发负担）。完整决策审计（44 条 + 评审报告）见 git 历史。
