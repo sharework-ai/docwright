@@ -5,10 +5,32 @@ export const DEFAULT_MAX_ITERATIONS = 5
 export const DEFAULT_PROMPT_TOKEN_BUDGET = 60_000
 export const DEFAULT_MATERIALS_ROOT = 'references'
 export const DEFAULT_OUTPUT_ROOT = 'output'
+/** Convergence defaults (docs/designs/convergence-detection.md). */
+export const DEFAULT_STAGNANT_ROUNDS = 3
+export const DEFAULT_DECLINING_ROUNDS = 3
+export const DEFAULT_MAX_REPEATS = 3
+export const DEFAULT_EPSILON = 0
+export const DEFAULT_SCORE_WEIGHTS = { error: 10, warning: 3, info: 1 } as const
 
 /** Upstream pack-version mismatch policy for chained generation. */
 export type UpstreamVersionPolicy = 'strict' | 'warn'
 export const DEFAULT_UPSTREAM_VERSION_POLICY: UpstreamVersionPolicy = 'strict'
+
+/** Convergence/oscillation tuning; every field optional, defaults above. */
+export interface OscillationConfig {
+  /** 'auto' (default): pack score if exported else built-in default score; 'score' forces the pack score; 'fingerprint' uses the loose fallback only. */
+  mode?: 'auto' | 'score' | 'fingerprint'
+  /** Terminate after this many consecutive rounds without beating the best score. */
+  stagnantRounds?: number
+  /** Terminate after this many consecutive strictly-decreasing rounds. */
+  decliningRounds?: number
+  /** Fingerprint fallback: terminate after this many consecutive identical fingerprints. */
+  maxRepeats?: number
+  /** Minimum improvement that counts as progress. */
+  epsilon?: number
+  /** Severity weights for the built-in default score. */
+  defaultScore?: { error?: number; warning?: number; info?: number }
+}
 
 /** Plugin configuration, overridable from cordis.yml (no hardcoded tunables). */
 export interface Config {
@@ -28,6 +50,8 @@ export interface Config {
   promptTokenBudget?: number
   /** Chained upstream pack-version mismatch: 'strict' rejects stale upstreams, 'warn' proceeds and surfaces upstreamWarnings (default strict). */
   upstreamVersionPolicy?: UpstreamVersionPolicy
+  /** Repair-loop convergence tuning (termination is early-exit only; green stays 0 errors). */
+  oscillation?: OscillationConfig
   /** Provider/model route for the LLM seam; required at first generate call. */
   provider?: string
   model?: string
@@ -42,6 +66,18 @@ export const Config: z<Config> = z.object({
   maxIterations: z.number().default(DEFAULT_MAX_ITERATIONS),
   promptTokenBudget: z.number().default(DEFAULT_PROMPT_TOKEN_BUDGET),
   upstreamVersionPolicy: z.union(['strict', 'warn']).default(DEFAULT_UPSTREAM_VERSION_POLICY),
+  oscillation: z.object({
+    mode: z.union(['auto', 'score', 'fingerprint']).default('auto'),
+    stagnantRounds: z.number().default(DEFAULT_STAGNANT_ROUNDS),
+    decliningRounds: z.number().default(DEFAULT_DECLINING_ROUNDS),
+    maxRepeats: z.number().default(DEFAULT_MAX_REPEATS),
+    epsilon: z.number().default(DEFAULT_EPSILON),
+    defaultScore: z.object({
+      error: z.number().default(DEFAULT_SCORE_WEIGHTS.error),
+      warning: z.number().default(DEFAULT_SCORE_WEIGHTS.warning),
+      info: z.number().default(DEFAULT_SCORE_WEIGHTS.info),
+    }),
+  }),
   provider: z.string(),
   model: z.string(),
 })

@@ -16,8 +16,9 @@ export const inject = ['tools', 'llm']
 export { Config }
 export type { HanzeepConfig }
 export * from './pack.ts'
+export { createScoring, defaultScore, type Scoring } from './convergence.ts'
 export { DocService, generateDocument } from './doc-service.ts'
-export { runRepairLoop } from './loop.ts'
+export { runRepairLoop, type LoopExhaustReason } from './loop.ts'
 
 export async function apply(ctx: Context, config: HanzeepConfig): Promise<void> {
   await registerTools(ctx, config, join(import.meta.dirname, '..', 'packs'))

@@ -135,9 +135,10 @@ describe('review fix: AbortError propagation', () => {
     const llm: LlmPort = { async complete() { return JSON.stringify(bad) } }
     const validateGood = (d: unknown): readonly Issue[] => [{ ruleId: 'r', severity: 'error', jsonPath: '$', message: (d as object).toString(), suggestion: 's' }]
     const result = await runRepairLoop({ llm, promptTemplate: 'T', materials: ['m'], maxIterations: 3, promptTokenBudget: 60_000, model: 't', validate: validateGood }, ev => { seen.push(ev.round) })
-    expect(seen).toEqual([1, 2])
+    expect(seen).toEqual([1, 2, 3])
     if (result.status === 'exhausted') {
-      expect(result.events.map(e => e.fingerprintsMatchedPrevious)).toEqual([false, true])
+      expect(result.events.map(e => e.fingerprintsMatchedPrevious)).toEqual([false, true, true])
+      expect(result.reason).toBe('fingerprint-repeat')
     }
   })
 })

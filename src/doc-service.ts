@@ -1,6 +1,7 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DEFAULT_MAX_ITERATIONS, DEFAULT_PROMPT_TOKEN_BUDGET, type Config } from './config.ts'
+import { createScoring } from './convergence.ts'
 import type { Issue } from './issue.ts'
 import type { LlmPort } from './llm-port.ts'
 import { runRepairLoop } from './loop.ts'
@@ -65,6 +66,7 @@ export class DocService {
     rounds: Receipt['rounds']
     model: string
     upstream?: readonly UpstreamAnchor[] | undefined
+    terminationReason?: Receipt['terminationReason'] | undefined
   }): Receipt {
     return {
       formatVersion: RECEIPT_FORMAT_VERSION,
@@ -79,6 +81,7 @@ export class DocService {
       rounds: input.rounds,
       rules: this.rollup(input.isValid ? [] : input.unresolved),
       isValid: input.isValid,
+      ...(input.terminationReason === undefined ? {} : { terminationReason: input.terminationReason }),
       generatedAt: new Date().toISOString(),
       model: input.model,
     }
@@ -154,6 +157,7 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
     throw new Error(`generator prompt exceeds token budget (${budget} > ${tokenBudget}); reduce materials or raise promptTokenBudget`)
   }
   const model = input.config.model ?? 'unknown'
+  const scoring = createScoring(input.pack, input.config)
   const result = await runRepairLoop(
     {
       llm: input.llm,
@@ -165,6 +169,7 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
       model,
       signal: input.signal,
       validate: artifact => service.validate(artifact),
+      scoring,
     },
     (event, artifact) => input.onRound(event.round, artifact),
   )
@@ -172,7 +177,16 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
   const isValid = result.status === 'green'
   const artifact = isValid ? result.artifact : result.draftArtifact
   const unresolved = isValid ? [] : result.unresolved
-  const receipt = service.buildReceipt({ artifact, isValid, unresolved, iterations: result.iterations, rounds: result.rounds, model, upstream: input.upstreamAnchors })
+  const receipt = service.buildReceipt({
+    artifact,
+    isValid,
+    unresolved,
+    iterations: result.iterations,
+    rounds: result.rounds,
+    model,
+    upstream: input.upstreamAnchors,
+    ...(isValid ? {} : { terminationReason: result.reason }),
+  })
 
   const outDir = input.outputRoot
   await mkdir(outDir, { recursive: true })

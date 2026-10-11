@@ -1,6 +1,6 @@
 # 设计：修复循环收敛检测三层机制（convergence detection）
 
-Status: PROPOSED — 已评审方向，未实施。
+Status: IMPLEMENTED (2026-10-11)。
 Date: 2026-10-11
 关联: docs/designs/hanzeep-mvp.md 第 3.2 节、TODOS.md D2-convergence
 

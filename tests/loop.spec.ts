@@ -64,15 +64,17 @@ describe('repair loop', () => {
     expect(result.status).toBe('exhausted')
     if (result.status === 'exhausted') {
       expect(result.unresolved[0]!.ruleId).toBe(INTERNAL_LLM_ERROR)
+      expect(result.reason).toBe('llm-error')
     }
   })
 
-  it('terminates early on oscillation (unchanged issue fingerprint)', async () => {
+  it('terminates on fingerprint-repeat after three identical rounds (loose fallback)', async () => {
     const llm = fakeLlm([JSON.stringify(badDoc), JSON.stringify(badDoc), JSON.stringify(badDoc)])
     const result = await runRepairLoop({ ...base, llm, validate: validateGood }, () => {})
     expect(result.status).toBe('exhausted')
     if (result.status === 'exhausted') {
-      expect(result.iterations).toBe(2)
+      expect(result.iterations).toBe(3)
+      expect(result.reason).toBe('fingerprint-repeat')
       expect(result.unresolved.some(i => i.ruleId === 'plan/min-length')).toBe(true)
     }
   })
@@ -100,5 +102,73 @@ describe('repair loop', () => {
     const result = await runRepairLoop({ ...base, llm, validate: () => [] }, () => {})
     expect(result.status).toBe('exhausted')
     if (result.status === 'exhausted') expect(result.unresolved[0]!.ruleId).toBe(INTERNAL_INVALID_OUTPUT)
+  })
+})
+
+describe('convergence scoring (score mode)', () => {
+  function scoreScoring(scores: number[], over: Record<string, unknown> = {}): { scoring: import('../src/convergence.ts').Scoring; seen: number[] } {
+    const seen: number[] = []
+    let n = 0
+    return {
+      seen,
+      scoring: {
+        kind: 'score',
+        scorer: () => {
+          const s = scores[Math.min(n, scores.length - 1)]!
+          n++
+          seen.push(s)
+          return s
+        },
+        stagnantRounds: 3,
+        decliningRounds: 3,
+        maxRepeats: 3,
+        epsilon: 0,
+        ...over,
+      },
+    }
+  }
+
+  it('terminates on stagnation after three rounds without beating the best score', async () => {
+    const { scoring } = scoreScoring([50, 50, 50, 50])
+    const llm = fakeLlm([JSON.stringify(badDoc)])
+    const result = await runRepairLoop({ ...base, llm, validate: validateGood, scoring }, () => {})
+    expect(result.status).toBe('exhausted')
+    if (result.status === 'exhausted') {
+      expect(result.reason).toBe('stagnation')
+      expect(result.iterations).toBe(4)
+      expect(result.rounds.map(r => r.score)).toEqual([50, 50, 50, 50])
+    }
+  })
+
+  it('terminates on strict decline before stagnation', async () => {
+    const { scoring } = scoreScoring([90, 80, 70, 60])
+    const llm = fakeLlm([JSON.stringify(badDoc)])
+    const result = await runRepairLoop({ ...base, llm, validate: validateGood, scoring }, () => {})
+    expect(result.status).toBe('exhausted')
+    if (result.status === 'exhausted') {
+      expect(result.reason).toBe('decline')
+      expect(result.iterations).toBe(4)
+    }
+  })
+
+  it('tolerates a single-round dip when a later round beats the best', async () => {
+    const { scoring } = scoreScoring([30, 25, 32])
+    const llm = fakeLlm([JSON.stringify(badDoc), JSON.stringify(badDoc), JSON.stringify(badDoc), JSON.stringify(goodDoc)])
+    const result = await runRepairLoop({ ...base, llm, validate: validateGood, scoring }, () => {})
+    expect(result.status).toBe('green')
+    if (result.status === 'green') expect(result.iterations).toBe(4)
+  })
+
+  it('honors epsilon: sub-epsilon gains do not reset stagnation', async () => {
+    const { scoring } = scoreScoring([50, 53, 60], { epsilon: 5 })
+    const llm = fakeLlm([JSON.stringify(badDoc)])
+    const result = await runRepairLoop({ ...base, maxIterations: 8, llm, validate: validateGood, scoring }, () => {})
+    expect(result.status).toBe('exhausted')
+    if (result.status === 'exhausted') {
+      // r1: 50 best; r2: 53 ≤ 50+5 → stagnant 1; r3: 60 > 55 → best, stagnant 0;
+      // r4-r6: 60 flat → stagnant 3 → terminate on round 6
+      expect(result.reason).toBe('stagnation')
+      expect(result.iterations).toBe(6)
+    }
   })
 })

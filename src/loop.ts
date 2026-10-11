@@ -1,3 +1,5 @@
+import { DEFAULT_MAX_REPEATS } from './config.ts'
+import type { Scoring } from './convergence.ts'
 import type { Issue } from './issue.ts'
 import { issueFingerprint, isAbortError, severityCounts } from './issue.ts'
 import type { LlmPort } from './llm-port.ts'
@@ -8,6 +10,9 @@ import type { ReceiptRound } from './receipt.ts'
 /** Loop-internal issue rule ids; ride the same repair path as pack rules. */
 export const INTERNAL_INVALID_OUTPUT = 'internal/invalid-output'
 export const INTERNAL_LLM_ERROR = 'internal/llm-error'
+
+/** Why the loop gave up (never present on green results). */
+export type LoopExhaustReason = 'stagnation' | 'decline' | 'fingerprint-repeat' | 'max-iterations' | 'llm-error'
 
 export interface LoopOptions {
   readonly llm: LlmPort
@@ -20,6 +25,8 @@ export interface LoopOptions {
   readonly signal?: AbortSignal | undefined
   /** Validates the current artifact; returns issues ([] = all green). */
   validate(artifact: unknown): readonly Issue[]
+  /** Early-exit policy (docs/designs/convergence-detection.md); defaults to the loose fingerprint fallback. */
+  scoring?: Scoring | undefined
 }
 
 export interface LoopRoundEvent {
@@ -28,6 +35,8 @@ export interface LoopRoundEvent {
   readonly errorCount: number
   readonly warningCount: number
   readonly fingerprintsMatchedPrevious: boolean
+  /** Convergence score of the round (score mode only, 0-100). */
+  readonly score?: number
 }
 
 export interface LoopSuccess {
@@ -46,25 +55,31 @@ export interface LoopExhausted {
   readonly rounds: ReceiptRound[]
   readonly events: LoopRoundEvent[]
   readonly unresolved: Issue[]
+  readonly reason: LoopExhaustReason
 }
 
 export type LoopResult = LoopSuccess | LoopExhausted
 
 /**
  * The closed repair loop: generate → validate → repair-until-green.
- * Oscillation guard: two consecutive rounds with an unchanged issue
- * fingerprint terminate early (fix A broke B loops burn iterations for
- * nothing). Every round persists through the round event sink so a crash
- * never loses the draft.
+ * Early exit only — green stays "0 error issues"; convergence scoring
+ * (stagnation vs best-so-far, strict decline, loose fingerprint repeats)
+ * decides when to stop burning rounds. Every round persists through the
+ * round event sink so a crash never loses the draft.
  */
 export async function runRepairLoop(
   options: LoopOptions,
   onRound: (event: LoopRoundEvent, artifact: unknown) => void,
 ): Promise<LoopResult> {
+  const scoring: Scoring = options.scoring ?? { kind: 'fingerprint', stagnantRounds: 0, decliningRounds: 0, maxRepeats: DEFAULT_MAX_REPEATS, epsilon: 0 }
   const rounds: ReceiptRound[] = []
   const events: LoopRoundEvent[] = []
   let previousFingerprint = ''
-  let repeatedCount = 0
+  let repeatStreak = 0
+  let bestScore = Number.NEGATIVE_INFINITY
+  let stagnantCount = 0
+  let decliningCount = 0
+  let previousScore: number | undefined
 
   let artifact: unknown
   const originalRequest = assembleGeneratorPrompt({
@@ -100,7 +115,7 @@ export async function runRepairLoop(
       events.push(ev)
       rounds.push({ round: iterations, errorCount: counts.errors, warningCount: counts.warnings })
       onRound(ev, artifact ?? null)
-      return { status: 'exhausted', draftArtifact: artifact ?? null, iterations, rounds, events, unresolved: llmIssues }
+      return { status: 'exhausted', draftArtifact: artifact ?? null, iterations, rounds, events, unresolved: llmIssues, reason: 'llm-error' }
     }
 
     let parseIssue: Issue | undefined
@@ -121,20 +136,49 @@ export async function runRepairLoop(
     const counts = severityCounts(issues)
     const fingerprint = issueFingerprint(issues)
     const repeated = fingerprint === previousFingerprint
-    repeatedCount = repeated ? repeatedCount + 1 : 0
     previousFingerprint = fingerprint
+    const score = scoring.kind === 'score' ? scoring.scorer!(artifact, issues) : undefined
 
-    const ev: LoopRoundEvent = { round: iterations, promptTokens: budget, errorCount: counts.errors, warningCount: counts.warnings, fingerprintsMatchedPrevious: repeated }
+    const ev: LoopRoundEvent = {
+      round: iterations,
+      promptTokens: budget,
+      errorCount: counts.errors,
+      warningCount: counts.warnings,
+      fingerprintsMatchedPrevious: repeated,
+      ...(score === undefined ? {} : { score }),
+    }
     events.push(ev)
-    rounds.push({ round: iterations, errorCount: counts.errors, warningCount: counts.warnings })
+    rounds.push({ round: iterations, errorCount: counts.errors, warningCount: counts.warnings, ...(score === undefined ? {} : { score }) })
     onRound(ev, artifact)
 
     if (counts.errors === 0) {
       return { status: 'green', artifact, iterations, rounds, events }
     }
-    if (repeatedCount >= 1) {
-      return { status: 'exhausted', draftArtifact: artifact, iterations, rounds, events, unresolved: [...issues] }
+
+    if (scoring.kind === 'score') {
+      const s = score!
+      if (s > bestScore + scoring.epsilon) {
+        bestScore = s
+        stagnantCount = 0
+      } else {
+        stagnantCount++
+      }
+      if (previousScore !== undefined && s < previousScore) decliningCount++
+      else decliningCount = 0
+      previousScore = s
+      if (decliningCount >= scoring.decliningRounds) {
+        return { status: 'exhausted', draftArtifact: artifact, iterations, rounds, events, unresolved: [...issues], reason: 'decline' }
+      }
+      if (stagnantCount >= scoring.stagnantRounds) {
+        return { status: 'exhausted', draftArtifact: artifact, iterations, rounds, events, unresolved: [...issues], reason: 'stagnation' }
+      }
+    } else {
+      repeatStreak = repeated ? repeatStreak + 1 : 0
+      if (repeatStreak >= scoring.maxRepeats - 1) {
+        return { status: 'exhausted', draftArtifact: artifact, iterations, rounds, events, unresolved: [...issues], reason: 'fingerprint-repeat' }
+      }
     }
+
     request = assembleRepairPrompt({
       promptTemplate: options.promptTemplate,
       originalRequest,
@@ -149,5 +193,6 @@ export async function runRepairLoop(
     rounds,
     events,
     unresolved: [...options.validate(artifact ?? null)],
+    reason: 'max-iterations',
   }
 }
