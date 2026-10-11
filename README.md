@@ -29,7 +29,7 @@ You get an all-green receipt in seconds — zero LLM calls. This is the determin
 | `pack` | string | e.g. `cosmic-plan`; unknown names list available packs |
 | `materials` | string[] | paths relative to the materials root (default `<workspace>/references/`), or inline text starting with `#!inline` |
 | `language` | string? | default: config `defaultLanguage`, else the pack's first language |
-| `upstream` | string[]? | workspace-relative paths to upstream artifacts; each must carry a green sidecar receipt (hash-verified, pack type matched against `consumes`) |
+| `upstream` | string[]? | workspace-relative paths to upstream artifacts; each must carry a green sidecar receipt (hash-verified, pack type matched against `consumes`, and recording the installed pack version — see `upstreamVersionPolicy`) |
 | `artifactName` | string? | output base name (default `<pack>-<timestamp>`) |
 
 Returns `{ artifactPath, markdownPath, receipt }`. Artifacts, receipts, and markdown land in the output root (default `<workspace>/output/`). Exhausted loops throw AND keep the draft + red receipt on disk.
@@ -37,6 +37,8 @@ Returns `{ artifactPath, markdownPath, receipt }`. Artifacts, receipts, and mark
 ### `doc_validate`
 
 Re-runs the ruleset over an existing artifact — deterministic, no LLM. `artifactPath` is workspace-relative (e.g. `output/plan-123.json`). Returns a fresh receipt; a hash mismatch means the artifact changed after generation.
+
+Also returns `packVersionStale`: `true` when the sidecar receipt was written by a different pack version — the artifact predates the installed pack and its green receipt certifies the OLD rules, so regenerate; `false` when versions match; `null` when no receipt exists.
 
 ## Configuration (cordis.yml)
 
@@ -50,6 +52,7 @@ Re-runs the ruleset over an existing artifact — deterministic, no LLM. `artifa
     defaultLanguage: "zh-CN"
     maxIterations: 5        # repair-loop round cap
     promptTokenBudget: 60000
+    upstreamVersionPolicy: "strict"  # chained upstream pack-version mismatch: "strict" rejects, "warn" proceeds with upstreamWarnings
     provider: "deepseek-official"  # an LLM route registered in the host (required)
     model: "deepseek-chat"
 ```
