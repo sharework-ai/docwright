@@ -187,8 +187,6 @@ packs/<name>/
 | `forbiddenKeywords` | `keywords[]` | 命中任一关键字即违规 |
 | `pattern` | `pattern`, `mustMatch` | 正则须匹配（或不匹配） |
 
-数值边界（`min` / `max`）可写字面量，也可写 `{ "param": "<声明的数字参数>" }` 按 `doc_generate` 调用解析（引用未声明或非数字参数在加载期报错）。
-
 ### 4.3 函数规则（`rules/functions.js`）
 
 导出 `rules` 数组，每条 `{ id, severity(默认 error), suggestion, check(artifact) }`；`check` 返回 `RuleIssue[]`（`{ jsonPath, message, snapshot? }`，空数组即通过），拿到整个产物，负责声明式四族表达不了的跨字段断言。规则运行时崩溃会带上规则 id 报错（不静默跳过）。另可导出 `score(artifact, issues) => 0-100`（收敛检测的 pack 层评分，越高越好；缺省自动启用内置严重度评分）。
@@ -220,7 +218,6 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 | 领域概念（COSMIC、CFP） | **禁止进入插件** | 规则与 prompt 中自由使用 |
 | 能力发现 | `doc_packs` 工具、三处静态邀请文案、manifest.description 加载期校验 | `description` 的一句话内容 |
 | 参数旋钮 | 解析/校验/钳制、`{{params}}` 渲染、回执 as-run、复验按当时参数 | `manifest.params` 声明与默认值、`manifest.maxRounds` 领域默认 |
-| 参数旋钮 | 解析级联（默认→覆盖）、clamp（参数 schema / maxRoundsCeiling）、as-run 快照与复验 | `manifest.params` 声明与默认值、`manifest.maxRounds` |
 
 ## 6. 质量门与验收基线
 
@@ -231,7 +228,6 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 
 ## 7. 当前限制与路线（未实现，按优先级参考 TODOS.md）
 
-- 参数最小桥（doc_generate 的 params/maxRounds 参数、pack 参数声明 schema、maxRoundsCeiling 硬上限、回执 as-run 快照）：**已实施**（见 3.1/3.2/3.3/3.4/4.1）。
 - 真实 LLM 的闭环端到端尚未验证（无 API key 环境，确定性路径全覆盖）。
 - 闭环每轮数据目前只进回执；独立的 doc-gen-round session 事件（model-visible ⟺ logged 的专项审计流）延后。
 - 草稿续修（从红回执草稿断点继续修）工具、MCP 包装（宿主无关分发）、pack npm 分发、cosmic Req/Func/Tech 后续阶段 pack——均未启动。
