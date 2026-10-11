@@ -6,10 +6,10 @@ import type { Issue, Severity } from './issue.ts'
  * Decided at the /autoplan final gate (UC2) after the spectral-core probe.
  */
 
-/** Declarative rule families; each targets one field across an array scope. */
+/** Declarative rule families; each targets one field across an array scope. Numeric bounds may reference pack params. */
 export type DeclarativeRule =
-  | { id: string; severity: Severity; given: string; field: string; kind: 'minLength'; min: number; suggestion: string }
-  | { id: string; severity: Severity; given: string; field: string; kind: 'maxLength'; max: number; suggestion: string }
+  | { id: string; severity: Severity; given: string; field: string; kind: 'minLength'; min: number | ParamRef; suggestion: string }
+  | { id: string; severity: Severity; given: string; field: string; kind: 'maxLength'; max: number | ParamRef; suggestion: string }
   | { id: string; severity: Severity; given: string; field: string; kind: 'forbiddenKeywords'; keywords: readonly string[]; suggestion: string }
   | { id: string; severity: Severity; given: string; field: string; kind: 'pattern'; pattern: string; mustMatch: boolean; suggestion: string }
 
@@ -36,6 +36,30 @@ export interface RuleIssue {
  */
 export type ScoreFn = (artifact: unknown, issues: readonly Issue[]) => number
 
+/**
+ * Reference to a pack-declared parameter, usable in declarative-rule numeric
+ * bounds (minLength.min / maxLength.max). Resolved per call from the
+ * effective params; unknown names fail at pack load time.
+ */
+export interface ParamRef {
+  readonly param: string
+}
+
+export function isParamRef(value: unknown): value is ParamRef {
+  return typeof value === 'object' && value !== null && typeof (value as { param?: unknown }).param === 'string'
+}
+
+/** Declaration of one pack tunable (manifest `params`); declaration IS the allowlist. */
+export interface ParamSpec {
+  readonly type: 'number' | 'string' | 'boolean'
+  readonly default: number | string | boolean
+  readonly enum?: readonly (number | string | boolean)[] | undefined
+  /** Numeric bounds (number-typed params only); the default must satisfy them. */
+  readonly min?: number | undefined
+  readonly max?: number | undefined
+  readonly description: string
+}
+
 /** Pack manifest (`manifest.json`); version gates breaking pack changes. */
 export interface PackManifest {
   readonly name: string
@@ -46,6 +70,10 @@ export interface PackManifest {
   readonly consumes: readonly string[]
   /** IETF-ish language tags the pack provides prompts/templates/keyword rules for. */
   readonly languages: readonly string[]
+  /** Optional per-pack round-count default for the repair loop (clamped by config maxRoundsCeiling). */
+  readonly maxRounds?: number | undefined
+  /** Declared tunables; declaration is the allowlist — undeclared names are rejected at call time. */
+  readonly params?: Readonly<Record<string, ParamSpec>> | undefined
 }
 
 /** A loaded, resolved pack ready for the loop. */

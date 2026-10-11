@@ -1,4 +1,5 @@
-import type { DeclarativeRule, FunctionRule, Pack } from './pack.ts'
+import type { DeclarativeRule, FunctionRule, Pack, ParamRef } from './pack.ts'
+import { isParamRef } from './pack.ts'
 import type { Issue } from './issue.ts'
 import type { ReceiptRuleResult } from './receipt.ts'
 
@@ -38,7 +39,17 @@ function scopeFor(artifact: unknown, compiled: CompiledRule): readonly unknown[]
   return Array.isArray(value) ? value : []
 }
 
-function checkField(compiled: CompiledRule, item: unknown, index: number): Issue | undefined {
+/** Resolve a numeric bound: literal, or a pack param reference (effective params are always complete — defaults guarantee it). */
+function resolveBound(value: number | ParamRef, params: Readonly<Record<string, unknown>> | undefined, ruleId: string): number {
+  if (!isParamRef(value)) return value
+  const resolved = params?.[value.param]
+  if (typeof resolved !== 'number') {
+    throw new Error(`rule ${ruleId}: param "${value.param}" did not resolve to a number; effective params are incomplete (defaults guarantee completeness — this indicates a bug)`)
+  }
+  return resolved
+}
+
+function checkField(compiled: CompiledRule, item: unknown, index: number, params: Readonly<Record<string, unknown>> | undefined): Issue | undefined {
   const rule = compiled.rule
   const obj = item as Record<string, unknown> | null
   const value = obj?.[rule.field]
@@ -46,12 +57,14 @@ function checkField(compiled: CompiledRule, item: unknown, index: number): Issue
   const snapshot = truncateSnapshot(value)
   switch (rule.kind) {
     case 'minLength': {
+      const min = resolveBound(rule.min, params, rule.id)
       const len = typeof value === 'string' ? value.length : -1
-      return len >= rule.min ? undefined : { ruleId: rule.id, severity: rule.severity, jsonPath: at, message: `length ${len} < min ${rule.min}`, ...(snapshot === undefined ? {} : { snapshot }), suggestion: rule.suggestion }
+      return len >= min ? undefined : { ruleId: rule.id, severity: rule.severity, jsonPath: at, message: `length ${len} < min ${min}`, ...(snapshot === undefined ? {} : { snapshot }), suggestion: rule.suggestion }
     }
     case 'maxLength': {
+      const max = resolveBound(rule.max, params, rule.id)
       const len = typeof value === 'string' ? value.length : Number.POSITIVE_INFINITY
-      return len <= rule.max ? undefined : { ruleId: rule.id, severity: rule.severity, jsonPath: at, message: `length ${len} > max ${rule.max}`, ...(snapshot === undefined ? {} : { snapshot }), suggestion: rule.suggestion }
+      return len <= max ? undefined : { ruleId: rule.id, severity: rule.severity, jsonPath: at, message: `length ${len} > max ${max}`, ...(snapshot === undefined ? {} : { snapshot }), suggestion: rule.suggestion }
     }
     case 'forbiddenKeywords': {
       const text = typeof value === 'string' ? value : ''
@@ -66,17 +79,17 @@ function checkField(compiled: CompiledRule, item: unknown, index: number): Issue
   }
 }
 
-export function createRuleEngine(pack: Pack, language: string): (artifact: unknown) => readonly Issue[] {
+export function createRuleEngine(pack: Pack, language: string): (artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined) => readonly Issue[] {
   const declarative = pack.rules.get(language)
   if (declarative === undefined) {
     throw new Error(`pack ${pack.manifest.name} has no rules for language "${language}"`)
   }
   const compiledRules = declarative.map(compileRule)
-  return (artifact: unknown): readonly Issue[] => {
+  return (artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined): readonly Issue[] => {
     const issues: Issue[] = []
     for (const compiled of compiledRules) {
       for (const [index, item] of scopeFor(artifact, compiled).entries()) {
-        const issue = checkField(compiled, item, index)
+        const issue = checkField(compiled, item, index, params)
         if (issue !== undefined) issues.push(issue)
       }
     }

@@ -1,11 +1,12 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DEFAULT_MAX_ITERATIONS, DEFAULT_PROMPT_TOKEN_BUDGET, type Config } from './config.ts'
+import { DEFAULT_MAX_ITERATIONS, DEFAULT_MAX_ROUNDS_CEILING, DEFAULT_PROMPT_TOKEN_BUDGET, type Config } from './config.ts'
 import { createScoring } from './convergence.ts'
 import type { Issue } from './issue.ts'
 import type { LlmPort } from './llm-port.ts'
 import { runRepairLoop } from './loop.ts'
 import type { Pack } from './pack.ts'
+import { resolveEffectiveParams } from './params.ts'
 import { createRuleEngine, rollupRules } from './rule-engine.ts'
 import { readMaterials } from './materials.ts'
 import { assembleGeneratorPrompt, estimateTokens } from './prompt.ts'
@@ -20,7 +21,7 @@ import { createRenderer } from './render.ts'
  */
 export class DocService {
   private readonly schemaCheck: (artifact: unknown) => readonly Issue[]
-  private readonly ruleEngine: (artifact: unknown) => readonly Issue[]
+  private readonly ruleEngine: (artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined) => readonly Issue[]
   readonly renderer: (artifact: unknown) => string
   readonly promptTemplate: string
   private readonly schemaHash: string
@@ -39,8 +40,8 @@ export class DocService {
     this.schemaHash = sha256(JSON.stringify(pack.schema))
   }
 
-  validate(artifact: unknown): readonly Issue[] {
-    return [...this.schemaCheck(artifact), ...this.ruleEngine(artifact)]
+  validate(artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined): readonly Issue[] {
+    return [...this.schemaCheck(artifact), ...this.ruleEngine(artifact, params)]
   }
 
   rulesetSnapshot(): Receipt['rulesetSnapshot'] {
@@ -67,6 +68,7 @@ export class DocService {
     model: string
     upstream?: readonly UpstreamAnchor[] | undefined
     terminationReason?: Receipt['terminationReason'] | undefined
+    params?: Readonly<Record<string, unknown>> | undefined
   }): Receipt {
     return {
       formatVersion: RECEIPT_FORMAT_VERSION,
@@ -77,6 +79,7 @@ export class DocService {
       schemaHash: this.schemaHash,
       rulesetSnapshot: this.rulesetSnapshot(),
       upstreamHashes: [...(input.upstream ?? [])],
+      ...(input.params === undefined ? {} : { params: { ...input.params } as { [key: string]: Json } }),
       iterations: input.iterations,
       rounds: input.rounds,
       rules: this.rollup(input.isValid ? [] : input.unresolved),
@@ -112,6 +115,10 @@ export interface GenerateInput {
   readonly upstream?: readonly string[] | undefined
   /** Chain anchors recorded into the receipt (pack/version/hash per upstream). */
   readonly upstreamAnchors?: readonly UpstreamAnchor[] | undefined
+  /** Call-time round cap (user intent via the tool arg); clamped by the pack default and config ceiling. */
+  readonly maxRounds?: number | undefined
+  /** Call-time pack-param overrides; validated against the manifest declaration. */
+  readonly params?: Readonly<Record<string, unknown>> | undefined
   readonly artifactName: string
   readonly workspaceRoot: string
   /** Absolute root artifacts/receipts/markdown are written to (tool layer). */
@@ -149,13 +156,21 @@ async function writeAtomic(path: string, content: string): Promise<void> {
 export async function generateDocument(input: GenerateInput): Promise<GenerateOutput> {
   assertSafeArtifactName(input.artifactName)
   const service = getDocService(input.pack, input.language)
+  const effectiveParams = resolveEffectiveParams(input.pack, input.params)
   const materialTexts = await readMaterials(input.materials, input.workspaceRoot, input.materialsRoot)
-  const firstPrompt = assembleGeneratorPrompt({ promptTemplate: service.promptTemplate, materials: materialTexts, upstream: input.upstream })
+  const firstPrompt = assembleGeneratorPrompt({ promptTemplate: service.promptTemplate, materials: materialTexts, upstream: input.upstream, params: effectiveParams })
   const budget = estimateTokens(firstPrompt)
   const tokenBudget = input.config.promptTokenBudget ?? DEFAULT_PROMPT_TOKEN_BUDGET
   if (budget > tokenBudget) {
     throw new Error(`generator prompt exceeds token budget (${budget} > ${tokenBudget}); reduce materials or raise promptTokenBudget`)
   }
+  // Round cap chain: tool arg (user intent) > pack default > config global, clamped by the hard ceiling.
+  const ceiling = input.config.maxRoundsCeiling ?? DEFAULT_MAX_ROUNDS_CEILING
+  const requestedRounds = input.maxRounds ?? input.pack.manifest.maxRounds ?? input.config.maxIterations ?? DEFAULT_MAX_ITERATIONS
+  if (!Number.isInteger(requestedRounds) || requestedRounds < 1) {
+    throw new Error(`maxRounds must be a positive integer (got ${String(requestedRounds)})`)
+  }
+  const maxIterations = Math.min(requestedRounds, ceiling)
   const model = input.config.model ?? 'unknown'
   const scoring = createScoring(input.pack, input.config)
   const result = await runRepairLoop(
@@ -164,11 +179,12 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
       promptTemplate: service.promptTemplate,
       materials: materialTexts,
       upstream: input.upstream,
-      maxIterations: input.config.maxIterations ?? DEFAULT_MAX_ITERATIONS,
+      params: effectiveParams,
+      maxIterations,
       promptTokenBudget: tokenBudget,
       model,
       signal: input.signal,
-      validate: artifact => service.validate(artifact),
+      validate: artifact => service.validate(artifact, effectiveParams),
       scoring,
     },
     (event, artifact) => input.onRound(event.round, artifact),
@@ -186,6 +202,7 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
     model,
     upstream: input.upstreamAnchors,
     ...(isValid ? {} : { terminationReason: result.reason }),
+    ...(Object.keys(effectiveParams).length > 0 ? { params: effectiveParams } : {}),
   })
 
   const outDir = input.outputRoot

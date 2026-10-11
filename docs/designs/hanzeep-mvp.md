@@ -50,6 +50,8 @@ hanzeep 的差异化就在"内容合格性"这一层，由三件事组成：
 | `language` | string? | 输出语言。优先级：tool 参数 > Config `defaultLanguage` > pack 的第一个语言；不被该 pack 支持即调用期报错 |
 | `upstream` | string[]? | 上游产物路径（workspace 相对）。仅当 pack 声明了 `consumes` 时必填，见 3.5 |
 | `artifactName` | string? | 输出基础名，仅允许 `[A-Za-z0-9._-]` 的纯 basename（拒绝路径形状与 `..`）；默认 `<pack>-<时间戳>` |
+| `maxRounds` | number? | 当次闭环轮数上限（用户意图经模型转述）；被 Config `maxRoundsCeiling` 硬钳制，任何层不可穿透 |
+| `params` | object? | pack 声明参数（`manifest.params`，doc_packs 可见清单）的覆盖值；未知名称/类型/枚举/越界 fail loud 并列出可用参数 |
 
 前置条件：Config 必须配置 `provider` + `model`（宿主 LLM 编排中的路由名），缺失即调用期报错。
 
@@ -75,7 +77,7 @@ hanzeep 的差异化就在"内容合格性"这一层，由三件事组成：
 2. **内置默认评分**（pack 未导出 score 时自动启用）：`clamp(100 − 10×error − 3×warning − 1×info, 0, 100)`，权重可配。
 3. **指纹兜底**（`mode: "fingerprint"`）：连续 3 轮 Issue 指纹完全相同 → reason `fingerprint-repeat`。
 
-**迭代上限**：`maxIterations`（默认 5）耗尽 → reason `max-iterations`，按失败返回（见 3.1）；模型调用失败 → reason `llm-error`。终止原因与每轮评分（score 模式）写入回执，收敛过程可审计。
+**迭代上限**：生效轮数 = clamp(`maxRounds` 参数 ?? pack `manifest.maxRounds` ?? Config `maxIterations`（默认 5）, `maxRoundsCeiling`（默认 10，宿主运维持有，任何层不可穿透））。耗尽 → reason `max-iterations`，按失败返回（见 3.1）；模型调用失败 → reason `llm-error`。终止原因与每轮评分（score 模式）写入回执，收敛过程可审计。生成 prompt 的 `{{params}}` 槽位渲染生效参数（模型看得见旋钮），生效参数以 as-run 记入回执。
 
 ### 3.3 验证回执（receipt）
 
@@ -94,13 +96,14 @@ sidecar 文件 `<产物名>.receipt.json` 与产物同目录；同时内联在�
 | `rules` | 逐规则 rollup：`{ruleId, severity, status: pass\|fail, count}`；schema 违规归并为 `schema/*` 族 |
 | `isValid` | 全绿与否 |
 | `terminationReason` | 红回执的终止原因（`stagnation` / `decline` / `fingerprint-repeat` / `max-iterations` / `llm-error`）；绿回执无此字段 |
+| `params` | 生效的 pack 参数 as-run（未覆盖即声明默认）；`doc_validate` 默认按它复验 |
 | `generatedAt` / `model` | ISO 时间戳；模型标识（复验轮为 `revalidate`） |
 
 **防篡改语义**：`doc_generate` 与 `doc_validate` 共用同一个回执构造器（两种回执永不漂移）。回执是 tamper-evident 而非 tamper-proof——无签名，误改必红，蓄意伪造产物+回执不可防。
 
 ### 3.4 工具 `doc_validate` — 确定性复验（零 LLM）
 
-参数：`artifactPath`（workspace 相对路径）、`pack`、`language?`。对既有产物用**当前安装的 pack 规则**重跑校验，返回 `{ artifactPath, receipt, hashMatches, packVersionStale }`。
+参数：`artifactPath`（workspace 相对路径）、`pack`、`language?`、`params?`。对既有产物用**当前安装的 pack 规则**重跑校验，返回 `{ artifactPath, receipt, hashMatches, packVersionStale }`。校验默认使用回执记录的 as-run 参数（**按当时的标准复验**）；显式传 `params` 可做 what-if 校验。
 
 - `hashMatches`：`true` 产物与 sidecar 回执哈希一致；`false` 生成后被改动过（篡改可见）；`null` 无 sidecar（如手工拷入的样例）。
 - `packVersionStale`：`true` 回执由**另一个 pack 版本**写入——绿回执证明的是旧规则，应重新生成（无版本记录的回执也算 stale）；`false` 版本一致；`null` 无回执。
@@ -133,7 +136,8 @@ Schema 的 ajv 编译在首次构建该 (pack, language) 的 DocService 时发�
     materialsRoot: ""       # 素材根（默认 <workspace>/references）
     outputRoot: ""          # 产物根（默认 <workspace>/output）
     defaultLanguage: "zh-CN"
-    maxIterations: 5        # 闭环轮数上限
+    maxIterations: 5        # 闭环轮数全局默认
+    maxRoundsCeiling: 10    # 轮数绝对上限（宿主运维持有，任何覆盖不可穿透）
     promptTokenBudget: 60000
     upstreamVersionPolicy: "strict"  # 链式上游版本不符：strict 拒绝 / warn 放行并告警
     oscillation:            # 收敛检测（提前终止策略，详见 docs/designs/convergence-detection.md）
@@ -161,7 +165,7 @@ workspace root 决策链：会话 workspace（如 dsh web UI 选择的目录）>
 
 ```
 packs/<name>/
-├── manifest.json      # name / version / description / consumes / languages
+├── manifest.json      # name / version / description / consumes / languages / maxRounds? / params?
 ├── schema.json        # JSON Schema（draft-07 或 2020-12），定义"文档长什么样"
 ├── rules/<lang>.json  # 声明式规则，定义"什么算合格"（简单族）
 ├── rules/functions.js # JS 函数规则（可选），跨字段规则（唯一性、求和、区间）
@@ -170,11 +174,11 @@ packs/<name>/
 └── samples/golden.json  # 全绿母本，变异测试的输入
 ```
 
-`languages` 里声明的每个语言标签，三件套（rules/prompt/template）缺一不可（加载期强制）。`manifest.description`（一句话，说明该 pack 生成什么文档）必填、加载期强制——`doc_packs` 把它原样返回给模型。多语言只影响表达层——文档结构与 schema 语言无关。
+`languages` 里声明的每个语言标签，三件套（rules/prompt/template）缺一不可（加载期强制）。`manifest.description`（一句话，说明该 pack 生成什么文档）必填、加载期强制——`doc_packs` 把它原样返回给模型。`manifest.maxRounds`（可选）是该 pack 的轮数默认。`manifest.params`（可选）声明可调参数：**声明即白名单**——每项 `{ type, default, description, enum?, min?, max? }`，default 必填且须满足自身约束；未声明的名称谁都不能调（加载期校验声明合法，调用期校验取值）。多语言只影响表达层——文档结构与 schema 语言无关。
 
 ### 4.2 声明式规则（四族）
 
-每条规则：`{ id, severity: error|warning|info, given, field, kind, ..., suggestion }`。`given` 支持 `$`（根对象）与 `$.<arrayField>[*]`（数组逐项），其余路径加载期报错。
+每条规则：`{ id, severity: error|warning|info, given, field, kind, ..., suggestion }`。`given` 支持 `$`（根对象）与 `$.<arrayField>[*]`（数组逐项），其余路径加载期报错。minLength/maxLength 的数值边界可写 `{ "param": "<声明的数字参数>" }` 引用 pack 参数（按次解析，未声明的引用加载期报错）。
 
 | kind | 载荷 | 语义 |
 |---|---|---|
@@ -182,6 +186,8 @@ packs/<name>/
 | `maxLength` | `max` | 字符串长度上限 |
 | `forbiddenKeywords` | `keywords[]` | 命中任一关键字即违规 |
 | `pattern` | `pattern`, `mustMatch` | 正则须匹配（或不匹配） |
+
+数值边界（`min` / `max`）可写字面量，也可写 `{ "param": "<声明的数字参数>" }` 按 `doc_generate` 调用解析（引用未声明或非数字参数在加载期报错）。
 
 ### 4.3 函数规则（`rules/functions.js`）
 
@@ -213,6 +219,8 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 | 配置 | Config schema 与全部默认值 | — |
 | 领域概念（COSMIC、CFP） | **禁止进入插件** | 规则与 prompt 中自由使用 |
 | 能力发现 | `doc_packs` 工具、三处静态邀请文案、manifest.description 加载期校验 | `description` 的一句话内容 |
+| 参数旋钮 | 解析/校验/钳制、`{{params}}` 渲染、回执 as-run、复验按当时参数 | `manifest.params` 声明与默认值、`manifest.maxRounds` 领域默认 |
+| 参数旋钮 | 解析级联（默认→覆盖）、clamp（参数 schema / maxRoundsCeiling）、as-run 快照与复验 | `manifest.params` 声明与默认值、`manifest.maxRounds` |
 
 ## 6. 质量门与验收基线
 
@@ -223,7 +231,7 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 
 ## 7. 当前限制与路线（未实现，按优先级参考 TODOS.md）
 
-- 参数最小桥（doc_generate 的 params/maxRounds 参数、pack 参数声明 schema、maxRoundsCeiling 硬上限、回执 as-run 快照）：已设计待实施，见 docs/designs/dynamic-parameters.md。
+- 参数最小桥（doc_generate 的 params/maxRounds 参数、pack 参数声明 schema、maxRoundsCeiling 硬上限、回执 as-run 快照）：**已实施**（见 3.1/3.2/3.3/3.4/4.1）。
 - 真实 LLM 的闭环端到端尚未验证（无 API key 环境，确定性路径全覆盖）。
 - 闭环每轮数据目前只进回执；独立的 doc-gen-round session 事件（model-visible ⟺ logged 的专项审计流）延后。
 - 草稿续修（从红回执草稿断点继续修）工具、MCP 包装（宿主无关分发）、pack npm 分发、cosmic Req/Func/Tech 后续阶段 pack——均未启动。

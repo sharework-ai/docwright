@@ -4,6 +4,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type UpstreamVersionPolicy } from './config.ts'
 import { generateDocument, getDocService } from './doc-service.ts'
 import { createLlmPort } from './llm-port.ts'
+import { resolveEffectiveParams } from './params.ts'
 import type { Pack } from './pack.ts'
 import { effectiveWorkspaceRoot, normalizeWindowsPath, resolveRootWithin, type SessionWorkspaceCarrier } from './paths.ts'
 import { artifactHashOf, type Receipt, type UpstreamAnchor } from './receipt.ts'
@@ -24,6 +25,15 @@ export interface ToolDeps {
   readonly packs: ReadonlyMap<string, Pack>
   readonly config: Config
   readonly ctx: object & { llm?: unknown }
+}
+
+/** Normalize a model-supplied params bag; anything but a JSON object fails loud. */
+function normalizeParams(raw: unknown): Record<string, unknown> | undefined {
+  if (raw === undefined) return undefined
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error(`params must be a JSON object of { name: value } (got ${Array.isArray(raw) ? 'an array' : typeof raw}; fix: pass declared param names as keys, e.g. {"cfpUpper": 45})`)
+  }
+  return raw as Record<string, unknown>
 }
 
 /** Resolve and lexically confine a user-supplied path to the workspace root. */
@@ -105,6 +115,7 @@ export function defineDocPacksTool(deps: ToolDeps) {
         description: p.manifest.description,
         languages: [...p.manifest.languages],
         consumes: [...p.manifest.consumes],
+        params: Object.entries(p.manifest.params ?? {}).map(([name, spec]) => ({ name, type: spec.type, description: spec.description })),
       }))
     },
   })
@@ -117,19 +128,22 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       + 'Call doc_packs first to see which packs are installed, then pass its name as pack. '
       + 'Returns artifactPath, markdownPath, and the validation receipt. '
       + 'Materials are paths relative to the materials root (default <workspace>/references/) or inline text starting with "#!inline"; '
-      + 'artifacts land under the output root (default <workspace>/output/).',
+      + 'artifacts land under the output root (default <workspace>/output/). '
+      + 'Pack-declared tunables can be overridden via params; maxRounds caps this call\'s loop rounds.',
     parameters: {
       pack: { type: 'string', required: true, description: 'Pack name; discover installed packs with doc_packs (e.g. cosmic-plan)' },
       materials: { type: 'array', required: true, items: { type: 'string' }, description: 'Material references: paths relative to the materials root (default references/ under the workspace) or #!inline text' },
       language: { type: 'string', description: 'Output language (default: config defaultLanguage)' },
       upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn")' },
       artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>)' },
+      maxRounds: { type: 'number', description: 'Round cap for this call (e.g. when the user asks to try more rounds); clamped to config maxRoundsCeiling' },
+      params: { type: 'json', description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpUpper": 45}; unknown names or out-of-range values fail loud' },
     },
     output: {
       schema: { type: 'json' },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args: { pack: string; materials: unknown[]; language?: string; upstream?: unknown[]; artifactName?: string }, exec) {
+    async execute(args: { pack: string; materials: unknown[]; language?: string; upstream?: unknown[]; artifactName?: string; maxRounds?: number; params?: unknown }, exec) {
       const pack = resolvePack(deps, args.pack)
       const language = resolveLanguage(deps, pack, args.language)
       const materials = args.materials as string[]
@@ -160,6 +174,8 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         materialsRoot,
         upstream: upstreamTexts,
         upstreamAnchors,
+        maxRounds: args.maxRounds,
+        params: normalizeParams(args.params),
         artifactName,
         workspaceRoot,
         outputRoot,
@@ -186,12 +202,13 @@ export function defineDocValidateTool(deps: ToolDeps) {
       artifactPath: { type: 'string', required: true, description: 'Workspace-relative path to the artifact JSON' },
       pack: { type: 'string', required: true, description: 'Pack name the artifact belongs to' },
       language: { type: 'string', description: 'Language whose ruleset to run; defaults to the receipt-recorded language, then config defaultLanguage' },
+      params: { type: 'json', description: 'Optional pack-param overrides; defaults to the receipt-recorded as-run params (revalidate by the original standards)' },
     },
     output: {
       schema: { type: 'json' },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args: { artifactPath: string; pack: string; language?: string }, exec) {
+    async execute(args: { artifactPath: string; pack: string; language?: string; params?: unknown }, exec) {
       const pack = resolvePack(deps, args.pack)
       const workspaceRoot = effectiveWorkspaceRoot(exec as SessionWorkspaceCarrier | undefined, deps.config.workspaceRoot)
       const artifactPath = confinePath(workspaceRoot, args.artifactPath, 'artifactPath')
@@ -205,11 +222,11 @@ export function defineDocValidateTool(deps: ToolDeps) {
 
       // Tamper evidence: compare the canonical hash against the sidecar
       // receipt written at generation time (absent for bundled samples).
-      let storedReceipt: { artifactHash?: string; language?: string; packVersion?: string } | undefined
+      let storedReceipt: { artifactHash?: string; language?: string; packVersion?: string; params?: Record<string, unknown> } | undefined
       let hashMatches: boolean | null = null
       try {
         const parsed: unknown = JSON.parse(await readFile(`${artifactPath.replace(/\.json$/, '')}.receipt.json`, 'utf8'))
-        storedReceipt = typeof parsed === 'object' && parsed !== null ? parsed as { artifactHash?: string; language?: string; packVersion?: string } : undefined
+        storedReceipt = typeof parsed === 'object' && parsed !== null ? parsed as { artifactHash?: string; language?: string; packVersion?: string; params?: Record<string, unknown> } : undefined
         hashMatches = storedReceipt?.artifactHash === artifactHashOf(artifact)
       } catch {
         storedReceipt = undefined
@@ -233,7 +250,13 @@ export function defineDocValidateTool(deps: ToolDeps) {
       const resolvedLang = resolveLanguage(deps, pack, language)
 
       const service = getDocService(pack, resolvedLang)
-      const issues = service.validate(artifact)
+      // Replay by the receipt-recorded as-run params (original standards);
+      // explicit args.params override them for what-if validation.
+      const receiptParams = storedReceipt?.params !== undefined && typeof storedReceipt.params === 'object'
+        ? storedReceipt.params as Record<string, unknown>
+        : undefined
+      const effectiveParams = resolveEffectiveParams(pack, normalizeParams(args.params), receiptParams)
+      const issues = service.validate(artifact, effectiveParams)
       const counts = severityCounts(issues)
       const isValid = counts.errors === 0
       const receipt = service.buildReceipt({
@@ -243,6 +266,7 @@ export function defineDocValidateTool(deps: ToolDeps) {
         iterations: 0,
         rounds: [{ round: 0, errorCount: counts.errors, warningCount: counts.warnings }],
         model: 'revalidate',
+        ...(Object.keys(effectiveParams).length > 0 ? { params: effectiveParams } : {}),
       })
       return { artifactPath, receipt, hashMatches, packVersionStale } as unknown as ValidateToolResult
     },

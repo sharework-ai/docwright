@@ -11,6 +11,8 @@ export const DEFAULT_DECLINING_ROUNDS = 3
 export const DEFAULT_MAX_REPEATS = 3
 export const DEFAULT_EPSILON = 0
 export const DEFAULT_SCORE_WEIGHTS = { error: 10, warning: 3, info: 1 } as const
+/** Absolute round cap no override can pierce (docs/designs/dynamic-parameters.md). */
+export const DEFAULT_MAX_ROUNDS_CEILING = 10
 
 /** Upstream pack-version mismatch policy for chained generation. */
 export type UpstreamVersionPolicy = 'strict' | 'warn'
@@ -52,6 +54,8 @@ export interface Config {
   upstreamVersionPolicy?: UpstreamVersionPolicy
   /** Repair-loop convergence tuning (termination is early-exit only; green stays 0 errors). */
   oscillation?: OscillationConfig
+  /** Absolute round cap for doc_generate; tool args and pack defaults clamp to it (hard ceiling, host-operator owned). */
+  maxRoundsCeiling?: number
   /** Provider/model route for the LLM seam; required at first generate call. */
   provider?: string
   model?: string
@@ -78,6 +82,7 @@ export const Config: z<Config> = z.object({
       info: z.number().default(DEFAULT_SCORE_WEIGHTS.info),
     }),
   }),
+  maxRoundsCeiling: z.number().default(DEFAULT_MAX_ROUNDS_CEILING),
   provider: z.string(),
   model: z.string(),
 })

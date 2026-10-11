@@ -10,16 +10,22 @@ export function assembleGeneratorPrompt(options: {
   promptTemplate: string
   materials: readonly string[]
   upstream?: readonly string[] | undefined
+  /** Effective pack params; rendered into the {{params}} slot when the template offers it. */
+  params?: Readonly<Record<string, unknown>> | undefined
 }): string {
   const materialsBlock = options.materials.map(m => `<material>\n${m}\n</material>`).join('\n\n')
   const upstreamBlock = options.upstream === undefined || options.upstream.length === 0
     ? ''
     : `\n\n<upstream-artifacts>\n${options.upstream.join('\n\n')}\n</upstream-artifacts>`
+  const paramsBlock = options.params === undefined || Object.keys(options.params).length === 0
+    ? ''
+    : `\n\n<effective-params>\n${JSON.stringify(options.params, null, 2)}\n</effective-params>`
   // Replacer functions: replacement strings interpret $&/$`/$' patterns,
   // which would silently corrupt materials containing them.
   return options.promptTemplate
     .replace('{{materials}}', () => materialsBlock)
     .replace('{{upstream}}', () => upstreamBlock)
+    .replace('{{params}}', () => paramsBlock)
 }
 
 export function assembleRepairPrompt(options: {

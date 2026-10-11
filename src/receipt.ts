@@ -45,6 +45,8 @@ export type Receipt = {
   readonly rulesetSnapshot: { readonly declarative: Record<string, Json>[]; readonly functionsSourceHash: string }
   /** Chain anchors for consumed upstream artifacts ([] for root packs and revalidation). */
   readonly upstreamHashes: UpstreamAnchor[]
+  /** Effective pack params as-run (declared defaults + call overrides); revalidation replays by these. */
+  readonly params?: { [key: string]: Json }
   readonly iterations: number
   readonly rounds: ReceiptRound[]
   readonly rules: ReceiptRuleResult[]
