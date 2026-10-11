@@ -1,6 +1,6 @@
 # AGENTS.md
 
-hanzeep is a deepseek-harness (dsh) plugin: closed-loop document generation with domain rule packs and replayable receipts. Design truth source: `docs/designs/hanzeep-mvp.md` (44-decision audit trail; positioning = domain rule packs + receipts + loop glue).
+hanzeep is a deepseek-harness (dsh) plugin: closed-loop document generation with domain rule packs and replayable receipts. Spec truth source: `docs/designs/hanzeep-mvp.md` (current-state functional spec: tool semantics, loop behavior, receipt fields, plugin-vs-pack boundary; the original 44-decision audit trail lives in git history).
 
 ## Layout
 

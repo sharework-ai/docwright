@@ -78,6 +78,10 @@ packs/cosmic-plan/
 
 **Pack contract:** every ERROR rule carries a `suggestion`; every language in `manifest.languages` provides rules + prompt + template; golden sample + per-rule-family mutations are mandatory (a checker that cannot catch a deliberately broken sample is decoration).
 
+## Docs
+
+- [Functional spec](docs/designs/hanzeep-mvp.md) — current-state behavior: tool semantics, loop and receipt details, and the plugin-vs-pack responsibility boundary (what the engine does vs. what a pack author writes).
+
 ## Development
 
 Requires a sibling checkout of [deepseek-harness](https://github.com/sharework-ai/deepseek-harness) at `../deepseek-harness`:
