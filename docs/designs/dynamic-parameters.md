@@ -1,6 +1,6 @@
 # 设计：生成参数机制——硬上限与用户意图注入（dynamic parameters）
 
-Status: PROPOSED — 已评审方向，未实施。
+Status: IMPLEMENTED (2026-10-11)。
 Date: 2026-10-11
 关联: docs/designs/hanzeep-mvp.md 第 3.1/3.7 节、docs/designs/convergence-detection.md（maxRounds 与终止语义的接口）、TODOS.md D3-params
 

@@ -1,7 +1,8 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import type { DeclarativeRule, FunctionRule, Pack, PackManifest, ScoreFn } from './pack.ts'
+import type { DeclarativeRule, FunctionRule, Pack, PackManifest, ParamSpec, ScoreFn } from './pack.ts'
+import { isParamRef } from './pack.ts'
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
@@ -19,6 +20,34 @@ interface RawPackDirs {
   readonly extra?: readonly string[] | undefined
 }
 
+/** Strict param-spec validation: declaration is the allowlist, so a broken declaration must fail at load. */
+function assertParamSpec(raw: unknown, dir: string, name: string): ParamSpec {
+  const where = `pack ${dir}: manifest.params.${name}`
+  if (typeof raw !== 'object' || raw === null) throw new Error(`${where} must be an object`)
+  const s = raw as Partial<ParamSpec>
+  if (s.type !== 'number' && s.type !== 'string' && s.type !== 'boolean') throw new Error(`${where}.type must be number|string|boolean`)
+  if (typeof s.description !== 'string' || s.description.length === 0) throw new Error(`${where}.description must be a non-empty string`)
+  const defaultMatches = s.default !== undefined && (s.type === 'number' ? typeof s.default === 'number' && Number.isFinite(s.default) : typeof s.default === s.type)
+  if (!defaultMatches) throw new Error(`${where}.default is required and must match type "${s.type}"`)
+  if (s.enum !== undefined) {
+    if (!Array.isArray(s.enum) || s.enum.length === 0 || s.enum.some(v => typeof v !== s.type)) {
+      throw new Error(`${where}.enum must be a non-empty array of ${s.type} values`)
+    }
+    if (!s.enum.includes(s.default)) throw new Error(`${where}.default must be one of the declared enum values`)
+  }
+  if (s.type === 'number') {
+    if (s.min !== undefined && (typeof s.min !== 'number' || !Number.isFinite(s.min))) throw new Error(`${where}.min must be a finite number`)
+    if (s.max !== undefined && (typeof s.max !== 'number' || !Number.isFinite(s.max))) throw new Error(`${where}.max must be a finite number`)
+    if (s.min !== undefined && s.max !== undefined && s.min > s.max) throw new Error(`${where}.min must be <= max`)
+    const d = s.default as number
+    if (s.min !== undefined && d < s.min) throw new Error(`${where}.default must be >= min`)
+    if (s.max !== undefined && d > s.max) throw new Error(`${where}.default must be <= max`)
+  } else if (s.min !== undefined || s.max !== undefined) {
+    throw new Error(`${where}.min/max are only valid for number-typed params`)
+  }
+  return s as ParamSpec
+}
+
 function assertManifest(raw: unknown, dir: string): PackManifest {
   if (typeof raw !== 'object' || raw === null) throw new Error(`pack ${dir}: manifest.json must be an object`)
   const m = raw as Partial<PackManifest>
@@ -30,7 +59,19 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
   if (!Array.isArray(m.languages) || m.languages.length === 0) throw new Error(`pack ${dir}: manifest.languages must be a non-empty array`)
   if (m.languages.some(l => typeof l !== 'string' || l.length === 0)) throw new Error(`pack ${dir}: manifest.languages entries must be non-empty strings`)
   if (m.consumes !== undefined && !Array.isArray(m.consumes)) throw new Error(`pack ${dir}: manifest.consumes must be an array when present`)
-  return { name: m.name, version: m.version, description: m.description, consumes: m.consumes ?? [], languages: m.languages }
+  if (m.maxRounds !== undefined && (!Number.isInteger(m.maxRounds) || m.maxRounds < 1)) {
+    throw new Error(`pack ${dir}: manifest.maxRounds must be a positive integer`)
+  }
+  let params: Readonly<Record<string, ParamSpec>> | undefined
+  if (m.params !== undefined) {
+    if (typeof m.params !== 'object' || m.params === null || Array.isArray(m.params)) {
+      throw new Error(`pack ${dir}: manifest.params must be an object of { type, default, description, ... } declarations`)
+    }
+    const out: Record<string, ParamSpec> = {}
+    for (const [name, spec] of Object.entries(m.params)) out[name] = assertParamSpec(spec, dir, name)
+    params = out
+  }
+  return { name: m.name, version: m.version, description: m.description, consumes: m.consumes ?? [], languages: m.languages, ...(m.maxRounds === undefined ? {} : { maxRounds: m.maxRounds }), ...(params === undefined ? {} : { params }) }
 }
 
 /**
@@ -39,7 +80,24 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
  * green over a failing rule. Kind-specific payloads are validated and
  * patterns compile-checked here.
  */
-function assertRule(raw: unknown, dir: string, i: number): DeclarativeRule {
+/** Numeric bound: literal or a reference to a declared number-typed param. */
+function assertBound(value: unknown, dir: string, i: number, kind: string, side: string, params: Readonly<Record<string, ParamSpec>> | undefined): void {
+  if (isParamRef(value)) {
+    const spec = params?.[value.param]
+    if (spec === undefined) {
+      throw new Error(`pack ${dir}: rules[${i}].${kind}.${side} references undeclared param "${value.param}" (declared: ${params === undefined || Object.keys(params).length === 0 ? 'none' : Object.keys(params).join(', ')})`)
+    }
+    if (spec.type !== 'number') {
+      throw new Error(`pack ${dir}: rules[${i}].${kind}.${side} references param "${value.param}" of type "${spec.type}"; bound references require a number-typed param`)
+    }
+    return
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`pack ${dir}: rules[${i}].${kind} requires a finite numeric ${side} or a { param: "..." } reference`)
+  }
+}
+
+function assertRule(raw: unknown, dir: string, i: number, params: Readonly<Record<string, ParamSpec>> | undefined): DeclarativeRule {
   if (typeof raw !== 'object' || raw === null) throw new Error(`pack ${dir}: rules[${i}] must be an object`)
   const r = raw as Record<string, unknown>
   for (const k of ['id', 'severity', 'given', 'field', 'suggestion']) {
@@ -53,10 +111,10 @@ function assertRule(raw: unknown, dir: string, i: number): DeclarativeRule {
   }
   switch (r.kind) {
     case 'minLength':
-      if (typeof r.min !== 'number' || !Number.isFinite(r.min)) throw new Error(`pack ${dir}: rules[${i}].minLength requires a finite numeric min`)
+      assertBound(r.min, dir, i, 'minLength', 'min', params)
       break
     case 'maxLength':
-      if (typeof r.max !== 'number' || !Number.isFinite(r.max)) throw new Error(`pack ${dir}: rules[${i}].maxLength requires a finite numeric max`)
+      assertBound(r.max, dir, i, 'maxLength', 'max', params)
       break
     case 'forbiddenKeywords':
       if (!Array.isArray(r.keywords) || r.keywords.length === 0 || r.keywords.some(k => typeof k !== 'string' || k.length === 0)) {
@@ -122,7 +180,7 @@ async function loadOnePack(dir: string): Promise<Pack> {
   for (const lang of manifest.languages) {
     const rawRules = JSON.parse(await readFile(join(dir, 'rules', `${lang}.json`), 'utf8')) as unknown[]
     if (!Array.isArray(rawRules)) throw new Error(`pack ${dir}: rules/${lang}.json must be an array`)
-    rules.set(lang, rawRules.map((r, i) => assertRule(r, dir, i)))
+    rules.set(lang, rawRules.map((r, i) => assertRule(r, dir, i, manifest.params)))
     const prompt = await readFile(join(dir, 'prompts', `${lang}.md`), 'utf8')
     if (!prompt.includes('{{materials}}')) {
       throw new Error(`pack ${dir}: prompts/${lang}.md is missing the {{materials}} slot; materials would be silently dropped`)

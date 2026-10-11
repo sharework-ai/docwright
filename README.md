@@ -24,7 +24,7 @@ You get an all-green receipt in seconds — zero LLM calls. This is the determin
 
 ### `doc_packs`
 
-Zero-arg discovery tool: lists installed packs as `[{ name, version, description, languages, consumes }]`. The model-facing descriptions of `doc_generate`/`doc_validate` carry a static invitation to call `doc_packs` first; unknown-pack errors also point there. Descriptions never change with the pack set (pull-based progressive disclosure).
+Zero-arg discovery tool: lists installed packs as `[{ name, version, description, languages, consumes, params }]` (params = the pack's declared tunables with type and description). The model-facing descriptions of `doc_generate`/`doc_validate` carry a static invitation to call `doc_packs` first; unknown-pack errors also point there. Descriptions never change with the pack set (pull-based progressive disclosure).
 
 ### `doc_generate`
 
@@ -35,6 +35,8 @@ Zero-arg discovery tool: lists installed packs as `[{ name, version, description
 | `language` | string? | default: config `defaultLanguage`, else the pack's first language |
 | `upstream` | string[]? | workspace-relative paths to upstream artifacts; each must carry a green sidecar receipt (hash-verified, pack type matched against `consumes`, and recording the installed pack version — see `upstreamVersionPolicy`) |
 | `artifactName` | string? | output base name (default `<pack>-<timestamp>`) |
+| `maxRounds` | number? | round cap for this call (user intent via the model); clamped to config `maxRoundsCeiling` |
+| `params` | object? | overrides for pack-declared tunables (see `doc_packs`); unknown names or out-of-range values fail loud |
 
 Returns `{ artifactPath, markdownPath, receipt }`. Artifacts, receipts, and markdown land in the output root (default `<workspace>/output/`). Exhausted loops throw AND keep the draft + red receipt on disk.
 
@@ -43,6 +45,8 @@ Returns `{ artifactPath, markdownPath, receipt }`. Artifacts, receipts, and mark
 Re-runs the ruleset over an existing artifact — deterministic, no LLM. `artifactPath` is workspace-relative (e.g. `output/plan-123.json`). Returns a fresh receipt; a hash mismatch means the artifact changed after generation.
 
 Also returns `packVersionStale`: `true` when the sidecar receipt was written by a different pack version — the artifact predates the installed pack and its green receipt certifies the OLD rules, so regenerate; `false` when versions match; `null` when no receipt exists.
+
+Validation replays by the receipt-recorded as-run pack params (original standards); pass `params` explicitly for what-if checks.
 
 ## Configuration (cordis.yml)
 
@@ -54,7 +58,8 @@ Also returns `packVersionStale`: `true` when the sidecar receipt was written by 
     materialsRoot: ""       # material reference root (default: <workspace>/references)
     outputRoot: ""          # artifact output root (default: <workspace>/output)
     defaultLanguage: "zh-CN"
-    maxIterations: 5        # repair-loop round cap
+    maxIterations: 5        # repair-loop global default rounds
+    maxRoundsCeiling: 10    # absolute round cap no override can pierce (host-operator owned)
     promptTokenBudget: 60000
     upstreamVersionPolicy: "strict"  # chained upstream pack-version mismatch: "strict" rejects, "warn" proceeds with upstreamWarnings
     oscillation:            # repair-loop early-exit policy (docs/designs/convergence-detection.md)
@@ -78,7 +83,7 @@ Hybrid packs: declarative JSON rules for simple families, JS functions for cross
 
 ```
 packs/cosmic-plan/
-├── manifest.json     # name, version, description (one line, shown to models by doc_packs), consumes, languages
+├── manifest.json     # name, version, description (one line, shown to models by doc_packs), consumes, languages, maxRounds?, params?
 ├── schema.json       # draft-07 JSON Schema
 ├── rules/zh-CN.json  # declarative: minLength / maxLength / forbiddenKeywords / pattern
 ├── rules/functions.js# export const rules = [{ id, severity, suggestion, check(artifact) }]; optional export function score(artifact, issues) => 0-100 (convergence scoring)
@@ -87,7 +92,7 @@ packs/cosmic-plan/
 └── samples/golden.json  # must pass all-green; feeds mutation tests
 ```
 
-**Pack contract:** `manifest.description` is a required one-liner naming the document this pack generates (load-time enforced; `doc_packs` returns it verbatim to the model); every ERROR rule carries a `suggestion`; every language in `manifest.languages` provides rules + prompt + template; golden sample + per-rule-family mutations are mandatory (a checker that cannot catch a deliberately broken sample is decoration).
+**Pack contract:** `manifest.description` is a required one-liner naming the document this pack generates (load-time enforced; `doc_packs` returns it verbatim to the model); `manifest.params` declares the pack's tunables (declaration IS the allowlist — `{ type, default, description, enum?, min?, max? }` per param; declarative-rule numeric bounds may reference number params via `{ "param": "name" }`); `manifest.maxRounds` optionally sets the pack's default loop rounds; every ERROR rule carries a `suggestion`; every language in `manifest.languages` provides rules + prompt + template; golden sample + per-rule-family mutations are mandatory (a checker that cannot catch a deliberately broken sample is decoration).
 
 ## Docs
 

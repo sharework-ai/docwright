@@ -17,6 +17,7 @@ export { Config }
 export type { HanzeepConfig }
 export * from './pack.ts'
 export { createScoring, defaultScore, type Scoring } from './convergence.ts'
+export { resolveEffectiveParams } from './params.ts'
 export { DocService, generateDocument } from './doc-service.ts'
 export { runRepairLoop, type LoopExhaustReason } from './loop.ts'
 

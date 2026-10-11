@@ -19,6 +19,8 @@ export interface LoopOptions {
   readonly promptTemplate: string
   readonly materials: readonly string[]
   readonly upstream?: readonly string[] | undefined
+  /** Effective pack params; rendered into the {{params}} slot of every round's prompt. */
+  readonly params?: Readonly<Record<string, unknown>> | undefined
   readonly maxIterations: number
   readonly promptTokenBudget: number
   readonly model: string
@@ -86,6 +88,7 @@ export async function runRepairLoop(
     promptTemplate: options.promptTemplate,
     materials: options.materials,
     upstream: options.upstream,
+    params: options.params,
   })
   let request = originalRequest
   let iterations = 0
