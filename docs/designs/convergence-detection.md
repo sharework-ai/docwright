@@ -30,8 +30,8 @@ Date: 2026-10-11
 
 | 层 | 启用条件 | 说明 |
 |---|---|---|
-| 1. pack 评分 | pack 的 `functions.js` 导出 `score(artifact, issues) => number`（越高越好） | pack 作者按文档领域定义质量分（cosmic-claude 的 0-100 审计评分是现成迁移来源）。加载期校验：`score` 若存在必须是函数；调用崩溃 fail loud 并带 `pack/score` 标识（与函数规则崩溃处理一致） |
-| 2. 内置默认评分 | pack 未导出 `score` 时自动启用 | 严重度加权：`100 − wE×error − wW×warning − wI×info`（默认 10/3/1，可配）。不写评分的 pack 免费获得轨迹检测 |
+| 1. pack 评分 | pack 的 `functions.js` 导出 `score(artifact, issues) => number`（**0-100 百分制**，越高越好；返回越界 fail loud，与函数规则崩溃同路径） | pack 作者按文档领域定义质量分（cosmic-claude 的 0-100 审计评分是现成迁移来源）。加载期校验：`score` 若存在必须是函数；调用崩溃 fail loud 并带 `pack/score` 标识 |
+| 2. 内置默认评分 | pack 未导出 `score` 时自动启用 | 严重度加权，同样百分制：`clamp(100 − wE×error − wW×warning − wI×info, 0, 100)`（默认 10/3/1，可配）。不写评分的 pack 免费获得轨迹检测 |
 | 3. 指纹兜底 | Config 显式选择 fingerprint 模式时 | 规则放宽：连续 N 次指纹相同才终止（默认 N=3，现状是 2 轮即杀） |
 
 `mode: auto`（默认）= 有 pack 评分用层 1，否则层 2；`mode: score` 强制层 1（pack 没导出 score 则调用期报错）；`mode: fingerprint` 强制层 3。
@@ -52,7 +52,7 @@ pack 的评分由 checker 每轮计算、循环内部跟踪，不进入文档。
 
 ### 可观测性
 
-- 回执 `rounds[]` 每轮增加 `score?: number`；
+- 回执 `rounds[]` 每轮增加 `score?: number`（0-100 百分制）；
 - 终止原因进回执/循环结果：`reason: 'green' | 'stagnation' | 'decline' | 'fingerprint-repeat' | 'max-iterations' | 'llm-error'`——收敛过程从不可见变为可审计。
 - 回执 formatVersion 维持 1：新增字段全部为可选附加项，老读者读新回执不受影响，新读者把缺失字段视为"无"。
 
@@ -88,6 +88,7 @@ oscillation:
 1. 默认评分权重（10/3/1）与 stagnantRounds/decliningRounds 默认值需用 cosmic-claude 历史产物实测校准（可复用 design 审计表 #21 的收敛率基线思路）。
 2. epsilon 对浮点评分的合理默认（0 对整数评分足够，浮点评分 pack 需自配）。
 3. 评分轨迹是否同时进入 doc-gen-round session 事件（与既有 TODOS T2-core 合并考虑，避免两处重复设计）。
+4. 百分制触底饱和：严重坏文档（默认权重下 ≥10 个 error）会触 0 分，层 2 随后无法区分"小步改善"与"原地踏步"，退化为横盘检测（按 stagnantRounds 终止，不会空转烧钱）。是否需要计数维度补偿或权重细化，待 cosmic-claude 历史产物实测后定；对严重坏文档早停本就符合成本护栏意图。
 
 ## 附录 A：已否决（已定案，不再重开）
 
@@ -100,4 +101,5 @@ oscillation:
 ## 决策记录
 
 - 2026-10-11 用户指出指纹机制对"修好 A 坏了 B"过于敏感、提出评分机制优先 + 指纹宽松兜底 + 参数可配置的分层设计，采纳为总体框架。
+- 2026-10-11 用户补充：评分统一采用百分制（0-100），pack 评分契约与内置默认评分同标。
 - 修正两点（经讨论确认）：现状指纹实际抓不住"修好 A 坏了 B"（那是失明侧，恰是评分要补的）；评分改由 checker 计算而非嵌入文档（防作弊/产物纯净/信任层级），"文档内约定位置"改为"functions.js 约定导出"。
