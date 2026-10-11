@@ -16,6 +16,8 @@ export type ReceiptRound = {
   readonly round: number
   readonly errorCount: number
   readonly warningCount: number
+  /** Convergence score of the round (score mode only, 0-100). */
+  readonly score?: number
 }
 
 export type ReceiptRuleResult = {
@@ -47,6 +49,8 @@ export type Receipt = {
   readonly rounds: ReceiptRound[]
   readonly rules: ReceiptRuleResult[]
   readonly isValid: boolean
+  /** Why the loop gave up; absent on green receipts (docs/designs/convergence-detection.md). */
+  readonly terminationReason?: 'stagnation' | 'decline' | 'fingerprint-repeat' | 'max-iterations' | 'llm-error'
   readonly generatedAt: string
   readonly model: string
 }

@@ -69,9 +69,13 @@ hanzeep 的差异化就在"内容合格性"这一层，由三件事组成：
 
 **修复 prompt 组装**：原生成 prompt + 当前产物 JSON + 按 jsonPath 分组、逐条携带 severity/message/suggestion 的 Issue 清单 + 指令"只修复列出的问题，输出完整 JSON，不要改动未列出的部分"。
 
-**振荡检测**：连续两轮 Issue 指纹（ruleId+jsonPath+message 排序拼接）完全相同 → 提前终止（"修好 A 坏了 B"的空转不再烧迭代）。
+**收敛检测与提前终止**（详见 docs/designs/convergence-detection.md）：提前终止只决定"何时放弃"，全绿判定始终是 0 ERROR。三层策略由 `oscillation.mode` 选择（默认 `auto`）：
 
-**迭代上限**：`maxIterations`（默认 5）耗尽 → 按失败返回（见 3.1），回执记录每轮的 error/warning 计数，收敛过程可观测。
+1. **pack 评分**：`functions.js` 导出 `score(artifact, issues)`（0-100 百分制，越高越好；越界/崩溃 fail loud）时启用。连续 K 轮未超过历史最优分（默认 K=3，容忍单轮回撤）→ 终止 reason `stagnation`；连续 D 轮严格下降（默认 D=3）→ reason `decline`。
+2. **内置默认评分**（pack 未导出 score 时自动启用）：`clamp(100 − 10×error − 3×warning − 1×info, 0, 100)`，权重可配。
+3. **指纹兜底**（`mode: "fingerprint"`）：连续 3 轮 Issue 指纹完全相同 → reason `fingerprint-repeat`。
+
+**迭代上限**：`maxIterations`（默认 5）耗尽 → reason `max-iterations`，按失败返回（见 3.1）；模型调用失败 → reason `llm-error`。终止原因与每轮评分（score 模式）写入回执，收敛过程可审计。
 
 ### 3.3 验证回执（receipt）
 
@@ -86,9 +90,10 @@ sidecar 文件 `<产物名>.receipt.json` 与产物同目录；同时内联在�
 | `schemaHash` | pack schema 的 sha256 |
 | `rulesetSnapshot` | **声明式规则全文**（按语言）+ `functions.js` 源码哈希——pack 升级后历史回执仍可解释当时依据 |
 | `upstreamHashes` | 链式锚点：每个上游的 pack/packVersion/artifactHash |
-| `iterations` / `rounds` | 闭环轮数；每轮 `{round, errorCount, warningCount}` |
+| `iterations` / `rounds` | 闭环轮数；每轮 `{round, errorCount, warningCount}` 及评分（score 模式，0-100） |
 | `rules` | 逐规则 rollup：`{ruleId, severity, status: pass\|fail, count}`；schema 违规归并为 `schema/*` 族 |
 | `isValid` | 全绿与否 |
+| `terminationReason` | 红回执的终止原因（`stagnation` / `decline` / `fingerprint-repeat` / `max-iterations` / `llm-error`）；绿回执无此字段 |
 | `generatedAt` / `model` | ISO 时间戳；模型标识（复验轮为 `revalidate`） |
 
 **防篡改语义**：`doc_generate` 与 `doc_validate` 共用同一个回执构造器（两种回执永不漂移）。回执是 tamper-evident 而非 tamper-proof——无签名，误改必红，蓄意伪造产物+回执不可防。
@@ -131,6 +136,13 @@ Schema 的 ajv 编译在首次构建该 (pack, language) 的 DocService 时发�
     maxIterations: 5        # 闭环轮数上限
     promptTokenBudget: 60000
     upstreamVersionPolicy: "strict"  # 链式上游版本不符：strict 拒绝 / warn 放行并告警
+    oscillation:            # 收敛检测（提前终止策略，详见 docs/designs/convergence-detection.md）
+      mode: auto            # auto | score | fingerprint
+      stagnantRounds: 3
+      decliningRounds: 3
+      maxRepeats: 3
+      epsilon: 0
+      defaultScore: { error: 10, warning: 3, info: 1 }
     provider: "deepseek-official"    # 宿主 LLM 路由名（必填才能 doc_generate）
     model: "deepseek-chat"
 ```
@@ -173,7 +185,7 @@ packs/<name>/
 
 ### 4.3 函数规则（`rules/functions.js`）
 
-导出 `rules` 数组，每条 `{ id, severity(默认 error), suggestion, check(artifact) }`；`check` 返回 `RuleIssue[]`（`{ jsonPath, message, snapshot? }`，空数组即通过），拿到整个产物，负责声明式四族表达不了的跨字段断言。规则运行时崩溃会带上规则 id 报错（不静默跳过）。
+导出 `rules` 数组，每条 `{ id, severity(默认 error), suggestion, check(artifact) }`；`check` 返回 `RuleIssue[]`（`{ jsonPath, message, snapshot? }`，空数组即通过），拿到整个产物，负责声明式四族表达不了的跨字段断言。规则运行时崩溃会带上规则 id 报错（不静默跳过）。另可导出 `score(artifact, issues) => 0-100`（收敛检测的 pack 层评分，越高越好；缺省自动启用内置严重度评分）。
 
 ### 4.4 作者硬契约
 
@@ -211,8 +223,6 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 
 ## 7. 当前限制与路线（未实现，按优先级参考 TODOS.md）
 
-- 能力发现机制（manifest 自描述 + `doc_packs` 工具 + 静态邀请文案）：已设计待实施，见 docs/designs/capability-discovery.md——当前新装 pack 仅能靠报错兜底被发现。
-- 收敛检测三层机制（pack 评分 > 内置严重度评分 > 指纹兜底）：已设计待实施，见 docs/designs/convergence-detection.md——当前指纹机制对"修好 A 坏了 B"型空转失明、对原地踏步过敏。
 - 参数最小桥（doc_generate 的 params/maxRounds 参数、pack 参数声明 schema、maxRoundsCeiling 硬上限、回执 as-run 快照）：已设计待实施，见 docs/designs/dynamic-parameters.md。
 - 真实 LLM 的闭环端到端尚未验证（无 API key 环境，确定性路径全覆盖）。
 - 闭环每轮数据目前只进回执；独立的 doc-gen-round session 事件（model-visible ⟺ logged 的专项审计流）延后。

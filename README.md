@@ -57,6 +57,13 @@ Also returns `packVersionStale`: `true` when the sidecar receipt was written by 
     maxIterations: 5        # repair-loop round cap
     promptTokenBudget: 60000
     upstreamVersionPolicy: "strict"  # chained upstream pack-version mismatch: "strict" rejects, "warn" proceeds with upstreamWarnings
+    oscillation:            # repair-loop early-exit policy (docs/designs/convergence-detection.md)
+      mode: auto            # auto | score | fingerprint
+      stagnantRounds: 3     # consecutive rounds without beating the best score
+      decliningRounds: 3    # consecutive strictly-decreasing rounds
+      maxRepeats: 3         # fingerprint fallback: consecutive identical fingerprints
+      epsilon: 0
+      defaultScore: { error: 10, warning: 3, info: 1 }
     provider: "deepseek-official"  # an LLM route registered in the host (required)
     model: "deepseek-chat"
 ```
@@ -74,7 +81,7 @@ packs/cosmic-plan/
 ├── manifest.json     # name, version, description (one line, shown to models by doc_packs), consumes, languages
 ├── schema.json       # draft-07 JSON Schema
 ├── rules/zh-CN.json  # declarative: minLength / maxLength / forbiddenKeywords / pattern
-├── rules/functions.js# export const rules = [{ id, severity, suggestion, check(artifact) }]
+├── rules/functions.js# export const rules = [{ id, severity, suggestion, check(artifact) }]; optional export function score(artifact, issues) => 0-100 (convergence scoring)
 ├── prompts/zh-CN.md  # generator prompt with {{materials}} / {{upstream}} slots
 ├── templates/zh-CN.hbs
 └── samples/golden.json  # must pass all-green; feeds mutation tests

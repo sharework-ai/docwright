@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import type { DeclarativeRule, FunctionRule, Pack, PackManifest } from './pack.ts'
+import type { DeclarativeRule, FunctionRule, Pack, PackManifest, ScoreFn } from './pack.ts'
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
@@ -77,13 +77,13 @@ function assertRule(raw: unknown, dir: string, i: number): DeclarativeRule {
 }
 
 /** Function-rule modules authored by pack maintainers; validated on load. */
-async function loadFunctionRules(dir: string): Promise<{ rules: readonly FunctionRule[]; sourceHash: string }> {
+async function loadFunctionRules(dir: string): Promise<{ rules: readonly FunctionRule[]; sourceHash: string; score: ScoreFn | undefined }> {
   const rulesPath = join(dir, 'rules', 'functions.js')
   let source: string
   try {
     source = await readFile(rulesPath, 'utf8')
   } catch {
-    return { rules: [], sourceHash: '' }
+    return { rules: [], sourceHash: '', score: undefined }
   }
   let mod: Record<string, unknown>
   try {
@@ -105,7 +105,11 @@ async function loadFunctionRules(dir: string): Promise<{ rules: readonly Functio
     }
     return { ...r, severity: r.severity ?? 'error' } as FunctionRule
   })
-  return { rules, sourceHash: sha256(source) }
+  const score = mod.score
+  if (score !== undefined && typeof score !== 'function') {
+    throw new Error(`pack ${dir}: rules/functions.js \`score\` export must be a function (artifact, issues) => 0-100 number`)
+  }
+  return { rules, sourceHash: sha256(source), score: score as ScoreFn | undefined }
 }
 
 async function loadOnePack(dir: string): Promise<Pack> {
@@ -127,8 +131,8 @@ async function loadOnePack(dir: string): Promise<Pack> {
     templates.set(lang, await readFile(join(dir, 'templates', `${lang}.hbs`), 'utf8'))
   }
   const goldenSample = JSON.parse(await readFile(join(dir, 'samples', 'golden.json'), 'utf8'))
-  const { rules: functionRules, sourceHash } = await loadFunctionRules(dir)
-  return { manifest, schema, rules, functionRules, functionsSourceHash: sourceHash, prompts, templates, goldenSample, dir }
+  const { rules: functionRules, sourceHash, score } = await loadFunctionRules(dir)
+  return { manifest, schema, rules, functionRules, score, functionsSourceHash: sourceHash, prompts, templates, goldenSample, dir }
 }
 
 async function listPackRoots(root: string): Promise<readonly string[]> {

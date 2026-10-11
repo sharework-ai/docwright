@@ -1,4 +1,4 @@
-import type { Severity } from './issue.ts'
+import type { Issue, Severity } from './issue.ts'
 
 /**
  * Hybrid pack: declarative JSON rules for simple families plus a JS function
@@ -28,6 +28,14 @@ export interface RuleIssue {
   readonly snapshot?: string
 }
 
+/**
+ * Pack-provided convergence score (layer 1 of the termination policy):
+ * a 0-100 quality estimate, higher is better. Receives the artifact and the
+ * round's issues so cross-field and rule-aware scoring are both possible.
+ * Never decides green — 0 errors does; it only informs early termination.
+ */
+export type ScoreFn = (artifact: unknown, issues: readonly Issue[]) => number
+
 /** Pack manifest (`manifest.json`); version gates breaking pack changes. */
 export interface PackManifest {
   readonly name: string
@@ -48,6 +56,8 @@ export interface Pack {
   /** Declarative rules; language-scoped keyword rules keyed per language. */
   readonly rules: ReadonlyMap<string, readonly DeclarativeRule[]>
   readonly functionRules: readonly FunctionRule[]
+  /** Optional convergence scorer exported from rules/functions.js (0-100). */
+  readonly score?: ScoreFn | undefined
   /** sha256 of rules/functions.js source bytes; '' when the pack ships none. */
   readonly functionsSourceHash: string
   /** Generator prompt per language; `{{materials}}`, `{{upstream}}` slots. */
