@@ -1,21 +1,24 @@
 lockfileVersion: '9.0'
 
 settings:
-  autoInstallPeers: false
+  autoInstallPeers: true
   excludeLinksFromLockfile: false
 
 overrides:
-  '@deepseek-ai/schemastery': file:../deepseek-harness/vendor/schemastery
-  '@deepseek-ai/cordis': ^4.0.1
-  '@deepseek-ai/cosmokit': ^1.8.2
+  '@deepseek-ai/cordis': link:../deepseek-harness/vendor/cordis
+  '@deepseek-ai/cosmokit': link:../deepseek-harness/vendor/cosmokit
+  '@deepseek-ai/schemastery': link:../deepseek-harness/vendor/schemastery
 
 importers:
 
   .:
     dependencies:
+      '@deepseek-ai/cordis':
+        specifier: link:../deepseek-harness/vendor/cordis
+        version: link:../deepseek-harness/vendor/cordis
       '@deepseek-ai/schemastery':
-        specifier: file:../deepseek-harness/vendor/schemastery
-        version: file:../deepseek-harness/vendor/schemastery
+        specifier: link:../deepseek-harness/vendor/schemastery
+        version: link:../deepseek-harness/vendor/schemastery
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
@@ -23,24 +26,21 @@ importers:
         specifier: ^4.7.8
         version: 4.7.9
     devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: ^4.0.1
-        version: 4.0.1
       '@deepseek-ai/dsh-llm':
-        specifier: file:../deepseek-harness/packages/llm/llm
-        version: file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1))
+        specifier: link:../deepseek-harness/packages/llm/llm
+        version: link:../deepseek-harness/packages/llm/llm
       '@deepseek-ai/dsh-scope':
-        specifier: file:../deepseek-harness/packages/core/scope
-        version: file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1)
+        specifier: link:../deepseek-harness/packages/core/scope
+        version: link:../deepseek-harness/packages/core/scope
       '@deepseek-ai/dsh-session':
-        specifier: file:../deepseek-harness/packages/core/session
-        version: file:../deepseek-harness/packages/core/session(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-llm@file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-scope@file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1))
+        specifier: link:../deepseek-harness/packages/core/session
+        version: link:../deepseek-harness/packages/core/session
       '@deepseek-ai/dsh-timeout':
-        specifier: file:../deepseek-harness/packages/util/timeout
-        version: file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1)
+        specifier: link:../deepseek-harness/packages/util/timeout
+        version: link:../deepseek-harness/packages/util/timeout
       '@deepseek-ai/dsh-tools':
-        specifier: file:../deepseek-harness/packages/core/tools
-        version: file:../deepseek-harness/packages/core/tools(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-llm@file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-scope@file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1))(@deepseek-ai/dsh-session@file:../deepseek-harness/packages/core/session(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-llm@file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-scope@file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1)))
+        specifier: link:../deepseek-harness/packages/core/tools
+        version: link:../deepseek-harness/packages/core/tools
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
@@ -87,68 +87,6 @@ packages:
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
-
-  '@deepseek-ai/cordis@4.0.1':
-    resolution: {integrity: sha512-YBdskTU2Po1kru3GgcUWUbkTsPMA9LkSQDAY8rBkFJeajdgcQad3QPJZE26JyK99Xb6HaASvoXg2DSUTeN/0Nw==}
-    hasBin: true
-    peerDependencies:
-      '@deepseek-ai/cordis-plugin-include': ^1.0.6
-      '@deepseek-ai/cordis-plugin-loader': ^1.0.2
-    peerDependenciesMeta:
-      '@deepseek-ai/cordis-plugin-include':
-        optional: true
-      '@deepseek-ai/cordis-plugin-loader':
-        optional: true
-
-  '@deepseek-ai/cosmokit@1.8.2':
-    resolution: {integrity: sha512-muBOKtSrUKU5m/xpq8ZXWL6hQ/jgd4PhU2PqH97bcxIiLEJfNwZOGQEx4t/aS/GgxRAR+ra9pMHPMtTHU4sqqA==}
-
-  '@deepseek-ai/dsh-llm@file:../deepseek-harness/packages/llm/llm':
-    resolution: {directory: ../deepseek-harness/packages/llm/llm, type: directory}
-    peerDependencies:
-      '@deepseek-ai/cordis': ^4.0.1
-      '@deepseek-ai/dsh-attachment': workspace:^
-      '@deepseek-ai/dsh-brand': workspace:^
-      '@deepseek-ai/dsh-invariants': workspace:^
-      '@deepseek-ai/dsh-timeout': workspace:^
-
-  '@deepseek-ai/dsh-scope@file:../deepseek-harness/packages/core/scope':
-    resolution: {directory: ../deepseek-harness/packages/core/scope, type: directory}
-    peerDependencies:
-      '@deepseek-ai/cordis': ^4.0.1
-      '@deepseek-ai/dsh-invariants': workspace:^
-
-  '@deepseek-ai/dsh-session@file:../deepseek-harness/packages/core/session':
-    resolution: {directory: ../deepseek-harness/packages/core/session, type: directory}
-    peerDependencies:
-      '@deepseek-ai/cordis': ^4.0.1
-      '@deepseek-ai/dsh-brand': workspace:^
-      '@deepseek-ai/dsh-invariants': workspace:^
-      '@deepseek-ai/dsh-llm': workspace:^
-      '@deepseek-ai/dsh-scope': workspace:^
-      '@deepseek-ai/dsh-typert-protocol': workspace:^
-
-  '@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout':
-    resolution: {directory: ../deepseek-harness/packages/util/timeout, type: directory}
-    peerDependencies:
-      '@deepseek-ai/cordis': ^4.0.1
-      '@deepseek-ai/dsh-invariants': workspace:^
-
-  '@deepseek-ai/dsh-tools@file:../deepseek-harness/packages/core/tools':
-    resolution: {directory: ../deepseek-harness/packages/core/tools, type: directory}
-    peerDependencies:
-      '@deepseek-ai/cordis': ^4.0.1
-      '@deepseek-ai/dsh-agent': workspace:^
-      '@deepseek-ai/dsh-code-runtime': workspace:^
-      '@deepseek-ai/dsh-invariants': workspace:^
-      '@deepseek-ai/dsh-llm': workspace:^
-      '@deepseek-ai/dsh-scope': workspace:^
-      '@deepseek-ai/dsh-session': workspace:^
-      '@deepseek-ai/dsh-system-prompt': workspace:^
-      '@deepseek-ai/dsh-user-approval': workspace:^
-
-  '@deepseek-ai/schemastery@file:../deepseek-harness/vendor/schemastery':
-    resolution: {directory: ../deepseek-harness/vendor/schemastery, type: directory}
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -580,9 +518,6 @@ packages:
     resolution: {integrity: sha512-hncn90N4sOky0L2LKE5oESKLbxCPeVo4eLA2LSMoDzM+879ml4WSr+Rr4DWknNIVVvS1Hirkc9hx02W6YxS8rQ==}
     cpu: [x64]
     os: [win32]
-
-  '@standard-schema/spec@1.1.0':
-    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1222,46 +1157,6 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@deepseek-ai/cordis@4.0.1':
-    dependencies:
-      '@deepseek-ai/cosmokit': 1.8.2
-      '@standard-schema/spec': 1.1.0
-
-  '@deepseek-ai/cosmokit@1.8.2': {}
-
-  '@deepseek-ai/dsh-llm@file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1))':
-    dependencies:
-      '@deepseek-ai/cordis': 4.0.1
-      '@deepseek-ai/dsh-timeout': file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1)
-      '@deepseek-ai/schemastery': file:../deepseek-harness/vendor/schemastery
-
-  '@deepseek-ai/dsh-scope@file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1)':
-    dependencies:
-      '@deepseek-ai/cordis': 4.0.1
-
-  '@deepseek-ai/dsh-session@file:../deepseek-harness/packages/core/session(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-llm@file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-scope@file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1))':
-    dependencies:
-      '@deepseek-ai/cordis': 4.0.1
-      '@deepseek-ai/dsh-llm': file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1))
-      '@deepseek-ai/dsh-scope': file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1)
-
-  '@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1)':
-    dependencies:
-      '@deepseek-ai/cordis': 4.0.1
-
-  '@deepseek-ai/dsh-tools@file:../deepseek-harness/packages/core/tools(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-llm@file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-scope@file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1))(@deepseek-ai/dsh-session@file:../deepseek-harness/packages/core/session(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-llm@file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-scope@file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1)))':
-    dependencies:
-      '@deepseek-ai/cordis': 4.0.1
-      '@deepseek-ai/dsh-llm': file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1))
-      '@deepseek-ai/dsh-scope': file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1)
-      '@deepseek-ai/dsh-session': file:../deepseek-harness/packages/core/session(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-llm@file:../deepseek-harness/packages/llm/llm(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-timeout@file:../deepseek-harness/packages/util/timeout(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-scope@file:../deepseek-harness/packages/core/scope(@deepseek-ai/cordis@4.0.1))
-      '@deepseek-ai/schemastery': file:../deepseek-harness/vendor/schemastery
-
-  '@deepseek-ai/schemastery@file:../deepseek-harness/vendor/schemastery':
-    dependencies:
-      '@deepseek-ai/cosmokit': 1.8.2
-      '@standard-schema/spec': 1.1.0
-
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
 
@@ -1498,8 +1393,6 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.63.0':
     optional: true
-
-  '@standard-schema/spec@1.1.0': {}
 
   '@types/chai@5.2.3':
     dependencies:

@@ -26,7 +26,7 @@ npx tsc -b tsconfig.json  # typecheck only
 - Registrations are effects (`ctx.tools.register` disposes with the fiber).
 - Misconfiguration fails loud at plugin apply (bad manifest/ruleset/language).
 - No hardcoded tunables: everything deployment-varying is a Config field.
-- `@deepseek-ai/*` are peerDependencies; devDependencies use local `file:` links only because the published npm line is incomplete (see README Development note).
+- `@deepseek-ai/*` are peerDependencies; devDependencies use local `link:` targets under `../deepseek-harness` (bare symlinks; a sibling dsh checkout must be installed and `build:lib:host`-built first) because the published npm line is incomplete (see README Development note).
 - Errors follow problem + cause + fix, with available options where applicable (unknown pack lists packs; bad language lists supported ones).
 - The repair loop is the product: every change to loop.ts needs a deterministic test (scripted LlmPort; no live model in unit tests).
 

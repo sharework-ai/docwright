@@ -1,0 +1,12 @@
+allowBuilds:
+  esbuild: true
+
+# Align every @deepseek-ai runtime library with the copies deepseek-harness
+# vendors (one instance per identity in the vitest process). Remove once dsh
+# publishes a complete npm line and the link: devDependencies become registry
+# versions.
+overrides:
+  '@deepseek-ai/cordis': 'link:../deepseek-harness/vendor/cordis'
+  '@deepseek-ai/cosmokit': 'link:../deepseek-harness/vendor/cosmokit'
+  '@deepseek-ai/schemastery': 'link:../deepseek-harness/vendor/schemastery'
+

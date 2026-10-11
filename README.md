@@ -77,13 +77,19 @@ packs/cosmic-plan/
 
 ## Development
 
+Requires a sibling checkout of [deepseek-harness](https://github.com/sharework-ai/deepseek-harness) at `../deepseek-harness`:
+
 ```sh
-pnpm install
-pnpm test            # 114 tests, coverage gate 100% lines/functions/statements
-pnpm run build       # tsc + tsdown
+# one-time, inside ../deepseek-harness: install deps and build the lib/ outputs
+corepack pnpm install && corepack pnpm run build:lib:host
+
+# then, in this repo
+corepack pnpm install
+corepack pnpm test            # 130 tests, coverage gate 100% lines/functions/statements
+corepack pnpm run build       # tsc + tsdown
 ```
 
-**Note on devDependencies:** `@deepseek-ai/dsh-*` packages link to a local `deepseek-harness` checkout via `file:` because the published npm `0.0.1-rc.1` line is incomplete (e.g. `dsh-llm` depends on the unpublished `dsh-type-meta`). Runtime consumers never install these — they are `peerDependencies` resolved from the host dsh installation. Switch the `file:` entries back to registry versions once dsh publishes a complete release.
+**Note on devDependencies:** `@deepseek-ai/dsh-*` packages link to the local `deepseek-harness` checkout via `link:` (a bare symlink: `file:` would try to resolve dsh's `workspace:*` internals, which only resolve inside the dsh workspace). The linked packages' `exports` point at their `lib/` build outputs, hence the one-time dsh build above. `pnpm-workspace.yaml` overrides also align `cordis`/`cosmokit`/`schemastery` with dsh's vendored copies so a single instance of each loads per process. Runtime consumers never install these — they are `peerDependencies` resolved from the host dsh installation. Switch the `link:` entries back to registry versions once dsh publishes a complete release.
 
 ## Limitations
 
