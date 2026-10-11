@@ -14,7 +14,7 @@ docs/       design doc + test plan
 ## Commands
 
 ```sh
-pnpm test               # vitest (80 tests)
+pnpm test               # vitest
 pnpm test:coverage      # coverage gate
 pnpm run build          # tsc -b + tsdown
 npx tsc -b tsconfig.json  # typecheck only
