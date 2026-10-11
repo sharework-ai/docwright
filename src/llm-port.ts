@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { BlockAssembler } from '@deepseek-ai/dsh-llm'
 import { isAbortError } from './issue.ts'
 import type { LlmRuntime, GenerateOptions } from '@deepseek-ai/dsh-llm'
 
@@ -28,7 +28,7 @@ export function createLlmPort(ctx: Context, route: LlmRoute): LlmPort {
         provider: route.provider,
         model: route.model,
         system,
-        messages: [createUserMessage({ content: [{ type: 'text', text: user }], source: { kind: 'plugin', plugin: 'hanzeep' } })],
+        messages: [{ role: 'user', content: [{ type: 'text', text: user }] }],
         ...(maxTokens === undefined ? {} : { maxTokens }),
         ...(signal === undefined ? {} : { signal }),
       }
