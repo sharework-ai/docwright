@@ -45,6 +45,14 @@ describe('pack loader', () => {
     await expect(loadPacks(packsRoot, { extra: [root] })).rejects.toThrow(/manifest.name/)
   })
 
+  it('fails loud when manifest.description is missing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'hanzeep-desc-root-'))
+    const dir = join(root, 'no-desc')
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'no-desc', version: '1', languages: ['zh-CN'] }), 'utf8')
+    await expect(loadPacks(root, {})).rejects.toThrow(/manifest\.description/)
+  })
+
   it('fails loud when a rules file is not an array', async () => {
     const root = await mkdtemp(join(tmpdir(), 'hanzeep-root-'))
     const dir = join(root, 'broken-pack')
@@ -52,7 +60,7 @@ describe('pack loader', () => {
     await mkdir(join(dir, 'prompts'), { recursive: true })
     await mkdir(join(dir, 'templates'), { recursive: true })
     await mkdir(join(dir, 'samples'), { recursive: true })
-    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'broken', version: '1', languages: ['zh-CN'], consumes: [] }), 'utf8')
+    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'broken', version: '1', description: 'd', languages: ['zh-CN'], consumes: [] }), 'utf8')
     await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
     await writeFile(join(dir, 'rules', 'zh-CN.json'), '{"not":"array"}', 'utf8')
     await writeFile(join(dir, 'prompts', 'zh-CN.md'), 'p', 'utf8')

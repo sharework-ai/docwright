@@ -1,6 +1,7 @@
 {
   "name": "cosmic-plan",
   "version": "0.1.0",
+  "description": "COSMIC function-point estimation plan: decomposes one requirement into leaf functions with hierarchical names, descriptions, and estimated CFPs, validated by COSMIC audit rules (root pack, no upstream consumed).",
   "consumes": [],
   "languages": ["zh-CN", "en-US"]
 }

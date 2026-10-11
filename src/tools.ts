@@ -40,7 +40,7 @@ function confinePath(workspaceRoot: string, ref: string, what: string): string {
 function resolvePack(deps: ToolDeps, name: string): Pack {
   const pack = deps.packs.get(name)
   if (pack === undefined) {
-    throw new Error(`unknown pack "${name}" (available: ${[...deps.packs.keys()].sort().join(', ')})`)
+    throw new Error(`unknown pack "${name}"; discover installed packs via doc_packs (available: ${[...deps.packs.keys()].sort().join(', ')})`)
   }
   return pack
 }
@@ -83,15 +83,43 @@ export type ValidateToolResult = {
   readonly packVersionStale: boolean | null
 }
 
+/**
+ * Pull-based capability discovery: the model calls this before doc_generate
+ * to learn which packs are installed and pick the right one. Tool descriptions
+ * stay static — the registry lives here, not in copy (docs/designs/capability-discovery.md).
+ */
+export function defineDocPacksTool(deps: ToolDeps) {
+  return defineTool({
+    name: 'doc_packs',
+    description: 'List installed document packs: name, one-line description, supported languages, and consumed upstream types. '
+      + 'Call this before doc_generate to pick the right pack for the document the user wants.',
+    parameters: {},
+    output: {
+      schema: { type: 'json' },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    async execute() {
+      return [...deps.packs.values()].map(p => ({
+        name: p.manifest.name,
+        version: p.manifest.version,
+        description: p.manifest.description,
+        languages: [...p.manifest.languages],
+        consumes: [...p.manifest.consumes],
+      }))
+    },
+  })
+}
+
 export function defineDocGenerateTool(deps: ToolDeps) {
   return defineTool({
     name: 'doc_generate',
     description: 'Generate a structured document via the pack\'s closed loop (generate → validate → repair until green). '
+      + 'Call doc_packs first to see which packs are installed, then pass its name as pack. '
       + 'Returns artifactPath, markdownPath, and the validation receipt. '
       + 'Materials are paths relative to the materials root (default <workspace>/references/) or inline text starting with "#!inline"; '
       + 'artifacts land under the output root (default <workspace>/output/).',
     parameters: {
-      pack: { type: 'string', required: true, description: 'Pack name (e.g. cosmic-plan)' },
+      pack: { type: 'string', required: true, description: 'Pack name; discover installed packs with doc_packs (e.g. cosmic-plan)' },
       materials: { type: 'array', required: true, items: { type: 'string' }, description: 'Material references: paths relative to the materials root (default references/ under the workspace) or #!inline text' },
       language: { type: 'string', description: 'Output language (default: config defaultLanguage)' },
       upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn")' },
@@ -151,7 +179,8 @@ export function defineDocValidateTool(deps: ToolDeps) {
   return defineTool({
     name: 'doc_validate',
     description: 'Re-validate an existing document artifact against its pack ruleset and compare its hash with the sidecar receipt. '
-      + 'Deterministic, no LLM. Returns a fresh receipt; hashMatches=false means the artifact changed after generation; hashMatches=null means no prior receipt exists. '
+      + 'Deterministic, no LLM. Call doc_packs to see which packs are installed. '
+      + 'Returns a fresh receipt; hashMatches=false means the artifact changed after generation; hashMatches=null means no prior receipt exists. '
       + 'packVersionStale=true means the sidecar receipt was written by a different pack version — the artifact predates the installed pack and its green receipt certifies the OLD rules; regenerate it.',
     parameters: {
       artifactPath: { type: 'string', required: true, description: 'Workspace-relative path to the artifact JSON' },

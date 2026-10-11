@@ -35,7 +35,11 @@ hanzeep 的差异化就在"内容合格性"这一层，由三件事组成：
 
 ## 3. 插件功能（机制层）
 
-插件导出 `name: 'hanzeep'`、`inject: ['tools', 'llm']`、`Config`；`apply()` 时加载全部 pack 并注册两个工具。pack 加载失败（坏 manifest、坏规则、Config 默认语言不被支持）在 apply 期直接报错，不会带病进入会话。
+插件导出 `name: 'hanzeep'`、`inject: ['tools', 'llm']`、`Config`；`apply()` 时加载全部 pack 并注册三个工具（`doc_packs` / `doc_generate` / `doc_validate`）。pack 加载失败（坏 manifest、坏规则、Config 默认语言不被支持）在 apply 期直接报错，不会带病进入会话。
+
+### 3.0 工具 `doc_packs` — 能力发现（拉式）
+
+零参数工具，返回已装载 pack 注册表 `[{ name, version, description, languages, consumes }]`。`doc_generate`/`doc_validate` 的描述与 `pack` 参数描述内置静态邀请（先调 `doc_packs`）；未知 pack 报错同时给出 `doc_packs` 提示与可用清单——模型跳过发现时由此自愈。工具描述不随 pack 集合变化（拉式渐进披露，见 docs/designs/capability-discovery.md）。
 
 ### 3.1 工具 `doc_generate` — 闭环生成
 
@@ -145,7 +149,7 @@ workspace root 决策链：会话 workspace（如 dsh web UI 选择的目录）>
 
 ```
 packs/<name>/
-├── manifest.json      # name / version / consumes / languages
+├── manifest.json      # name / version / description / consumes / languages
 ├── schema.json        # JSON Schema（draft-07 或 2020-12），定义"文档长什么样"
 ├── rules/<lang>.json  # 声明式规则，定义"什么算合格"（简单族）
 ├── rules/functions.js # JS 函数规则（可选），跨字段规则（唯一性、求和、区间）
@@ -154,7 +158,7 @@ packs/<name>/
 └── samples/golden.json  # 全绿母本，变异测试的输入
 ```
 
-`languages` 里声明的每个语言标签，三件套（rules/prompt/template）缺一不可（加载期强制）。多语言只影响表达层——文档结构与 schema 语言无关。
+`languages` 里声明的每个语言标签，三件套（rules/prompt/template）缺一不可（加载期强制）。`manifest.description`（一句话，说明该 pack 生成什么文档）必填、加载期强制——`doc_packs` 把它原样返回给模型。多语言只影响表达层——文档结构与 schema 语言无关。
 
 ### 4.2 声明式规则（四族）
 
@@ -196,6 +200,7 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 | 安全 | 路径包含、名称消毒、素材非空 | — |
 | 配置 | Config schema 与全部默认值 | — |
 | 领域概念（COSMIC、CFP） | **禁止进入插件** | 规则与 prompt 中自由使用 |
+| 能力发现 | `doc_packs` 工具、三处静态邀请文案、manifest.description 加载期校验 | `description` 的一句话内容 |
 
 ## 6. 质量门与验收基线
 

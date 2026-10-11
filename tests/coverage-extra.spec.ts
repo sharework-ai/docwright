@@ -16,7 +16,7 @@ const packsRoot = fileURLToPath(new URL('../packs', import.meta.url))
 
 function fakePack(overrides: Partial<{ rules: readonly DeclarativeRule[]; fnRules: readonly FunctionRule[]; languages: readonly string[] }> = {}): Pack {
   const base = JSON.parse(JSON.stringify({
-    manifest: { name: 't', version: '1', consumes: [], languages: overrides.languages ?? ['zh-CN'] },
+    manifest: { name: 't', version: '1', description: 'd', consumes: [], languages: overrides.languages ?? ['zh-CN'] },
   }))
   return {
     manifest: base.manifest,
@@ -98,7 +98,7 @@ describe('coverage: consuming-pack upstream checks', () => {
     const root = await mkdtemp(join(tmpdir(), 'hanzeep-chain-'))
     const dir = join(root, 'chain-pack')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
-    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'chain-pack', version: '1', consumes: ['cosmic-plan'], languages: ['zh-CN'] }), 'utf8')
+    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'chain-pack', version: '1', description: 'd', consumes: ['cosmic-plan'], languages: ['zh-CN'] }), 'utf8')
     await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
     await writeFile(join(dir, 'rules', 'zh-CN.json'), '[]', 'utf8')
     await writeFile(join(dir, 'prompts', 'zh-CN.md'), 'T {{materials}} {{upstream}}', 'utf8')
@@ -143,7 +143,7 @@ describe('coverage: loader validation branches', () => {
     await mkdir(join(dir, 'prompts'), { recursive: true })
     await mkdir(join(dir, 'templates'), { recursive: true })
     await mkdir(join(dir, 'samples'), { recursive: true })
-    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'p2', version: '1', consumes: [], languages: ['zh-CN'] }), 'utf8')
+    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'p2', version: '1', description: 'd', consumes: [], languages: ['zh-CN'] }), 'utf8')
     await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
     await writeFile(join(dir, 'rules', 'zh-CN.json'), JSON.stringify([{ id: 'r', severity: 'error', given: '$', field: 'x', kind: 'nope', suggestion: 's' }]), 'utf8')
     await writeFile(join(dir, 'prompts', 'zh-CN.md'), 'T {{materials}}', 'utf8')
@@ -159,7 +159,7 @@ describe('coverage: loader validation branches', () => {
     await mkdir(join(dir, 'prompts'), { recursive: true })
     await mkdir(join(dir, 'templates'), { recursive: true })
     await mkdir(join(dir, 'samples'), { recursive: true })
-    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'p3', version: '1', consumes: [], languages: ['zh-CN'] }), 'utf8')
+    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'p3', version: '1', description: 'd', consumes: [], languages: ['zh-CN'] }), 'utf8')
     await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
     await writeFile(join(dir, 'rules', 'zh-CN.json'), '[]', 'utf8')
     await writeFile(join(dir, 'rules', 'functions.js'), 'export const rules = "nope"', 'utf8')
@@ -175,7 +175,7 @@ async function makeMiniPack(root: string, name: string, files: Record<string, st
   const dir = join(root, name)
   for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
   const defaults: Record<string, string> = {
-    'manifest.json': JSON.stringify({ name, version: '1', consumes: [], languages: ['zh-CN'] }),
+    'manifest.json': JSON.stringify({ name, version: '1', description: 'd', consumes: [], languages: ['zh-CN'] }),
     'schema.json': '{"type":"object"}',
     'rules/zh-CN.json': '[]',
     'prompts/zh-CN.md': 'T {{materials}}',
@@ -235,7 +235,7 @@ describe('coverage: final line gaps', () => {
     const root = await mkdtemp(join(tmpdir(), 'hanzeep-chain2-'))
     const dir = join(root, 'chain2')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
-    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'chain2', version: '1', consumes: ['cosmic-plan'], languages: ['zh-CN'] }), 'utf8')
+    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'chain2', version: '1', description: 'd', consumes: ['cosmic-plan'], languages: ['zh-CN'] }), 'utf8')
     await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
     await writeFile(join(dir, 'rules', 'zh-CN.json'), '[]', 'utf8')
     await writeFile(join(dir, 'prompts', 'zh-CN.md'), 'T {{materials}} {{upstream}}', 'utf8')

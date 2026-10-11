@@ -1,6 +1,6 @@
 # 设计：pack 能力发现机制（capability discovery）
 
-Status: PROPOSED — 已评审方向，未实施。
+Status: IMPLEMENTED (2026-10-11)。
 Date: 2026-10-11
 关联: docs/designs/hanzeep-mvp.md（功能说明书）第 3.1 节、TODOS.md D1-discovery
 
