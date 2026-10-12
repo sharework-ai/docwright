@@ -66,10 +66,7 @@ manifest 增 `params` 声明：
 
 ## 开放问题
 
-1. 参数 schema 的校验设施是否复用现有 declarative rule 校验，还是独立 mini-schema（实现时定）。
-2. 规则引用参数的语法（`{"param": "cfpUpper"}` vs 模板插值）——倾向前者（结构化、可快照）。
-3. 命名统一：新概念一律 `maxRounds`；现有 `config.maxIterations` 保留为全局默认还是更名，实现时定（避免破坏既有 cordis.yml）。
-4. `maxRounds` 耗尽的终止 reason 仍为 `max-iterations`，与 convergence-detection.md 的 reason 枚举合并维护。
+（无——原列四问均已在实现期定案，见附录 B；选择细节以功能说明书 3.x 为准。）
 
 ## 附录 A：推演记录（已定案，不再重开）
 
@@ -98,3 +95,4 @@ manifest 增 `params` 声明：
 - 2026-10-11 三轮推敲定案（自省 → 会话级联 → 最小桥），否决原则见附录 A。
 - 用户关键判断一：参数识别最终必由 LLM 完成，机制不应重复它——据此砍掉会话级联。
 - 用户关键判断二（终案保留的边界）：LLM 可以识别意图，但校验侧的值必须经类型化工具参数进入确定性代码与回执。
+- 实现期定案（原开放问题 1-4）：参数声明用 loader 内独立全量校验（assertParamSpec，不复用规则校验）；规则引用语法取 `{"param": "name"}`（结构化、可快照）；命名取 `maxRounds`（manifest/pack 级），`config.maxIterations` 保留为全局默认；轮数耗尽 reason 仍为 `max-iterations`（与 convergence reason 枚举同集）。

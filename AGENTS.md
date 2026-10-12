@@ -18,6 +18,7 @@ pnpm test               # vitest
 pnpm test:coverage      # coverage gate
 pnpm run build          # tsc -b + tsdown
 npx tsc -b tsconfig.json  # typecheck only
+pnpm run smoke:host     # pre-release: pack → real dsh host boot → tool assertions (no API key)
 ```
 
 ## Conventions (inherited from deepseek-harness/AGENTS.md)

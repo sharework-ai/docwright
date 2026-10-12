@@ -224,11 +224,11 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 - Vitest；每文件 100% 行/函数/语句覆盖门。
 - 变异测试（mutation tests）证明护栏非摆设：golden 样本按规则族故意损坏，checker 必须全抓住。
 - 闭环行为用确定性策略测试：注入损坏 JSON + LLM seam 按脚本返回，断言循环与回执；真实模型端到端属 e2e（有 API key 才跑）。
-- 宿主 e2e 冒烟已覆盖分发层（npm tarball → 真实 dsh 宿主加载 → 工具执行）。
+- 预发布宿主冒烟（`scripts/host-smoke.ts`，`pnpm run smoke:host`）：npm tarball → 真实 dsh 宿主 boot → 三工具注册断言，无模型调用、无 API key。
 
 ## 7. 当前限制与路线（未实现，按优先级参考 TODOS.md）
 
-- 真实 LLM 的闭环端到端尚未验证（无 API key 环境，确定性路径全覆盖）。
+- 真实 LLM 闭环已验证：多轮修复轨迹、内置权重对账（score = 100 − 10×error 精确吻合）、跨 dsh 版本回执复验均通过（数据见 docs/testing/e2e-real-llm.md）。停滞/阴跌阈值在 glm-5.3 级强模型下不可触达（模型优先 pack 规则），仍由确定性测试覆盖。
 - 闭环每轮数据（含各轮 promptHash）进回执；回执整体作为 doc_generate 工具结果内容逐字进入 session log，审计流由该通道承载。独立 doc-gen-round session 事件类型延后：dsh 未提供插件事件类型写侧 `ignorable` 标记的入口，未经标记的未知类型会使会话在 stock 宿主下不可重载。
 - 草稿续修（从红回执草稿断点继续修）工具、MCP 包装（宿主无关分发）、pack npm 分发、cosmic Req/Func/Tech 后续阶段 pack——均未启动。
 - 同名产物的并发写入无跨文件锁（单文件原子，artifact/receipt 对可能交错，last-writer-wins）。
