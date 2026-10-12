@@ -4,8 +4,7 @@ Source: functional spec at docs/designs/hanzeep-mvp.md. 本文件记录真正待
 
 ## Open
 
-- [ ] **E2E-real-llm** — 真实 LLM 闭环端到端。**管道已验证（2026-10-11）**：zai-coding-cn / glm-4.7 走 headless 会话，doc_generate 1 轮全绿（round score 100）+ doc_validate 复验 hashMatches=true（runbook：docs/testing/e2e-real-llm.md，无需升级 dsh）。**剩余**：多轮修复路径的实测观测（构造违规素材触发 repair/stagnation），用 cosmic-claude 历史产物校准 D2 默认评分权重（10/3/1）与 stagnation/decline 阈值（设计开放问题 1/4）
-- [ ] **host-smoke** — 宿主冒烟脚本入库：/tmp/hanzeep-qa/smoke-host.mts（tarball → 新 profile → runProfile boot → 工具断言）参数化为 scripts/host-smoke.mts，作预发布检查（原脚本已被 tmp 清理，按此描述重写）
+- [ ] **E2E-real-llm** — 真实 LLM 闭环端到端。**管道已验证（2026-10-11）**：zai-coding-cn / glm-4.7 走 headless 会话，doc_generate 1 轮全绿（round score 100）+ doc_validate 复验 hashMatches=true（runbook：docs/testing/e2e-real-llm.md，无需升级 dsh）。**剩余**：多轮修复路径的实测观测（构造违规素材触发 repair/stagnation），用 cosmic-claude 历史产物校准 D2 默认评分权重（10/3/1）与 stagnation/decline 阈值（设计开放问题 1/4）（原脚本已被 tmp 清理，按此描述重写）
 
 ## Deferred
 
@@ -19,6 +18,7 @@ Source: functional spec at docs/designs/hanzeep-mvp.md. 本文件记录真正待
 
 ## Done（压缩账目）
 
+- **2026-10-12 host-smoke**：`scripts/host-smoke.ts`（`pnpm run smoke:host`）——pack tarball → 沙箱 DSH_HOME 新 profile → `dsh plugin add`（base+hanzeep 组合，无需 headless/模型/key）→ `runProfile` 进程内 boot → 断言三工具注册。要点：`--profile` 须在 `plugin` 之后；跨仓跑 dsh 源码需重生进程设 `TSX_TSCONFIG_PATH` 指 dsh tsconfig（vendored lib 可滞后）；runbook 步骤 2 已同步修正。
 - **2026-10-12 T2-core**：每轮 promptHash 进回执 rounds（sha256 该轮实际发送 prompt，llm-error 轮同样记录）——回执整体作为 doc_generate 工具结果 content 逐字进 session log，审计流由既有通道承载，未引自定义事件类型（dsh 写侧缺口见 Deferred）。200 tests 全绿 + 覆盖门 + typecheck，分支 feat/t2-round-audit。
 - **2026-10-11 D1-D3**：能力发现（doc_packs + manifest.description）/ 收敛检测三层（pack 评分百分制 > 内置严重度评分 > 指纹兜底，终止 reason 进回执）/ 参数最小桥（params/maxRounds + 声明白名单 + maxRoundsCeiling 硬钳制 + as-run 复验）。设计 docs/designs/*（均已 IMPLEMENTED），提交 8fcbd4d / 3ad941c / de7bcde，明细见下方 tracker。
 - **2026-08-27/28 Sprint 3-5**：闭环核心（llm-error 映射+单次重试 / 振荡终止 / token 预检 / 路径包含 / 回执 language+规则集快照 / 6 项 GAP 测试 / 引擎 bake-off 微型引擎胜出）；DX 面（确定性 quickstart / 工具返回 shape / Config 键名与合并语义 / version+formatVersion / 全绿语义+错误契约）；Sprint 4 /review 链式绿回执+防篡改+staleness 等 44+3 项；Sprint 5 分发层 3 缺陷修复（bundle patch / tarball / types）+ 宿主冒烟 10/10。

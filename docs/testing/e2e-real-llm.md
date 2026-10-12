@@ -17,21 +17,29 @@ cd ~/projects/lab/hanzeep && corepack pnpm build && corepack pnpm pack --pack-de
 ```sh
 export DSH_HOME=/tmp/hanzeep-zai/home   # throwaway home; keeps ~/.dsh clean
 cd ~/projects/lab/deepseek-harness      # dsh from source (pnpm dsh script)
-corepack pnpm dsh --profile e2e --template headless plugin add /tmp/hanzeep-zai/dsh-plugin-hanzeep-*.tgz
+corepack pnpm dsh plugin --profile e2e add /tmp/hanzeep-zai/dsh-plugin-hanzeep-*.tgz
+# e2e needs the one-shot runner, which plugin add does not include — declare the
+# headless bundle in profiles/e2e/package.json:
+#   "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless", "dsh-plugin-hanzeep"] } }
 ```
 
 Gotchas (each cost us time once):
 
-- Launcher flags go BEFORE the subcommand: `dsh --profile e2e --template headless plugin add …`.
-  `--template` after `plugin` is forwarded to pnpm and dies.
-- A failed init still creates the profile with DEFAULT bundles (base only). If the headless
-  app bundle is missing, fix `profiles/e2e/package.json` →
-  `dsh.profile.bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless"]`.
+- `--profile` goes AFTER the `plugin` subcommand: `dsh plugin --profile e2e add …`.
+  Before it, the invocation routes to profile boot and dies with "profile does not exist".
+- The current CLI has no `--template` for plugin mode; `plugin add` initializes a
+  base-backed profile. A base-only profile boots, but running tasks needs the headless
+  bundle — declare it in `profiles/e2e/package.json` (see above; `scripts/host-smoke.ts`
+  skips it because it only boots the tool registry).
 - `dsh plugin add` does more than pnpm: it appends bundles declaring `dsh.bundle` to
   `dsh.profile.bundles`. A manual `pnpm add <tgz>` must append `dsh-plugin-hanzeep` to that
   list by hand, or the plugin's patch layer never loads (`patch: entry "hanzeep" not found`).
 - `pnpm --dir <dsh> dsh …` switches cwd to the dsh repo — pin the workspace with the
   hanzeep `workspaceRoot` config instead of relying on cwd.
+- Running dsh sources from a foreign cwd (e.g. a script) needs `TSX_TSCONFIG_PATH`
+  pointed at the dsh checkout's `tsconfig.base.json` — its `paths` map `@deepseek-ai/*`
+  onto vendored TS sources, and the committed `lib/` outputs can lag. `scripts/host-smoke.ts`
+  handles this by respawning itself with the env set.
 
 ## 3. Profile patch (`$DSH_HOME/profiles/e2e/cordis.patch.yml`)
 
