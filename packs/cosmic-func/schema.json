@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "COSMIC Func Document",
-  "description": "Functional-process design artifact migrated from cosmic-claude assets/schemas/func.json; metadata dropped (no manual-editing UX in hanzeep), desiredCfps added as the chain anchor copied from the upstream req artifact.",
+  "description": "Functional-process design artifact migrated from cosmic-claude assets/schemas/func.json; metadata dropped (no manual-editing UX in docwright), desiredCfps added as the chain anchor copied from the upstream req artifact.",
   "type": "object",
   "additionalProperties": false,
   "required": ["docType", "language", "index", "desiredCfps", "funcId", "diagrams", "processes"],

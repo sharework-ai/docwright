@@ -20,7 +20,7 @@ const signal = new AbortController().signal
 async function makeDeps(overrides: Record<string, unknown> = {}) {
   const packs = await loadPacks(packsRoot, {})
   const pack = packs.get('cosmic-plan')!
-  const workspaceRoot = await mkdtemp(join(tmpdir(), 'hanzeep-rf-'))
+  const workspaceRoot = await mkdtemp(join(tmpdir(), 'docwright-rf-'))
   return {
     packs,
     config: { provider: 'deepseek', model: 'm1', workspaceRoot, maxIterations: 3, promptTokenBudget: 60_000, ...overrides } as never,
@@ -164,21 +164,21 @@ describe('review fix: prompt assembly', () => {
 
 describe('review fix: material containment hardening', () => {
   it('accepts an absolute path inside the workspace root', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-abs-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-abs-'))
     await writeFile(join(root, 'in.txt'), 'inside', 'utf8')
     expect(await readMaterials([join(root, 'in.txt')], root, root)).toEqual(['inside'])
   })
 
   it('rejects an absolute path outside the workspace root', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-abs-'))
-    const outside = await mkdtemp(join(tmpdir(), 'hanzeep-out-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-abs-'))
+    const outside = await mkdtemp(join(tmpdir(), 'docwright-out-'))
     await writeFile(join(outside, 'secret.txt'), 's', 'utf8')
     await expect(readMaterials([join(outside, 'secret.txt')], root, root)).rejects.toThrow(/escapes the workspace root/)
   })
 
   it('rejects a symlink inside the workspace that points outside it', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-sym-'))
-    const outside = await mkdtemp(join(tmpdir(), 'hanzeep-out-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-sym-'))
+    const outside = await mkdtemp(join(tmpdir(), 'docwright-out-'))
     await writeFile(join(outside, 'secret.txt'), 's', 'utf8')
     await symlink(join(outside, 'secret.txt'), join(root, 'leak.txt'))
     await expect(readMaterials(['leak.txt'], root, root)).rejects.toThrow(/symlink/)
@@ -213,7 +213,7 @@ describe('review fix: pack rule parity and rollup truthfulness', () => {
   })
 
   it('rejects a declarative rule with a non-enum severity at load time', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-sev2-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-sev2-'))
     const dir = join(root, 'p-sev')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'p-sev', version: '1', description: 'd', consumes: [], languages: ['zh-CN'] }), 'utf8')
@@ -243,7 +243,7 @@ describe('review fix: remaining load-time branches', () => {
   })
 
   it('rejects a rule whose pattern does not compile at load', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-pat-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-pat-'))
     const dir = join(root, 'p-pat')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'p-pat', version: '1', description: 'd', consumes: [], languages: ['zh-CN'] }), 'utf8')
@@ -256,7 +256,7 @@ describe('review fix: remaining load-time branches', () => {
   })
 
   it('rejects a functions.js that fails to import', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-brokenfn-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-brokenfn-'))
     const dir = join(root, 'p-broken')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'p-broken', version: '1', description: 'd', consumes: [], languages: ['zh-CN'] }), 'utf8')
@@ -270,7 +270,7 @@ describe('review fix: remaining load-time branches', () => {
   })
 
   it('rejects a prompt missing the {{materials}} slot', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-slot-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-slot-'))
     const dir = join(root, 'p-slot')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'p-slot', version: '1', description: 'd', consumes: [], languages: ['zh-CN'] }), 'utf8')
@@ -289,7 +289,7 @@ describe('review fix: minLength/maxLength/forbiddenKeywords payload validation',
     ['maxLength', { id: 'r', severity: 'error', given: '$', field: 'x', kind: 'maxLength', suggestion: 's' }, /finite numeric max/],
     ['forbiddenKeywords', { id: 'r', severity: 'error', given: '$', field: 'x', kind: 'forbiddenKeywords', suggestion: 's' }, /non-empty array/],
   ])('rejects a %s rule with a missing payload', async (_kind, rule, pattern) => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-payload-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-payload-'))
     const dir = join(root, 'p-payload')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'p-payload', version: '1', description: 'd', consumes: [], languages: ['zh-CN'] }), 'utf8')
@@ -306,7 +306,7 @@ describe('review fix: green-receipt upstream verification + receipt anchoring', 
   async function makeChainDeps() {
     const packs = await loadPacks(packsRoot, {})
     const pack = packs.get('cosmic-plan')!
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-chain3-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-chain3-'))
     // Build a consuming pack
     const dir = join(root, 'packs', 'chain3')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })

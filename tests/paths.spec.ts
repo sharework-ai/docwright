@@ -89,10 +89,10 @@ describe('session-driven roots end to end (doc_generate via tool)', () => {
   it('reads materials from <session-ws>/references and writes to <session-ws>/output', async () => {
     const packs = await loadPacks(packsRoot, {})
     const pack = packs.get('cosmic-plan')!
-    const sessionWs = await mkdtemp(join(tmpdir(), 'hanzeep-session-'))
+    const sessionWs = await mkdtemp(join(tmpdir(), 'docwright-session-'))
     await mkdir(join(sessionWs, 'references'), { recursive: true })
     await writeFile(join(sessionWs, 'references', 'req.md'), '素材内容', 'utf8')
-    const configWs = await mkdtemp(join(tmpdir(), 'hanzeep-config-'))
+    const configWs = await mkdtemp(join(tmpdir(), 'docwright-config-'))
     const tool = defineDocGenerateTool({
       packs,
       config: { workspaceRoot: configWs, maxIterations: 3, promptTokenBudget: 60_000, model: 'test', provider: 'x' },

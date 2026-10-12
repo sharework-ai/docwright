@@ -8,12 +8,12 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      # hanzeep is checked out into a subdirectory so the local file: devDeps
+      # docwright is checked out into a subdirectory so the local file: devDeps
       # at ../deepseek-harness resolve. Remove both hacks once dsh publishes
       # a complete npm release (see README Development note).
       - uses: actions/checkout@v4
         with:
-          path: hanzeep
+          path: docwright
       - uses: actions/checkout@v4
         with:
           repository: deepseek-ai/deepseek-harness
@@ -27,8 +27,8 @@ jobs:
       - name: build host typings
         run: cd deepseek-harness && pnpm install --frozen-lockfile && pnpm run build:lib:host
       - run: pnpm install
-        working-directory: hanzeep
+        working-directory: docwright
       - run: npx tsc -b tsconfig.json
-        working-directory: hanzeep
+        working-directory: docwright
       - run: pnpm test:coverage
-        working-directory: hanzeep
+        working-directory: docwright

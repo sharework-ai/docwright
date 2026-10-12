@@ -1,6 +1,6 @@
-# TODOS — hanzeep
+# TODOS — docwright
 
-Source: functional spec at docs/designs/hanzeep-mvp.md. 本文件记录真正待办与已完成的压缩账目（一个事实一个家；实施细节见 git 与 Implementation tracker）。
+Source: functional spec at docs/designs/docwright-mvp.md. 本文件记录真正待办与已完成的压缩账目（一个事实一个家；实施细节见 git 与 Implementation tracker）。
 
 ## Open
 
@@ -17,9 +17,10 @@ Source: functional spec at docs/designs/hanzeep-mvp.md. 本文件记录真正待
 
 ## Done（压缩账目）
 
+- **2026-10-12 rename-docwright**：产品定名 docwright（wright = 工匠，playwright 词形；write/right 双关 = 生成 + 校验）。plugin name / Config id / 类型名 DocwrightConfig / 错误消息前缀 / 环境变量 DOCWRIGHT_* / README / 说明书全文替换，设计文档改名 docwright-mvp.md；npm 包名定 @sharework-ai/dsh-docwright（cordis.patch.yml 的 name 值以 @ 开头须加 YAML 引号——冒烟实测抓出，裸值解析即炸）；GitHub 仓库 sharework-ai/docwright。253 tests + typecheck + build + 冒烟 PASS，分支 feat/rename-docwright。
 - **2026-10-12 cosmic-func/tech packs**：COSMIC 四阶段链补全（plan→req→func→tech，每跳三点锚定 index/funcId/desiredCfps）。cosmic-func：7 规则（3 声明式 + 4 函数，E001/E002/A001/W001 迁移）；cosmic-tech：13 规则（1 声明式 + 11 函数，tech_auditor 全家族迁移）。引擎零改动——嵌套作用域（subProcesses）规则由函数规则整产物视角覆盖。迁移决策：severity 映射 ERROR→error/WARNING→warning/ADVICE→info；FunctionRule 单 severity 契约迫使两处分拆（movement-count/movement-split-advice、cfp-total-vs-budget/cfp-budget-advice）；cfpMinRatio/cfpMaxRatio 参数化预算错误边界；golden 双语零 issue（9 过程 × 4 移动 = 36 CFP，落在 [35,42] 干净带）。schema 偏差：metadata/revised 删除（无人工编辑 UX）。253 tests 全绿 + 覆盖门 + typecheck + build + 冒烟 PASS。
 - **2026-10-12 cosmic-req pack**：第二个 pack 落地（per-function 粒度，consumes cosmic-plan；3 参数 5 声明式 3 函数规则，E301/E302/E303 全 error 阻断）。核心扩展：函数规则 `check(artifact, context?)` 注入 upstream/materials/params（链式跨产物校验的引擎缺口），doc_validate 增可选 upstream 参数（链式复验 + 锚点入回执）；顺带修复根作用域 pattern 规则不编译正则的引擎缺陷。218 tests 全绿 + 覆盖门 + typecheck + 冒烟；真实 LLM 链式闭环验证（plan→req，upstreamHashes 锚定，三点对齐精确）。设计 docs/designs/function-rule-context.md。
-- **2026-10-12 host-smoke**：`scripts/host-smoke.ts`（`pnpm run smoke:host`）——pack tarball → 沙箱 DSH_HOME 新 profile → `dsh plugin add`（base+hanzeep 组合，无需 headless/模型/key）→ `runProfile` 进程内 boot → 断言三工具注册。要点：`--profile` 须在 `plugin` 之后；跨仓跑 dsh 源码需重生进程设 `TSX_TSCONFIG_PATH` 指 dsh tsconfig（vendored lib 可滞后）；runbook 步骤 2 已同步修正。
+- **2026-10-12 host-smoke**：`scripts/host-smoke.ts`（`pnpm run smoke:host`）——pack tarball → 沙箱 DSH_HOME 新 profile → `dsh plugin add`（base+docwright 组合，无需 headless/模型/key）→ `runProfile` 进程内 boot → 断言三工具注册。要点：`--profile` 须在 `plugin` 之后；跨仓跑 dsh 源码需重生进程设 `TSX_TSCONFIG_PATH` 指 dsh tsconfig（vendored lib 可滞后）；runbook 步骤 2 已同步修正。
 - **2026-10-12 T2-core**：每轮 promptHash 进回执 rounds（sha256 该轮实际发送 prompt，llm-error 轮同样记录）——回执整体作为 doc_generate 工具结果 content 逐字进 session log，审计流由既有通道承载，未引自定义事件类型（dsh 写侧缺口见 Deferred）。200 tests 全绿 + 覆盖门 + typecheck，分支 feat/t2-round-audit。
 - **2026-10-11 D1-D3**：能力发现（doc_packs + manifest.description）/ 收敛检测三层（pack 评分百分制 > 内置严重度评分 > 指纹兜底，终止 reason 进回执）/ 参数最小桥（params/maxRounds + 声明白名单 + maxRoundsCeiling 硬钳制 + as-run 复验）。设计 docs/designs/*（均已 IMPLEMENTED），提交 8fcbd4d / 3ad941c / de7bcde，明细见下方 tracker。
 - **2026-08-27/28 Sprint 3-5**：闭环核心（llm-error 映射+单次重试 / 振荡终止 / token 预检 / 路径包含 / 回执 language+规则集快照 / 6 项 GAP 测试 / 引擎 bake-off 微型引擎胜出）；DX 面（确定性 quickstart / 工具返回 shape / Config 键名与合并语义 / version+formatVersion / 全绿语义+错误契约）；Sprint 4 /review 链式绿回执+防篡改+staleness 等 44+3 项；Sprint 5 分发层 3 缺陷修复（bundle patch / tarball / types）+ 宿主冒烟 10/10。

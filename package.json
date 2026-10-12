@@ -1,5 +1,5 @@
 {
-  "name": "dsh-plugin-hanzeep",
+  "name": "@sharework-ai/dsh-docwright",
   "description": "Closed-loop AI document generation for deepseek-harness: domain rule packs + replayable validation receipts",
   "version": "0.1.0",
   "type": "module",
@@ -24,6 +24,7 @@
     "cordis.patch.yml"
   ],
   "keywords": [
+    "docwright",
     "dsh-plugin",
     "deepseek-harness",
     "document-generation",

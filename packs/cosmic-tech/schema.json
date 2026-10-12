@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "COSMIC Tech Document",
-  "description": "Technical breakdown artifact migrated from cosmic-claude assets/schemas/tech.json; metadata and the manual-tracking `revised` flag dropped (no manual-editing UX in hanzeep), desiredCfps added as the chain anchor copied from the upstream func artifact.",
+  "description": "Technical breakdown artifact migrated from cosmic-claude assets/schemas/tech.json; metadata and the manual-tracking `revised` flag dropped (no manual-editing UX in docwright), desiredCfps added as the chain anchor copied from the upstream func artifact.",
   "type": "object",
   "additionalProperties": false,
   "required": ["docType", "language", "index", "desiredCfps", "funcId", "diagrams", "processes"],

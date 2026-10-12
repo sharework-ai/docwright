@@ -72,7 +72,7 @@ describe('coverage: rule engine branches', () => {
 
   it('registerTools fails loud when the packs root is empty', async () => {
     const { registerTools } = await import('../src/index.ts')
-    const emptyRoot = await mkdtemp(join(tmpdir(), 'hanzeep-empty-'))
+    const emptyRoot = await mkdtemp(join(tmpdir(), 'docwright-empty-'))
     await expect(registerTools({ tools: { register: () => {} } } as never, {}, emptyRoot)).rejects.toThrow(/no packs found/)
   })
 })
@@ -95,7 +95,7 @@ describe('coverage: loop in-loop budget guard', () => {
 
 describe('coverage: consuming-pack upstream checks', () => {
   it('requires upstream artifacts for chained packs and rejects invalid JSON', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-chain-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-chain-'))
     const dir = join(root, 'chain-pack')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'chain-pack', version: '1', description: 'd', consumes: ['cosmic-plan'], languages: ['zh-CN'] }), 'utf8')
@@ -121,7 +121,7 @@ describe('coverage: consuming-pack upstream checks', () => {
 
 describe('coverage: loader validation branches', () => {
   it('rejects bad manifest languages and version', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-manifest-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-manifest-'))
     const dir = join(root, 'p1')
     await mkdir(join(dir, 'rules'), { recursive: true })
     await mkdir(join(dir, 'prompts'), { recursive: true })
@@ -137,7 +137,7 @@ describe('coverage: loader validation branches', () => {
   })
 
   it('rejects a rule with an unknown kind or missing suggestion', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-kind-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-kind-'))
     const dir = join(root, 'p2')
     await mkdir(join(dir, 'rules'), { recursive: true })
     await mkdir(join(dir, 'prompts'), { recursive: true })
@@ -153,7 +153,7 @@ describe('coverage: loader validation branches', () => {
   })
 
   it('rejects functions.js whose rules export is not an array', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-fn-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-fn-'))
     const dir = join(root, 'p3')
     await mkdir(join(dir, 'rules'), { recursive: true })
     await mkdir(join(dir, 'prompts'), { recursive: true })
@@ -224,7 +224,7 @@ describe('coverage: final line gaps', () => {
     const { generateDocument } = await import('../src/doc-service.ts')
     const packs = await loadPacks(packsRoot, {})
     const pack = packs.get('cosmic-plan')!
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-def-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-def-'))
     const llm = { async complete() { return JSON.stringify(pack.goldenSample) } }
     const out = await generateDocument({ pack, language: 'zh-CN', materials: ['#!inline\nx'], artifactName: 'def', materialsRoot: root, workspaceRoot: root, outputRoot: join(root, 'output'), config: {}, llm, onRound: () => {} })
     expect(out.receipt.isValid).toBe(true)
@@ -232,7 +232,7 @@ describe('coverage: final line gaps', () => {
   })
 
   it('consuming pack with valid JSON upstream proceeds past verification', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-chain2-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-chain2-'))
     const dir = join(root, 'chain2')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'chain2', version: '1', description: 'd', consumes: ['cosmic-plan'], languages: ['zh-CN'] }), 'utf8')
@@ -268,13 +268,13 @@ describe('coverage: tool render callbacks', () => {
 
 describe('coverage: loader rule-shape branches', () => {
   it('rejects a declarative rule without a suggestion', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-sug-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-sug-'))
     await makeMiniPack(root, 'p-sug', { 'rules/zh-CN.json': JSON.stringify([{ id: 'r', severity: 'error', given: '$', field: 'x', kind: 'minLength', min: 1 }]) })
     await expect(loadPacks(root, {})).rejects.toThrow(/suggestion/)
   })
 
   it('rejects a function rule with an invalid severity', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-sev-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-sev-'))
     await makeMiniPack(root, 'p-sev', { 'rules/functions.js': "export const rules = [{ id: 'r', severity: 'fatal', suggestion: 's', check: () => [] }]" })
     await expect(loadPacks(root, {})).rejects.toThrow(/severity must be error/)
   })

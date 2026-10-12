@@ -71,7 +71,7 @@ function resolveLanguage(deps: ToolDeps, pack: Pack, language?: string): string 
 function requireRoute(deps: ToolDeps): { provider: string; model: string } {
   const { provider, model } = deps.config
   if (provider === undefined || provider.length === 0 || model === undefined || model.length === 0) {
-    throw new Error('hanzeep config needs provider and model for doc_generate; set them in cordis.yml (cause: LLM route unset; fix: add provider+model to the hanzeep config block)')
+    throw new Error('docwright config needs provider and model for doc_generate; set them in cordis.yml (cause: LLM route unset; fix: add provider+model to the docwright config block)')
   }
   return { provider, model }
 }

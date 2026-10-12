@@ -103,14 +103,14 @@ describe('pack loader: functions.js score export', () => {
   }
 
   it('loads a valid score export onto the pack', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-score-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-score-'))
     await writePack(root, 'scored', 'export const rules = []\nexport function score() { return 50 }\n')
     const packs = await loadPacks(root, {})
     expect(typeof packs.get('scored')?.score).toBe('function')
   })
 
   it('fails loud when score is exported but is not a function', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-score-bad-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-score-bad-'))
     await writePack(root, 'bad-score', 'export const rules = []\nexport const score = 42\n')
     await expect(loadPacks(root, {})).rejects.toThrow(/`score` export must be a function/)
   })
@@ -118,7 +118,7 @@ describe('pack loader: functions.js score export', () => {
 
 describe('generateDocument integration: reason + round scores land in the red receipt', () => {
   it('records terminationReason and per-round scores on exhaustion', async () => {
-    const ws = await mkdtemp(join(tmpdir(), 'hanzeep-conv-e2e-'))
+    const ws = await mkdtemp(join(tmpdir(), 'docwright-conv-e2e-'))
     const packs = await loadPacks(packsRoot, {})
     const pack = packs.get('cosmic-plan')!
     const calls: string[] = []

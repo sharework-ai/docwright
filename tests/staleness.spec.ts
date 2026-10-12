@@ -17,7 +17,7 @@ async function makeDeps(overrides: Record<string, unknown> = {}) {
     config: {
       provider: 'deepseek',
       model: 'test-model',
-      workspaceRoot: await mkdtemp(join(tmpdir(), 'hanzeep-stale-')),
+      workspaceRoot: await mkdtemp(join(tmpdir(), 'docwright-stale-')),
       maxIterations: 3,
       promptTokenBudget: 60_000,
       ...overrides,
@@ -82,7 +82,7 @@ describe('pack-version staleness in doc_validate', () => {
 
 /** Minimal pack consuming the given upstream type, loaded from an extra dir under the workspace root. */
 async function makeChainDeps(overrides: Record<string, unknown> = {}, consumes = 'cosmic-plan') {
-  const root = await mkdtemp(join(tmpdir(), 'hanzeep-chain-'))
+  const root = await mkdtemp(join(tmpdir(), 'docwright-chain-'))
   const dir = join(root, 'chain-pack')
   for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
   await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'chain-pack', version: '2', description: 'd', consumes: [consumes], languages: ['zh-CN'] }), 'utf8')

@@ -35,7 +35,7 @@ async function writeParamPack(root: string, name: string, over: Record<string, u
 
 describe('resolveEffectiveParams', () => {
   async function paramPack(): Promise<Pack> {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-resolve-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-resolve-'))
     await writeParamPack(root, 'param-pack')
     const packs = await loadPacks(root, {})
     const pack = packs.get('param-pack')
@@ -109,7 +109,7 @@ describe('pack loader: params declaration is the allowlist', () => {
 
   for (const [label, spec] of badSpecs) {
     it(`fails loud: ${label}`, async () => {
-      const root = await mkdtemp(join(tmpdir(), 'hanzeep-param-bad-'))
+      const root = await mkdtemp(join(tmpdir(), 'docwright-param-bad-'))
       const dir = join(root, 'pp')
       await mkdir(join(dir, 'rules'), { recursive: true })
       await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'pp', version: '1', description: 'd', languages: ['zh-CN'], params: { limit: spec } }), 'utf8')
@@ -118,7 +118,7 @@ describe('pack loader: params declaration is the allowlist', () => {
   }
 
   it('fails loud when params itself is not an object', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-param-shape-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-param-shape-'))
     const dir = join(root, 'pp')
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'pp', version: '1', description: 'd', languages: ['zh-CN'], params: [1] }), 'utf8')
@@ -126,7 +126,7 @@ describe('pack loader: params declaration is the allowlist', () => {
   })
 
   it('fails loud on maxRounds that is not a positive integer', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-param-rounds-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-param-rounds-'))
     const dir = join(root, 'pp')
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'pp', version: '1', description: 'd', languages: ['zh-CN'], maxRounds: 0 }), 'utf8')
@@ -134,7 +134,7 @@ describe('pack loader: params declaration is the allowlist', () => {
   })
 
   it('fails loud when a rule references an undeclared or non-number param', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-param-ref-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-param-ref-'))
     const dir = join(root, 'pp')
     for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'pp', version: '1', description: 'd', languages: ['zh-CN'], params: { tone: { type: 'string', default: 'a', description: 'd' } } }), 'utf8')
@@ -190,7 +190,7 @@ describe('prompt: {{params}} slot', () => {
 
 describe('doc_generate: maxRounds chain and params override (end to end)', () => {
   async function makeDeps(configOver: Record<string, unknown> = {}) {
-    const ws = await mkdtemp(join(tmpdir(), 'hanzeep-params-ws-'))
+    const ws = await mkdtemp(join(tmpdir(), 'docwright-params-ws-'))
     const root = join(ws, 'packs')
     await mkdir(root, { recursive: true })
     await writeParamPack(root, 'param-pack')
@@ -241,7 +241,7 @@ describe('doc_generate: maxRounds chain and params override (end to end)', () =>
   })
 
   it('uses the pack manifest maxRounds when the call passes none', async () => {
-    const ws = await mkdtemp(join(tmpdir(), 'hanzeep-params-packrounds-'))
+    const ws = await mkdtemp(join(tmpdir(), 'docwright-params-packrounds-'))
     const root = join(ws, 'packs')
     await mkdir(root, { recursive: true })
     await writeParamPack(root, 'param-pack', { maxRounds: 1 })
@@ -271,7 +271,7 @@ describe('doc_generate: maxRounds chain and params override (end to end)', () =>
 
 describe('doc_validate: replays by receipt-recorded params', () => {
   it('green under receipt params; what-if override can go red', async () => {
-    const ws = await mkdtemp(join(tmpdir(), 'hanzeep-params-val-'))
+    const ws = await mkdtemp(join(tmpdir(), 'docwright-params-val-'))
     const root = join(ws, 'packs')
     await mkdir(root, { recursive: true })
     await writeParamPack(root, 'param-pack')
@@ -302,7 +302,7 @@ describe('doc_validate: replays by receipt-recorded params', () => {
 
 describe('doc_packs: exposes declared params', () => {
   it('lists param name/type/description per pack', async () => {
-    const ws = await mkdtemp(join(tmpdir(), 'hanzeep-params-list-'))
+    const ws = await mkdtemp(join(tmpdir(), 'docwright-params-list-'))
     const root = join(ws, 'packs')
     await mkdir(root, { recursive: true })
     await writeParamPack(root, 'param-pack')
