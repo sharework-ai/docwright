@@ -5,7 +5,7 @@ import { issueFingerprint, isAbortError, severityCounts } from './issue.ts'
 import type { LlmPort } from './llm-port.ts'
 import { withSingleRetry } from './llm-port.ts'
 import { assembleGeneratorPrompt, assembleRepairPrompt, estimateTokens, extractJson } from './prompt.ts'
-import type { ReceiptRound } from './receipt.ts'
+import { sha256, type ReceiptRound } from './receipt.ts'
 
 /** Loop-internal issue rule ids; ride the same repair path as pack rules. */
 export const INTERNAL_INVALID_OUTPUT = 'internal/invalid-output'
@@ -116,7 +116,7 @@ export async function runRepairLoop(
       const counts = severityCounts(llmIssues)
       const ev: LoopRoundEvent = { round: iterations, promptTokens: budget, errorCount: counts.errors, warningCount: counts.warnings, fingerprintsMatchedPrevious: false }
       events.push(ev)
-      rounds.push({ round: iterations, errorCount: counts.errors, warningCount: counts.warnings })
+      rounds.push({ round: iterations, errorCount: counts.errors, warningCount: counts.warnings, promptHash: sha256(request) })
       onRound(ev, artifact ?? null)
       return { status: 'exhausted', draftArtifact: artifact ?? null, iterations, rounds, events, unresolved: llmIssues, reason: 'llm-error' }
     }
@@ -151,7 +151,7 @@ export async function runRepairLoop(
       ...(score === undefined ? {} : { score }),
     }
     events.push(ev)
-    rounds.push({ round: iterations, errorCount: counts.errors, warningCount: counts.warnings, ...(score === undefined ? {} : { score }) })
+    rounds.push({ round: iterations, errorCount: counts.errors, warningCount: counts.warnings, ...(score === undefined ? {} : { score }), promptHash: sha256(request) })
     onRound(ev, artifact)
 
     if (counts.errors === 0) {

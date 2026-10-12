@@ -5,11 +5,11 @@ Source: functional spec at docs/designs/hanzeep-mvp.md. 本文件记录真正待
 ## Open
 
 - [ ] **E2E-real-llm** — 真实 LLM 闭环端到端。**管道已验证（2026-10-11）**：zai-coding-cn / glm-4.7 走 headless 会话，doc_generate 1 轮全绿（round score 100）+ doc_validate 复验 hashMatches=true（runbook：docs/testing/e2e-real-llm.md，无需升级 dsh）。**剩余**：多轮修复路径的实测观测（构造违规素材触发 repair/stagnation），用 cosmic-claude 历史产物校准 D2 默认评分权重（10/3/1）与 stagnation/decline 阈值（设计开放问题 1/4）
-- [ ] **T2-core** — doc-gen-round session 事件（prompt hash + artifact 引用的最小载荷）：回执已承载每轮数据，独立的专项审计流仍缺（model-visible ⟺ logged 的闭环专项）
-- [ ] **host-smoke** — 宿主冒烟脚本入库：/tmp/hanzeep-qa/smoke-host.mts（tarball → 新 profile → runProfile boot → 工具断言）参数化为 scripts/host-smoke.mts，作预发布检查
+- [ ] **host-smoke** — 宿主冒烟脚本入库：/tmp/hanzeep-qa/smoke-host.mts（tarball → 新 profile → runProfile boot → 工具断言）参数化为 scripts/host-smoke.mts，作预发布检查（原脚本已被 tmp 清理，按此描述重写）
 
 ## Deferred
 
+- **dsh 上游：插件事件类型写侧 `ignorable` 旋钮** — `Session.append` 无法给 log-only 事件打 `ignorable: true`，插件自定义事件类型会使会话在 stock 宿主下不可重载（读侧已容忍，写侧缺口；依据 dsh 架构决策 2026-08-30）。补上后可再评估独立 `doc-gen/round` 专项事件（当前审计流由回执 promptHash + 工具结果 content 承载，见 Done T2-core）
 - receipts CI badge、社区基础设施（issue 模板等）— 等第一个真实用户
 - cosmic Req/Func/Tech 三阶段 pack — Plan 先行已定（核心 API 已按链式留位）
 - pack npm 分发机制（设计 OQ4）、MCP 包装（OQ6，宿主无关分发）
@@ -19,12 +19,13 @@ Source: functional spec at docs/designs/hanzeep-mvp.md. 本文件记录真正待
 
 ## Done（压缩账目）
 
+- **2026-10-12 T2-core**：每轮 promptHash 进回执 rounds（sha256 该轮实际发送 prompt，llm-error 轮同样记录）——回执整体作为 doc_generate 工具结果 content 逐字进 session log，审计流由既有通道承载，未引自定义事件类型（dsh 写侧缺口见 Deferred）。200 tests 全绿 + 覆盖门 + typecheck，分支 feat/t2-round-audit。
 - **2026-10-11 D1-D3**：能力发现（doc_packs + manifest.description）/ 收敛检测三层（pack 评分百分制 > 内置严重度评分 > 指纹兜底，终止 reason 进回执）/ 参数最小桥（params/maxRounds + 声明白名单 + maxRoundsCeiling 硬钳制 + as-run 复验）。设计 docs/designs/*（均已 IMPLEMENTED），提交 8fcbd4d / 3ad941c / de7bcde，明细见下方 tracker。
 - **2026-08-27/28 Sprint 3-5**：闭环核心（llm-error 映射+单次重试 / 振荡终止 / token 预检 / 路径包含 / 回执 language+规则集快照 / 6 项 GAP 测试 / 引擎 bake-off 微型引擎胜出）；DX 面（确定性 quickstart / 工具返回 shape / Config 键名与合并语义 / version+formatVersion / 全绿语义+错误契约）；Sprint 4 /review 链式绿回执+防篡改+staleness 等 44+3 项；Sprint 5 分发层 3 缺陷修复（bundle patch / tarball / types）+ 宿主冒烟 10/10。
 
 ## Implementation tracker（D1 → D2 → D3 全部完成 2026-10-11；后续实施从这里续）
 
-实施约定：每个 D 独立分支 `feat/d<N>-<slug>`；完成 = 测试全绿 + 覆盖门 100% + 功能说明书（current-state）与本文同步 + 设计文档 Status 翻 IMPLEMENTED + `--no-ff` 合并 master + push。commit 前缀 `[feat]`。基线：2026-10-11 master 141 tests 全绿（D3 完成后 198）。
+实施约定：每个 D 独立分支 `feat/d<N>-<slug>`；完成 = 测试全绿 + 覆盖门 100% + 功能说明书（current-state）与本文同步 + 设计文档 Status 翻 IMPLEMENTED + `--no-ff` 合并 master + push。commit 前缀 `[feat]`。基线：2026-10-11 master 141 tests 全绿（D3 完成后 198；T2-core 后 200）。
 
 ### D1-discovery — DONE (2026-10-11, feat/d1-discovery)
 - [x] 1. `src/pack.ts`：PackManifest 增必填 `description`

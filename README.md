@@ -110,7 +110,7 @@ corepack pnpm install && corepack pnpm run build:lib:host
 
 # then, in this repo
 corepack pnpm install
-corepack pnpm test            # 130 tests, coverage gate 100% lines/functions/statements
+corepack pnpm test            # vitest, coverage gate 100% lines/functions/statements
 corepack pnpm run build       # tsc + tsdown
 ```
 
@@ -119,5 +119,5 @@ corepack pnpm run build       # tsc + tsdown
 ## Limitations
 
 - Receipts are tamper-evident, not tamper-proof (no signature): accidental edits go red; a determined attacker can forge both artifact and receipt.
-- Repair-loop observability lives in the receipt (per-round issue counts); dedicated session events are future work.
+- Repair-loop observability lives in the receipt (per-round issue counts and prompt hashes); the receipt rides the doc_generate tool result into the session log verbatim. A dedicated session event type is future work (dsh has no write-side knob to mark plugin event types ignorable).
 - Materials are trusted input: malicious material content can steer generation (documented trust model; accepted at review, nonce delimiters deferred).
