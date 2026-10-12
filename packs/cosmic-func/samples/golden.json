@@ -1,0 +1,84 @@
+{
+  "docType": "func",
+  "language": "zh-CN",
+  "index": 1,
+  "desiredCfps": 35,
+  "funcId": "USR-FAV",
+  "diagrams": [
+    "sequenceDiagram\n    autonumber\n    actor u as 注册用户\n    participant fav as 收藏服务\n    participant prod as 商品服务\n    participant price as 价格服务\n    participant notify as 通知服务\n    u->>fav: 收藏商品\n    fav-->>u: 收藏结果\n    u->>fav: 查询收藏列表\n    fav->>prod: 读取商品信息\n    prod-->>fav: 商品数据\n    fav-->>u: 收藏列表\n    price->>notify: 推送收藏降价提醒\n    notify-->>u: 降价通知"
+  ],
+  "processes": [
+    {
+      "index": 1,
+      "name": "收藏商品",
+      "description": "注册用户在商品列表或详情页将感兴趣的商品加入个人收藏，系统核验登录态与商品有效性后写入收藏记录并反馈收藏结果。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在商品详情页点击“收藏”按钮"
+    },
+    {
+      "index": 2,
+      "name": "取消收藏",
+      "description": "注册用户从个人收藏列表中移除不再感兴趣的商品，系统更新收藏记录状态并即时反馈取消结果。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在收藏列表中点击“取消收藏”"
+    },
+    {
+      "index": 3,
+      "name": "查询收藏列表",
+      "description": "注册用户进入个人中心收藏页，系统分页返回收藏商品清单及每个商品的最新状态，供用户浏览与后续操作。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户进入个人中心的收藏页"
+    },
+    {
+      "index": 4,
+      "name": "查看收藏商品详情",
+      "description": "注册用户从收藏列表进入某个商品的详情展示，系统在详情中标注该商品的收藏状态，帮助用户决定是否继续保留。",
+      "originator": "注册用户",
+      "receiver": "商品服务",
+      "origination_event": "用户在收藏列表中点击某个商品"
+    },
+    {
+      "index": 5,
+      "name": "清理失效收藏",
+      "description": "对已下架或删除的商品，系统提示用户存在失效条目，用户确认后批量清理，收藏关系同步解除并反馈清理结果。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "系统提示存在失效收藏条目，用户确认清理"
+    },
+    {
+      "index": 6,
+      "name": "统计收藏数量",
+      "description": "注册用户查看个人收藏总数角标，系统汇总有效收藏条目数量并返回，为收藏维护提供直观参考。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户查看个人中心的收藏总数角标"
+    },
+    {
+      "index": 7,
+      "name": "判断重复收藏",
+      "description": "用户提交收藏请求时系统核对既有收藏记录，对重复收藏不产生新记录并返回友好提示，保证收藏列表不出现重复条目。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户提交收藏请求，系统核对既有收藏"
+    },
+    {
+      "index": 8,
+      "name": "推送收藏降价提醒",
+      "description": "收藏商品价格发生下降时，系统向收藏该商品的用户发送降价通知，提升收藏功能的回访价值。",
+      "originator": "价格服务",
+      "receiver": "通知服务",
+      "origination_event": "商品价格变动事件到达价格服务"
+    },
+    {
+      "index": 9,
+      "name": "导出收藏清单",
+      "description": "注册用户将个人收藏清单导出为文件留存，系统按所选格式生成文件并提供下载，便于线下整理与分享。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在收藏页点击“导出收藏”按钮"
+    }
+  ]
+}

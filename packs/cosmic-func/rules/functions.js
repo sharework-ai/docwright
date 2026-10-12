@@ -1,0 +1,131 @@
+// Function rules for the cosmic-func pack: cross-field and cross-artifact
+// checks migrated from cosmic-claude auditors/func_auditor.py (E001
+// originator != receiver) plus the chain-alignment pattern generalized from
+// the req pack (E303): index/funcId/desiredCfps must match the upstream req
+// artifact. Contract: export `rules`; each check(artifact, context) returns
+// RuleIssue[] ({ jsonPath, message, snapshot? }); an empty array means pass.
+// `context` carries upstream (parsed artifacts), materials (raw texts), and
+// effective params — see docs/designs/function-rule-context.md. Messages
+// follow the artifact's `language` field (zh-CN default, en-US variant) so
+// one rule serves both language rule files.
+
+function isObject(value) {
+  return value !== null && typeof value === 'object'
+}
+
+/** Message selector: en-US only when the artifact itself says so. */
+function say(artifact, zh, en) {
+  return isObject(artifact) && artifact.language === 'en-US' ? en : zh
+}
+
+function getProcesses(artifact) {
+  return isObject(artifact) && Array.isArray(artifact.processes) ? artifact.processes : []
+}
+
+export const rules = [
+  {
+    // E001 migrated: a process's originator and receiver must differ.
+    id: 'func/originator-receiver-distinct',
+    severity: 'error',
+    suggestion: '功能过程的发起者（originator）与接收者（receiver）不能相同：发起者是触发过程的功能用户或外部系统，接收者是响应并实现过程的系统部分；两者相同时说明过程边界没有切开，重新划分触发方与实现方。',
+    check(artifact) {
+      const issues = []
+      for (const [index, proc] of getProcesses(artifact).entries()) {
+        if (!isObject(proc)) continue
+        const { originator, receiver } = proc
+        if (typeof originator === 'string' && typeof receiver === 'string' && originator === receiver) {
+          issues.push({
+            jsonPath: `$.processes[${index}]`,
+            message: say(artifact,
+              `功能过程 "${String(proc.name)}" 的发起者与接收者相同（"${originator}"）`,
+              `Process "${String(proc.name)}" has an identical originator and receiver ("${originator}")`),
+            snapshot: `originator=receiver=${originator}`,
+          })
+        }
+      }
+      return issues
+    },
+  },
+  {
+    id: 'func/process-name-unique',
+    severity: 'error',
+    suggestion: '功能过程名称必须在文档内唯一：重名的过程要么是同一过程被重复列出（删除一个），要么是两个不同过程共用泛化名（各自改为具体的业务对象+动作）。',
+    check(artifact) {
+      const seen = new Map()
+      const issues = []
+      for (const [index, proc] of getProcesses(artifact).entries()) {
+        const name = isObject(proc) && typeof proc.name === 'string' ? proc.name : ''
+        if (name === '') continue
+        if (seen.has(name)) {
+          issues.push({
+            jsonPath: `$.processes[${index}].name`,
+            message: say(artifact,
+              `功能过程名称重复："${name}" 在第 ${seen.get(name) + 1} 和第 ${index + 1} 个过程都出现`,
+              `Duplicate process name: "${name}" appears in both process ${seen.get(name) + 1} and ${index + 1}`),
+            snapshot: name,
+          })
+        } else {
+          seen.set(name, index)
+        }
+      }
+      return issues
+    },
+  },
+  {
+    id: 'func/process-index-sequence',
+    severity: 'error',
+    suggestion: '功能过程 index 必须从 1 开始连续递增（第 i 个过程的 index 为 i）：重新编号全部过程，使 index 与数组位置一致。',
+    check(artifact) {
+      const issues = []
+      for (const [index, proc] of getProcesses(artifact).entries()) {
+        const claimed = isObject(proc) ? proc.index : undefined
+        if (claimed !== index + 1) {
+          issues.push({
+            jsonPath: `$.processes[${index}].index`,
+            message: say(artifact,
+              `功能过程 index 不连续：数组第 ${index + 1} 项的 index 为 ${String(claimed)}，期望 ${index + 1}`,
+              `Process indexes are not sequential: entry ${index + 1} claims index ${String(claimed)}, expected ${index + 1}`),
+            snapshot: `index=${String(claimed)}`,
+          })
+        }
+      }
+      return issues
+    },
+  },
+  {
+    // E303 pattern (generalized in the req pack): index/funcId/desiredCfps
+    // must align with the upstream req artifact.
+    id: 'func/req-alignment',
+    severity: 'error',
+    suggestion: 'index/funcId/desiredCfps 必须与上游 req 产物完全一致：三者都从绿回执的 req 产物对应字段原样复制，不得改写；doc_validate 复验时请传入与生成时相同的 upstream 路径。',
+    check(artifact, context) {
+      if (!isObject(artifact)) return []
+      const upstream = Array.isArray(context?.upstream) ? context.upstream : []
+      const req = upstream.find(item => isObject(item) && item.docType === 'req')
+      if (req === undefined) {
+        return [{
+          jsonPath: '$',
+          message: say(artifact,
+            '找不到上游 req 产物（docType="req"）：生成时必须以绿回执的 req 产物为 upstream；doc_validate 复验需传入相同 upstream 路径',
+            'Upstream req artifact not found (docType="req"): generate with a green req artifact as upstream; pass the same upstream paths when revalidating with doc_validate'),
+        }]
+      }
+      const issues = []
+      const expect = (field, reqValue) => {
+        if (artifact[field] !== reqValue) {
+          issues.push({
+            jsonPath: `$.${field}`,
+            message: say(artifact,
+              `${field} 与上游 req 不一致：func 为 ${String(artifact[field])}，req 为 ${String(reqValue)}`,
+              `${field} mismatches the upstream req artifact: func has ${String(artifact[field])}, req has ${String(reqValue)}`),
+            snapshot: `${field}=${String(artifact[field])}`,
+          })
+        }
+      }
+      expect('index', req.index)
+      expect('funcId', req.funcId)
+      expect('desiredCfps', req.desiredCfps)
+      return issues
+    },
+  },
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "tech/func-id-format",
+    "severity": "error",
+    "given": "$",
+    "field": "funcId",
+    "kind": "pattern",
+    "pattern": "^[A-Z0-9]{1,8}(-[A-Z0-9]{1,8})+$",
+    "mustMatch": true,
+    "suggestion": "funcId 格式不合法：从上游 func 产物原样复制（大写字母/数字分段、段间 `-` 连接、至少两段，每段 1-8 字符，如 USR-FAV）。"
+  }
+]

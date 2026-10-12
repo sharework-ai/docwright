@@ -1,0 +1,21 @@
+# Functional Process Design: {{funcId}}
+
+- Document type: func (functional process design)
+- Requirement index: index {{index}}
+- Target CFPs: {{desiredCfps}}
+
+## Sequence diagrams
+
+{{#each diagrams}}
+```mermaid
+{{this}}
+```
+{{/each}}
+
+## Functional process list
+
+| # | Process | Originator | Receiver | Origination event | Description |
+|---|---------|------------|----------|-------------------|-------------|
+{{#each processes}}
+| {{index}} | {{name}} | {{originator}} | {{receiver}} | {{origination_event}} | {{description}} |
+{{/each}}

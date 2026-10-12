@@ -1,0 +1,30 @@
+[
+  {
+    "id": "func/process-name-forbidden-keywords",
+    "severity": "error",
+    "given": "$.processes[*]",
+    "field": "name",
+    "kind": "forbiddenKeywords",
+    "keywords": ["进行", "执行", "异常处理", "设计", "校验", "conduct", "execute"],
+    "suggestion": "功能过程名称含设计/实现类字眼（进行、执行、异常处理、设计、校验、conduct、execute）：过程名应写业务对象+业务动作（如\"收藏商品\"），把校验与异常分支写进 process description，而不是体现在名称上。"
+  },
+  {
+    "id": "func/process-name-suffix",
+    "severity": "info",
+    "given": "$.processes[*]",
+    "field": "name",
+    "kind": "pattern",
+    "pattern": "(处理|过程|闭环|流程|管理|等等|待定|TBD|etc\\.)$",
+    "mustMatch": false,
+    "suggestion": "功能过程名称以泛化词（处理/过程/闭环/流程/管理）或未定稿标记（等等/待定/TBD/etc.）结尾：改为具体的业务对象+动作命名，如\"收藏商品\"而非\"收藏管理\"。"
+  },
+  {
+    "id": "func/process-name-warning-keywords",
+    "severity": "warning",
+    "given": "$.processes[*]",
+    "field": "name",
+    "kind": "forbiddenKeywords",
+    "keywords": ["计算", "转化", "转换", "拆分", "日志", "解析", "编码", "缓存", "临时", "筛选", "排序"],
+    "suggestion": "功能过程名称含技术实现字眼（计算/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序）：这些属于技术设计（tech 阶段子过程），过程名保持业务视角。"
+  }
+]

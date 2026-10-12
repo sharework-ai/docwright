@@ -1,0 +1,29 @@
+# Function-Point Breakdown: {{funcId}}
+
+- Document type: tech (technical breakdown)
+- Requirement index: index {{index}}
+- Target CFPs: {{desiredCfps}}
+
+## Data-movement sequence diagrams
+
+{{#each diagrams}}
+```mermaid
+{{this}}
+```
+{{/each}}
+
+## Breakdown table
+
+{{#each processes}}
+### {{index}}. {{name}}
+
+Originator: {{originator}}　Receiver: {{receiver}}　Origination event: {{origination_event}}
+
+{{description}}
+
+| # | Data movement | Type | Data group | Data properties | CFP |
+|---|---------------|------|------------|-----------------|-----|
+{{#each subProcesses}}
+| {{@index}} | {{description}} | {{dataMovementType}} | {{dataGroup}} | {{dataProperties}} | {{cfp}} |
+{{/each}}
+{{/each}}

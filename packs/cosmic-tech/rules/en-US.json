@@ -1,0 +1,12 @@
+[
+  {
+    "id": "tech/func-id-format",
+    "severity": "error",
+    "given": "$",
+    "field": "funcId",
+    "kind": "pattern",
+    "pattern": "^[A-Z0-9]{1,8}(-[A-Z0-9]{1,8})+$",
+    "mustMatch": true,
+    "suggestion": "funcId is malformed: copy it verbatim from the upstream func artifact (uppercase letters/digits in segments, `-` between segments, at least two segments, 1-8 characters each, e.g. USR-FAV)."
+  }
+]

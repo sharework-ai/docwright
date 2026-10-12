@@ -6,7 +6,7 @@ hanzeep is a deepseek-harness (dsh) plugin: closed-loop document generation with
 
 ```
 src/        plugin code (entry: index.ts; loop.ts is the core repair loop)
-packs/      built-in packs (cosmic-plan; hybrid JSON rules + JS functions)
+packs/      built-in packs (cosmic-plan/req/func/tech; hybrid JSON rules + JS functions)
 tests/      vitest; coverage gate 100% lines/functions/statements, 80% branches
 docs/       design doc + test plan
 ```
