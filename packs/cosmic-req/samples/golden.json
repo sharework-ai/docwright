@@ -1,0 +1,32 @@
+{
+  "docType": "req",
+  "language": "zh-CN",
+  "index": 1,
+  "desiredCfps": 35,
+  "funcId": "USR-FAV",
+  "funcDesc": "为注册用户提供商品收藏功能：用户在浏览商品列表或商品详情时，可将感兴趣的商品加入个人收藏；系统校验登录态与商品有效性后写入收藏记录，并即时反馈收藏结果；重复收藏同一商品时不产生重复记录，返回友好提示；用户可在个人中心查看收藏列表并取消收藏，取消后记录即时移除，为后续收藏维护与个性化推荐提供数据基础。",
+  "functionalUsers": [
+    {
+      "role": "customer",
+      "description": "注册购物用户，通过收藏功能管理自己感兴趣的商品。",
+      "userStories": [
+        "As a customer, I want to add a product to my favorites while browsing, so that I can quickly find it again later.",
+        "As a customer, I want to remove a product from my favorites, so that my collection stays relevant."
+      ]
+    }
+  ],
+  "businessRules": [
+    {
+      "ruleType": "condition",
+      "description": "仅登录用户可以收藏商品，未登录时先引导完成登录。"
+    },
+    {
+      "ruleType": "event",
+      "description": "同一用户重复收藏同一商品时，系统不产生重复记录并返回已收藏提示。"
+    },
+    {
+      "ruleType": "complex",
+      "description": "商品下架或删除后，收藏列表中对应条目标记为失效状态，用户清理失效条目时同步解除收藏关系。"
+    }
+  ]
+}

@@ -13,12 +13,27 @@ export type DeclarativeRule =
   | { id: string; severity: Severity; given: string; field: string; kind: 'forbiddenKeywords'; keywords: readonly string[]; suggestion: string }
   | { id: string; severity: Severity; given: string; field: string; kind: 'pattern'; pattern: string; mustMatch: boolean; suggestion: string }
 
-/** JS rule: receives the whole artifact, returns issues. Pack-author authored. */
+/**
+ * Execution context handed to function rules as an optional second argument:
+ * everything the current doc_generate/doc_validate call has beyond the
+ * artifact itself. Chained packs use it for cross-artifact rules (upstream),
+ * deployment allowlists (params), and reference material checks (materials).
+ */
+export interface RuleContext {
+  /** Upstream artifacts of the call, parsed (best-effort; unparseable entries are skipped). */
+  readonly upstream?: readonly unknown[]
+  /** Raw material texts of the call (#!inline markers already stripped). */
+  readonly materials?: readonly string[]
+  /** Effective pack params as-run (defaults + call overrides, validated). */
+  readonly params?: Readonly<Record<string, unknown>>
+}
+
+/** JS rule: receives the whole artifact plus the optional call context. Pack-author authored. */
 export interface FunctionRule {
   readonly id: string
   readonly severity: Severity
   readonly suggestion: string
-  check(artifact: unknown): RuleIssue[]
+  check(artifact: unknown, context?: RuleContext): RuleIssue[]
 }
 
 /** Shape function rules may return (structural subset of Issue). */

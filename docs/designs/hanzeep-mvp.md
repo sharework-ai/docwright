@@ -103,7 +103,7 @@ sidecar 文件 `<产物名>.receipt.json` 与产物同目录；同时内联在�
 
 ### 3.4 工具 `doc_validate` — 确定性复验（零 LLM）
 
-参数：`artifactPath`（workspace 相对路径）、`pack`、`language?`、`params?`。对既有产物用**当前安装的 pack 规则**重跑校验，返回 `{ artifactPath, receipt, hashMatches, packVersionStale }`。校验默认使用回执记录的 as-run 参数（**按当时的标准复验**）；显式传 `params` 可做 what-if 校验。
+参数：`artifactPath`（workspace 相对路径）、`pack`、`language?`、`params?`、`upstream?`（链式 pack 复验用，同生成时的 workspace 相对路径数组）。对既有产物用**当前安装的 pack 规则**重跑校验，返回 `{ artifactPath, receipt, hashMatches, packVersionStale }`。校验默认使用回执记录的 as-run 参数（**按当时的标准复验**）；显式传 `params` 可做 what-if 校验。传入 `upstream` 时走与 `doc_generate` 相同的六项上游校验，解析后的产物注入函数规则 context（跨产物规则得以复验），回执同步记录 `upstreamHashes` 锚点。
 
 - `hashMatches`：`true` 产物与 sidecar 回执哈希一致；`false` 生成后被改动过（篡改可见）；`null` 无 sidecar（如手工拷入的样例）。
 - `packVersionStale`：`true` 回执由**另一个 pack 版本**写入——绿回执证明的是旧规则，应重新生成（无版本记录的回执也算 stale）；`false` 版本一致；`null` 无回执。
@@ -189,7 +189,7 @@ packs/<name>/
 
 ### 4.3 函数规则（`rules/functions.js`）
 
-导出 `rules` 数组，每条 `{ id, severity(默认 error), suggestion, check(artifact) }`；`check` 返回 `RuleIssue[]`（`{ jsonPath, message, snapshot? }`，空数组即通过），拿到整个产物，负责声明式四族表达不了的跨字段断言。规则运行时崩溃会带上规则 id 报错（不静默跳过）。另可导出 `score(artifact, issues) => 0-100`（收敛检测的 pack 层评分，越高越好；缺省自动启用内置严重度评分）。
+导出 `rules` 数组，每条 `{ id, severity(默认 error), suggestion, check(artifact, context?) }`；`check` 返回 `RuleIssue[]`（`{ jsonPath, message, snapshot? }`，空数组即通过），拿到整个产物，负责声明式四族表达不了的跨字段断言。第二参 `context`（可选，旧单参规则零改动兼容）携带本次调用产物之外的信息：`upstream`（解析后的上游产物数组）、`materials`（素材原文）、`params`（生效参数）——链式 pack 用它做跨产物校验（如 req 对 plan 的三点对齐）与部署白名单（如功能用户角色）。规则运行时崩溃会带上规则 id 报错（不静默跳过）。另可导出 `score(artifact, issues) => 0-100`（收敛检测的 pack 层评分，越高越好；缺省自动启用内置严重度评分）。设计依据见 docs/designs/function-rule-context.md。
 
 ### 4.4 作者硬契约
 
@@ -200,6 +200,10 @@ packs/<name>/
 ### 4.5 现有 pack：cosmic-plan（v0.1.0）
 
 COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`consumes: []`，双语 zh-CN/en-US。schema 定义 `functions[]`（funcId / l1-l3Name / funcDesc / estimatedCfps）+ totalCfps 等字段。规则 10 条：声明式 6 条（funcDesc ≥80 字 [error] / ≤2000 字 [warning]、funcId 格式正则、三级功能名禁用"管理/处理/系统/manage/process/system"等泛化词）；函数规则 4 条（funcId 唯一、层级路径唯一、单功能 CFP 建议区间 20-50 [warning]、CFP 总和 20-1000 且 totalCfps 等于求和）。
+
+### 4.6 现有 pack：cosmic-req（v0.1.0）
+
+COSMIC 需求分析文档（从 cosmic-claude Req 阶段迁移），per-function 粒度：`index` 定位上游 plan `functions` 数组的 1-based 位置，`funcId`/`desiredCfps`（=estimatedCfps）从对应 function 复制。`consumes: ["cosmic-plan"]`，双语 zh-CN/en-US。参数三个：`cfpsPerFunc`（业务规则配比分母，默认 30）、`functionalUserRoles`（功能用户角色白名单，逗号分隔 string，默认 6 个样例角色）、`funcDescMaxLength`（功能描述上限，默认 500；schema 硬顶 2000）。规则 8 条：声明式 5 条（funcDesc ≥10 [error] / ≤参数上限 [warning]、funcId 格式、role 格式 `^[a-z][a-z0-9-]*$`、业务规则描述 ≥10 [error]）；函数规则 3 条（**E301** role ∈ 部署白名单、**E302** 规则数 ∈ [ceil(cfps/perFunc), floor(ceil×1.5)]、**E303 泛化** index/funcId/desiredCfps 与上游 plan 三点对齐——全部 error 阻断，与原系统"审计意见只降分不阻断"不同，差异与理由见 docs/designs/function-rule-context.md）。
 
 ## 5. 插件 / pack 职责边界（总表）
 

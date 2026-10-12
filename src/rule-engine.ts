@@ -1,4 +1,4 @@
-import type { DeclarativeRule, FunctionRule, Pack, ParamRef } from './pack.ts'
+import type { DeclarativeRule, FunctionRule, Pack, ParamRef, RuleContext } from './pack.ts'
 import { isParamRef } from './pack.ts'
 import type { Issue } from './issue.ts'
 import type { ReceiptRuleResult } from './receipt.ts'
@@ -17,19 +17,20 @@ import { truncateSnapshot } from './issue.ts'
  */
 
 function compileRule(rule: DeclarativeRule): CompiledRule {
-  if (rule.given === '$') return { rule, scope: 'root' }
-  const arrayMatch = /^\$\.([A-Za-z0-9_]+)\[\*\]$/.exec(rule.given)
-  if (arrayMatch === null) {
-    throw new Error(`rule ${rule.id}: given path not supported: ${rule.given} (supported: $, $.field[*])`)
-  }
+  let re: RegExp | undefined
   if (rule.kind === 'pattern') {
     try {
-      return { rule, scope: { key: arrayMatch[1] ?? '' }, re: new RegExp(rule.pattern) }
+      re = new RegExp(rule.pattern)
     } catch (error) {
       throw new Error(`rule ${rule.id}: invalid pattern "${rule.pattern}": ${(error as Error).message}`)
     }
   }
-  return { rule, scope: { key: arrayMatch[1] ?? '' } }
+  if (rule.given === '$') return { rule, scope: 'root', ...(re === undefined ? {} : { re }) }
+  const arrayMatch = /^\$\.([A-Za-z0-9_]+)\[\*\]$/.exec(rule.given)
+  if (arrayMatch === null) {
+    throw new Error(`rule ${rule.id}: given path not supported: ${rule.given} (supported: $, $.field[*])`)
+  }
+  return { rule, scope: { key: arrayMatch[1] ?? '' }, ...(re === undefined ? {} : { re }) }
 }
 
 function scopeFor(artifact: unknown, compiled: CompiledRule): readonly unknown[] {
@@ -79,14 +80,15 @@ function checkField(compiled: CompiledRule, item: unknown, index: number, params
   }
 }
 
-export function createRuleEngine(pack: Pack, language: string): (artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined) => readonly Issue[] {
+export function createRuleEngine(pack: Pack, language: string): (artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined, context?: RuleContext | undefined) => readonly Issue[] {
   const declarative = pack.rules.get(language)
   if (declarative === undefined) {
     throw new Error(`pack ${pack.manifest.name} has no rules for language "${language}"`)
   }
   const compiledRules = declarative.map(compileRule)
-  return (artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined): readonly Issue[] => {
+  return (artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined, context?: RuleContext | undefined): readonly Issue[] => {
     const issues: Issue[] = []
+    const ruleContext: RuleContext = { ...(params === undefined ? {} : { params }), ...(context === undefined ? {} : context) }
     for (const compiled of compiledRules) {
       for (const [index, item] of scopeFor(artifact, compiled).entries()) {
         const issue = checkField(compiled, item, index, params)
@@ -95,7 +97,7 @@ export function createRuleEngine(pack: Pack, language: string): (artifact: unkno
     }
     for (const rule of pack.functionRules) {
       try {
-        for (const found of rule.check(artifact)) {
+        for (const found of rule.check(artifact, ruleContext)) {
           issues.push({ ruleId: rule.id, severity: rule.severity, jsonPath: found.jsonPath, message: found.message, ...(found.snapshot === undefined ? {} : { snapshot: found.snapshot }), suggestion: rule.suggestion })
         }
       } catch (error) {

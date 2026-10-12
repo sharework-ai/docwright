@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type UpstreamVersionPolicy } from './config.ts'
-import { generateDocument, getDocService } from './doc-service.ts'
+import { generateDocument, getDocService, parseUpstreamArtifacts } from './doc-service.ts'
 import { createLlmPort } from './llm-port.ts'
 import { resolveEffectiveParams } from './params.ts'
 import type { Pack } from './pack.ts'
@@ -205,15 +205,20 @@ export function defineDocValidateTool(deps: ToolDeps) {
       pack: { type: 'string', required: true, description: 'Pack name the artifact belongs to' },
       language: { type: 'string', description: 'Language whose ruleset to run; defaults to the receipt-recorded language, then config defaultLanguage' },
       params: { type: 'json', description: 'Optional pack-param overrides; defaults to the receipt-recorded as-run params (revalidate by the original standards)' },
+      upstream: { type: 'array', items: { type: 'string' }, description: 'For chained packs: workspace-relative paths to the same upstream artifacts used at generation (green-receipt verified); required to replay chained-pack rules like plan-alignment checks' },
     },
     output: {
       schema: { type: 'json' },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args: { artifactPath: string; pack: string; language?: string; params?: unknown }, exec) {
+    async execute(args: { artifactPath: string; pack: string; language?: string; params?: unknown; upstream?: unknown[] }, exec) {
       const pack = resolvePack(deps, args.pack)
       const workspaceRoot = effectiveWorkspaceRoot(exec as SessionWorkspaceCarrier | undefined, deps.config.workspaceRoot)
       const artifactPath = confinePath(workspaceRoot, args.artifactPath, 'artifactPath')
+      const upstreamRefs = args.upstream as string[] | undefined
+      const verifiedUpstream = upstreamRefs !== undefined && upstreamRefs.length > 0 && pack.manifest.consumes.length > 0
+        ? await verifyUpstreamReceipts(workspaceRoot, upstreamRefs, pack, deps.packs, deps.config.upstreamVersionPolicy ?? DEFAULT_UPSTREAM_VERSION_POLICY)
+        : undefined
       const raw = await readFile(artifactPath, 'utf8')
       let artifact: unknown
       try {
@@ -258,7 +263,10 @@ export function defineDocValidateTool(deps: ToolDeps) {
         ? storedReceipt.params as Record<string, unknown>
         : undefined
       const effectiveParams = resolveEffectiveParams(pack, normalizeParams(args.params), receiptParams)
-      const issues = service.validate(artifact, effectiveParams)
+      // Chained replay: verified upstream artifacts feed rules like plan-alignment.
+      const upstreamArtifacts = parseUpstreamArtifacts(verifiedUpstream?.texts)
+      const ruleContext = upstreamArtifacts === undefined ? undefined : { upstream: upstreamArtifacts }
+      const issues = service.validate(artifact, effectiveParams, ruleContext)
       const counts = severityCounts(issues)
       const isValid = counts.errors === 0
       const receipt = service.buildReceipt({
@@ -268,6 +276,7 @@ export function defineDocValidateTool(deps: ToolDeps) {
         iterations: 0,
         rounds: [{ round: 0, errorCount: counts.errors, warningCount: counts.warnings }],
         model: 'revalidate',
+        ...(verifiedUpstream !== undefined ? { upstream: verifiedUpstream.anchors } : {}),
         ...(Object.keys(effectiveParams).length > 0 ? { params: effectiveParams } : {}),
       })
       return { artifactPath, receipt, hashMatches, packVersionStale } as unknown as ValidateToolResult

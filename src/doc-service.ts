@@ -5,7 +5,7 @@ import { createScoring } from './convergence.ts'
 import type { Issue } from './issue.ts'
 import type { LlmPort } from './llm-port.ts'
 import { runRepairLoop } from './loop.ts'
-import type { Pack } from './pack.ts'
+import type { Pack, RuleContext } from './pack.ts'
 import { resolveEffectiveParams } from './params.ts'
 import { createRuleEngine, rollupRules } from './rule-engine.ts'
 import { readMaterials } from './materials.ts'
@@ -21,7 +21,7 @@ import { createRenderer } from './render.ts'
  */
 export class DocService {
   private readonly schemaCheck: (artifact: unknown) => readonly Issue[]
-  private readonly ruleEngine: (artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined) => readonly Issue[]
+  private readonly ruleEngine: (artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined, context?: RuleContext | undefined) => readonly Issue[]
   readonly renderer: (artifact: unknown) => string
   readonly promptTemplate: string
   private readonly schemaHash: string
@@ -40,8 +40,8 @@ export class DocService {
     this.schemaHash = sha256(JSON.stringify(pack.schema))
   }
 
-  validate(artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined): readonly Issue[] {
-    return [...this.schemaCheck(artifact), ...this.ruleEngine(artifact, params)]
+  validate(artifact: unknown, params?: Readonly<Record<string, unknown>> | undefined, context?: RuleContext | undefined): readonly Issue[] {
+    return [...this.schemaCheck(artifact), ...this.ruleEngine(artifact, params, context)]
   }
 
   rulesetSnapshot(): Receipt['rulesetSnapshot'] {
@@ -149,6 +149,25 @@ async function writeAtomic(path: string, content: string): Promise<void> {
 }
 
 /**
+ * Best-effort parse of upstream texts for the rule context. The tool layer
+ * verifies upstream files are JSON, but generateDocument is also callable
+ * programmatically — unparseable entries are skipped rather than failing
+ * validation on them.
+ */
+export function parseUpstreamArtifacts(texts?: readonly string[] | undefined): readonly unknown[] | undefined {
+  if (texts === undefined || texts.length === 0) return undefined
+  const parsed: unknown[] = []
+  for (const text of texts) {
+    try {
+      parsed.push(JSON.parse(text) as unknown)
+    } catch {
+      // Free-form text upstream: rules see only parseable artifacts.
+    }
+  }
+  return parsed
+}
+
+/**
  * doc_generate core: token pre-check → closed loop → persist artifact,
  * markdown, and sidecar receipt. Exhausted loops still write the draft and
  * a red receipt (fail loud, nothing silent).
@@ -158,6 +177,11 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
   const service = getDocService(input.pack, input.language)
   const effectiveParams = resolveEffectiveParams(input.pack, input.params)
   const materialTexts = await readMaterials(input.materials, input.workspaceRoot, input.materialsRoot)
+  const upstreamArtifacts = parseUpstreamArtifacts(input.upstream)
+  const ruleContext: RuleContext = {
+    materials: materialTexts,
+    ...(upstreamArtifacts === undefined ? {} : { upstream: upstreamArtifacts }),
+  }
   const firstPrompt = assembleGeneratorPrompt({ promptTemplate: service.promptTemplate, materials: materialTexts, upstream: input.upstream, params: effectiveParams })
   const budget = estimateTokens(firstPrompt)
   const tokenBudget = input.config.promptTokenBudget ?? DEFAULT_PROMPT_TOKEN_BUDGET
@@ -184,7 +208,7 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
       promptTokenBudget: tokenBudget,
       model,
       signal: input.signal,
-      validate: artifact => service.validate(artifact, effectiveParams),
+      validate: artifact => service.validate(artifact, effectiveParams, ruleContext),
       scoring,
     },
     (event, artifact) => input.onRound(event.round, artifact),

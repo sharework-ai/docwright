@@ -35,6 +35,9 @@ Gotchas (each cost us time once):
 - `dsh plugin add` does more than pnpm: it appends bundles declaring `dsh.bundle` to
   `dsh.profile.bundles`. A manual `pnpm add <tgz>` must append `dsh-plugin-hanzeep` to that
   list by hand, or the plugin's patch layer never loads (`patch: entry "hanzeep" not found`).
+- Re-adding a SAME-VERSION tarball does not refresh the installed copy (pnpm skips it):
+  `dsh plugin --profile <name> remove dsh-plugin-hanzeep` first, then add again, or new
+  packs/dirs silently stay absent.
 - `pnpm --dir <dsh> dsh …` switches cwd to the dsh repo — pin the workspace with the
   hanzeep `workspaceRoot` config instead of relying on cwd.
 - Running dsh sources from a foreign cwd (e.g. a script) needs `TSX_TSCONFIG_PATH`

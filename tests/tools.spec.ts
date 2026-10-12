@@ -40,7 +40,7 @@ describe('doc_packs tool', () => {
     const deps = await makeDeps()
     const tool = defineDocPacksTool(deps)
     const packs = await tool.execute({} as never, { signal } as never) as Array<{ name: string; version: string; description: string; languages: string[]; consumes: string[] }>
-    expect(packs).toHaveLength(1)
+    expect(packs).toHaveLength(2)
     expect(packs[0]).toMatchObject({ name: 'cosmic-plan', version: '0.1.0', languages: ['zh-CN', 'en-US'], consumes: [] })
     expect(packs[0]!.description.length).toBeGreaterThan(0)
   })
@@ -70,7 +70,7 @@ describe('doc_generate tool', () => {
   it('fails loud on an unknown pack with the discovery hint and available list', async () => {
     const deps = await makeDeps()
     const tool = defineDocGenerateTool(deps)
-    await expect(tool.execute({ pack: 'nope', materials: ['#!inline\nx'] } as never, { signal } as never)).rejects.toThrow(/unknown pack "nope"; discover installed packs via doc_packs \(available: cosmic-plan\)/)
+    await expect(tool.execute({ pack: 'nope', materials: ['#!inline\nx'] } as never, { signal } as never)).rejects.toThrow(/unknown pack "nope"; discover installed packs via doc_packs \(available: cosmic-plan, cosmic-req\)/)
   })
 
   it('fails loud on an unsupported language at call time', async () => {

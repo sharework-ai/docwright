@@ -10,7 +10,7 @@ Source: functional spec at docs/designs/hanzeep-mvp.md. 本文件记录真正待
 
 - **dsh 上游：插件事件类型写侧 `ignorable` 旋钮** — `Session.append` 无法给 log-only 事件打 `ignorable: true`，插件自定义事件类型会使会话在 stock 宿主下不可重载（读侧已容忍，写侧缺口；依据 dsh 架构决策 2026-08-30）。补上后可再评估独立 `doc-gen/round` 专项事件（当前审计流由回执 promptHash + 工具结果 content 承载，见 Done T2-core）
 - receipts CI badge、社区基础设施（issue 模板等）— 等第一个真实用户
-- cosmic Req/Func/Tech 三阶段 pack — Plan 先行已定（核心 API 已按链式留位）
+- cosmic Func/Tech 两阶段 pack — Req 已落地（feat/cosmic-req-pack），Func/Tech 按同模式复制（链式 API + 函数规则 context 就绪）
 - pack npm 分发机制（设计 OQ4）、MCP 包装（OQ6，宿主无关分发）
 - 草稿续修（resume from draft）工具 — DX-M4：红回执草稿从断点继续修
 - prompt 注入 nonce 定界符 + Markdown 表格转义 — 信任模型已文档化，等真实用户反馈
@@ -18,6 +18,7 @@ Source: functional spec at docs/designs/hanzeep-mvp.md. 本文件记录真正待
 
 ## Done（压缩账目）
 
+- **2026-10-12 cosmic-req pack**：第二个 pack 落地（per-function 粒度，consumes cosmic-plan；3 参数 5 声明式 3 函数规则，E301/E302/E303 全 error 阻断）。核心扩展：函数规则 `check(artifact, context?)` 注入 upstream/materials/params（链式跨产物校验的引擎缺口），doc_validate 增可选 upstream 参数（链式复验 + 锚点入回执）；顺带修复根作用域 pattern 规则不编译正则的引擎缺陷。218 tests 全绿 + 覆盖门 + typecheck + 冒烟；真实 LLM 链式闭环验证（plan→req，upstreamHashes 锚定，三点对齐精确）。设计 docs/designs/function-rule-context.md。
 - **2026-10-12 host-smoke**：`scripts/host-smoke.ts`（`pnpm run smoke:host`）——pack tarball → 沙箱 DSH_HOME 新 profile → `dsh plugin add`（base+hanzeep 组合，无需 headless/模型/key）→ `runProfile` 进程内 boot → 断言三工具注册。要点：`--profile` 须在 `plugin` 之后；跨仓跑 dsh 源码需重生进程设 `TSX_TSCONFIG_PATH` 指 dsh tsconfig（vendored lib 可滞后）；runbook 步骤 2 已同步修正。
 - **2026-10-12 T2-core**：每轮 promptHash 进回执 rounds（sha256 该轮实际发送 prompt，llm-error 轮同样记录）——回执整体作为 doc_generate 工具结果 content 逐字进 session log，审计流由既有通道承载，未引自定义事件类型（dsh 写侧缺口见 Deferred）。200 tests 全绿 + 覆盖门 + typecheck，分支 feat/t2-round-audit。
 - **2026-10-11 D1-D3**：能力发现（doc_packs + manifest.description）/ 收敛检测三层（pack 评分百分制 > 内置严重度评分 > 指纹兜底，终止 reason 进回执）/ 参数最小桥（params/maxRounds + 声明白名单 + maxRoundsCeiling 硬钳制 + as-run 复验）。设计 docs/designs/*（均已 IMPLEMENTED），提交 8fcbd4d / 3ad941c / de7bcde，明细见下方 tracker。
