@@ -45,7 +45,7 @@ describe('cordis.patch.yml bundle shape', () => {
   it('every insert row names the importable package name', async () => {
     const patch = await readFile(`${repoRoot}/cordis.patch.yml`, 'utf8')
     const manifest = JSON.parse(await readFile(`${repoRoot}/package.json`, 'utf8')) as { name: string }
-    const names = [...patch.matchAll(/^\s*name:\s*'?[^\s']+'?\s*$/gm)].map(line => line[0].trim().replace(/^name:\s*/, '').replace(/'/g, ''))
+    const names = [...patch.matchAll(/^\s*name:\s*(['"]?)([^'"\s]+)\1\s*$/gm)].map(line => line[2])
     expect(names.length).toBeGreaterThan(0)
     for (const name of names) {
       expect(name).toBe(manifest.name)
