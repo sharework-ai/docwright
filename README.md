@@ -112,6 +112,7 @@ corepack pnpm install && corepack pnpm run build:lib:host
 corepack pnpm install
 corepack pnpm test            # vitest, coverage gate 100% lines/functions/statements
 corepack pnpm run build       # tsc + tsdown
+corepack pnpm run smoke:host  # pre-release: pack → real dsh host boot → tool assertions (no API key)
 ```
 
 **Note on devDependencies:** `@deepseek-ai/dsh-*` packages link to the local `deepseek-harness` checkout via `link:` (a bare symlink: `file:` would try to resolve dsh's `workspace:*` internals, which only resolve inside the dsh workspace). The linked packages' `exports` point at their `lib/` build outputs, hence the one-time dsh build above. `pnpm-workspace.yaml` overrides also align `cordis`/`cosmokit`/`schemastery` with dsh's vendored copies so a single instance of each loads per process. Runtime consumers never install these — they are `peerDependencies` resolved from the host dsh installation. Switch the `link:` entries back to registry versions once dsh publishes a complete release.
