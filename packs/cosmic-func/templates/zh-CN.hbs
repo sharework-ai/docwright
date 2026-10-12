@@ -1,0 +1,21 @@
+# 概要设计文档：{{funcId}}
+
+- 文档类型：func（概要设计）
+- 需求索引：index {{index}}
+- 目标 CFP：{{desiredCfps}}
+
+## 功能时序图
+
+{{#each diagrams}}
+```mermaid
+{{this}}
+```
+{{/each}}
+
+## 功能过程清单
+
+| # | 过程名称 | 发起者 | 接收者 | 触发事件 | 说明 |
+|---|----------|--------|--------|----------|------|
+{{#each processes}}
+| {{index}} | {{name}} | {{originator}} | {{receiver}} | {{origination_event}} | {{description}} |
+{{/each}}

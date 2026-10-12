@@ -1,0 +1,23 @@
+{
+  "name": "cosmic-tech",
+  "version": "0.1.0",
+  "description": "COSMIC technical breakdown for one function: data-movement subprocesses (E/X/R/W) per functional process with exact CFP counts checked against the budget, refined from a green cosmic-func artifact.",
+  "consumes": ["cosmic-func"],
+  "languages": ["zh-CN", "en-US"],
+  "params": {
+    "cfpMinRatio": {
+      "type": "number",
+      "default": 0.9,
+      "min": 0.5,
+      "max": 1,
+      "description": "Total CFPs below desiredCfps × this ratio is an error; between this and 1.0 is a warning (rule tech/cfp-total-vs-budget)"
+    },
+    "cfpMaxRatio": {
+      "type": "number",
+      "default": 1.5,
+      "min": 1,
+      "max": 3,
+      "description": "Total CFPs above desiredCfps × this ratio is an error; between 1.2 and this is a warning (rule tech/cfp-total-vs-budget)"
+    }
+  }
+}

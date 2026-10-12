@@ -1,0 +1,29 @@
+# 功能点拆分表：{{funcId}}
+
+- 文档类型：tech（技术设计）
+- 需求索引：index {{index}}
+- 目标 CFP：{{desiredCfps}}
+
+## 数据移动时序图
+
+{{#each diagrams}}
+```mermaid
+{{this}}
+```
+{{/each}}
+
+## 功能点拆分表
+
+{{#each processes}}
+### {{index}}. {{name}}
+
+发起者：{{originator}}　接收者：{{receiver}}　触发事件：{{origination_event}}
+
+{{description}}
+
+| # | 数据移动 | 类型 | 数据组 | 数据属性 | CFP |
+|---|----------|------|--------|----------|-----|
+{{#each subProcesses}}
+| {{@index}} | {{description}} | {{dataMovementType}} | {{dataGroup}} | {{dataProperties}} | {{cfp}} |
+{{/each}}
+{{/each}}

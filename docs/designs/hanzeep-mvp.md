@@ -205,6 +205,14 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 
 COSMIC 需求分析文档（从 cosmic-claude Req 阶段迁移），per-function 粒度：`index` 定位上游 plan `functions` 数组的 1-based 位置，`funcId`/`desiredCfps`（=estimatedCfps）从对应 function 复制。`consumes: ["cosmic-plan"]`，双语 zh-CN/en-US。参数三个：`cfpsPerFunc`（业务规则配比分母，默认 30）、`functionalUserRoles`（功能用户角色白名单，逗号分隔 string，默认 6 个样例角色）、`funcDescMaxLength`（功能描述上限，默认 500；schema 硬顶 2000）。规则 8 条：声明式 5 条（funcDesc ≥10 [error] / ≤参数上限 [warning]、funcId 格式、role 格式 `^[a-z][a-z0-9-]*$`、业务规则描述 ≥10 [error]）；函数规则 3 条（**E301** role ∈ 部署白名单、**E302** 规则数 ∈ [ceil(cfps/perFunc), floor(ceil×1.5)]、**E303 泛化** index/funcId/desiredCfps 与上游 plan 三点对齐——全部 error 阻断，与原系统"审计意见只降分不阻断"不同，差异与理由见 docs/designs/function-rule-context.md）。
 
+### 4.7 现有 pack：cosmic-func（v0.1.0）
+
+COSMIC 概要设计文档（功能过程设计，从 cosmic-claude Func 阶段迁移），per-function 粒度：`index`/`funcId`/`desiredCfps` 从上游 req 产物原样复制，`diagrams`（mermaid 源码）+ `processes[]`（name/description/originator/receiver/origination_event）。相对原 schema 的两处偏差：`metadata`（时间戳等文档元信息）删除——hanzeep 无手工编辑 UX，版本由回执承载。`consumes: ["cosmic-req"]`，双语，无参数。规则 7 条：声明式 3 条（**E002** 过程名禁用"进行/执行/异常处理/设计/校验/conduct/execute" [error，v1 审计器默认与 v2 关键字文件合并]、**A001** 过程名后缀"处理/过程/闭环/流程/管理/等等/待定/TBD/etc." [info，ADVICE→info，用 pattern+mustMatch:false 表达]、**W001** 过程名警示词"计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序" [warning]）；函数规则 4 条（**E001** originator≠receiver [error]、过程名文档内唯一、过程 index 从 1 连续、**req 三点对齐**——index/funcId/desiredCfps 与上游 req 一致，缺失/非 req 上游一律响亮报错）。原 Func 审计器的 expected_functions 外部计数检查未迁移（hanzeep 无对应外部输入，过程规模由 tech 阶段 CFP 预算约束兜底）。
+
+### 4.8 现有 pack：cosmic-tech（v0.1.0）
+
+COSMIC 技术拆分文档（功能点拆分表，从 cosmic-claude Tech 阶段迁移），per-function 粒度：锚点同 func（index/funcId/desiredCfps 从上游 func 复制），`processes[].subProcesses[]` 为数据移动（description/dataMovementType E-X-R-W/dataGroup/dataProperties/cfp=1）。相对原 schema 的两处偏差：`metadata` 删除（同 4.7）；`revised`（人工复核标记）删除——hanzeep 无人工修订流。`consumes: ["cosmic-func"]`，双语。参数两个：`cfpMinRatio`（默认 0.9，区间 [0.5,1]）、`cfpMaxRatio`（默认 1.5，区间 [1,3]），即 CFP 预算错误边界 [desiredCfps×min, desiredCfps×max]。规则 13 条：声明式 1 条（funcId 格式）；函数规则 11 条，全部迁移自 tech_auditor，其中两条因 FunctionRule 单 severity 契约从原规则分拆：移动计数 **E107/E109/E103**（1/2/>6 [error]）与 **A101**（5-6 个 [info]）分属 `tech/movement-count`/`tech/movement-split-advice`；CFP 预算错误带（<0.9× / >1.5× [error]）与警示带（[min,1) / (1.2,max] [warning]，对应 W100/W200）分属 `tech/cfp-total-vs-budget`/`tech/cfp-budget-advice`。其余：**E101** 首移动必 E、**E105** E/W/X 不连相同类型（R 可连续）、**E108** 非首 E 前必 X、**W103** 同过程内移动三元组（类型+数据组+数据属性）不重复 [warning]、**W101** 子过程描述警示词 [warning]、**W102** 数据属性 ≥2 [warning]、**func 对齐**——三点锚定加过程名覆盖（上游 func 每个过程必须出现在 tech.processes 中，同名）。嵌套作用域（subProcesses）规则全部走函数规则——声明式 `given` 仅支持根与一层 `$.field[*]`，嵌套由函数规则的整产物视角覆盖，引擎无需扩展。
+
 ## 5. 插件 / pack 职责边界（总表）
 
 | 关注点 | 插件实现 | pack 实现 |
@@ -234,5 +242,5 @@ COSMIC 需求分析文档（从 cosmic-claude Req 阶段迁移），per-function
 
 - 真实 LLM 闭环已验证：多轮修复轨迹、内置权重对账（score = 100 − 10×error 精确吻合）、跨 dsh 版本回执复验均通过（数据见 docs/testing/e2e-real-llm.md）。停滞/阴跌阈值在 glm-5.3 级强模型下不可触达（模型优先 pack 规则），仍由确定性测试覆盖。
 - 闭环每轮数据（含各轮 promptHash）进回执；回执整体作为 doc_generate 工具结果内容逐字进入 session log，审计流由该通道承载。独立 doc-gen-round session 事件类型延后：dsh 未提供插件事件类型写侧 `ignorable` 标记的入口，未经标记的未知类型会使会话在 stock 宿主下不可重载。
-- 草稿续修（从红回执草稿断点继续修）工具、MCP 包装（宿主无关分发）、pack npm 分发、cosmic Req/Func/Tech 后续阶段 pack——均未启动。
+- 草稿续修（从红回执草稿断点继续修）工具、MCP 包装（宿主无关分发）、pack npm 分发——均未启动。
 - 同名产物的并发写入无跨文件锁（单文件原子，artifact/receipt 对可能交错，last-writer-wins）。
