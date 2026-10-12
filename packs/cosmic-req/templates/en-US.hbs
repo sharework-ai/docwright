@@ -1,0 +1,28 @@
+# Requirements Analysis: {{funcId}}
+
+- Document type: req (requirements analysis)
+- Plan index: index {{index}}
+- Target CFP: {{desiredCfps}}
+
+## Functional Description
+
+{{funcDesc}}
+
+## Functional Users & User Stories
+
+{{#each functionalUsers}}
+### {{role}}
+
+{{description}}
+
+{{#each userStories}}- {{this}}
+{{/each}}
+{{/each}}
+
+## Business Rules
+
+| Type | Description |
+|------|-------------|
+{{#each businessRules}}
+| {{ruleType}} | {{description}} |
+{{/each}}

@@ -1,0 +1,28 @@
+# 需求分析文档：{{funcId}}
+
+- 文档类型：req（需求分析）
+- 需求索引：index {{index}}
+- 目标 CFP：{{desiredCfps}}
+
+## 功能描述
+
+{{funcDesc}}
+
+## 功能用户与用户故事
+
+{{#each functionalUsers}}
+### {{role}}
+
+{{description}}
+
+{{#each userStories}}- {{this}}
+{{/each}}
+{{/each}}
+
+## 业务规则
+
+| 类型 | 规则描述 |
+|------|----------|
+{{#each businessRules}}
+| {{ruleType}} | {{description}} |
+{{/each}}

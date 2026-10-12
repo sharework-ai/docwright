@@ -48,6 +48,8 @@ Also returns `packVersionStale`: `true` when the sidecar receipt was written by 
 
 Validation replays by the receipt-recorded as-run pack params (original standards); pass `params` explicitly for what-if checks.
 
+Chained packs accept an optional `upstream` string[] (the same paths used at generation): it re-runs the green-receipt verification and feeds the parsed artifacts into function rules, so cross-artifact rules (e.g. cosmic-req's plan-alignment) replay too — the fresh receipt then records the `upstreamHashes` anchors. Omitting it leaves those rules failing loud with a message that points here.
+
 ## Configuration (cordis.yml)
 
 ```yaml
@@ -92,7 +94,7 @@ packs/cosmic-plan/
 └── samples/golden.json  # must pass all-green; feeds mutation tests
 ```
 
-**Pack contract:** `manifest.description` is a required one-liner naming the document this pack generates (load-time enforced; `doc_packs` returns it verbatim to the model); `manifest.params` declares the pack's tunables (declaration IS the allowlist — `{ type, default, description, enum?, min?, max? }` per param; declarative-rule numeric bounds may reference number params via `{ "param": "name" }`); `manifest.maxRounds` optionally sets the pack's default loop rounds; every ERROR rule carries a `suggestion`; every language in `manifest.languages` provides rules + prompt + template; golden sample + per-rule-family mutations are mandatory (a checker that cannot catch a deliberately broken sample is decoration).
+**Pack contract:** `manifest.description` is a required one-liner naming the document this pack generates (load-time enforced; `doc_packs` returns it verbatim to the model); `manifest.params` declares the pack's tunables (declaration IS the allowlist — `{ type, default, description, enum?, min?, max? }` per param; declarative-rule numeric bounds may reference number params via `{ "param": "name" }`); `manifest.maxRounds` optionally sets the pack's default loop rounds; every ERROR rule carries a `suggestion`; every language in `manifest.languages` provides rules + prompt + template; golden sample + per-rule-family mutations are mandatory (a checker that cannot catch a deliberately broken sample is decoration). Function rules receive an optional second argument `context = { upstream, materials, params }` — parsed upstream artifacts, raw material texts, and effective params — for cross-artifact and allowlist checks (see `docs/designs/function-rule-context.md`); single-argument rules keep working unchanged.
 
 ## Docs
 

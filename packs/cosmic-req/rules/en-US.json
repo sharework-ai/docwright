@@ -1,0 +1,49 @@
+[
+  {
+    "id": "req/func-desc-min-length",
+    "severity": "error",
+    "given": "$",
+    "field": "funcDesc",
+    "kind": "minLength",
+    "min": 10,
+    "suggestion": "Functional description too short: expand it into a natural-language paragraph covering triggers, processing, outputs, and error handling so a reader understands the core functionality and business value (at least 10 characters; target at most 500)."
+  },
+  {
+    "id": "req/func-desc-max-length",
+    "severity": "warning",
+    "given": "$",
+    "field": "funcDesc",
+    "kind": "maxLength",
+    "max": { "param": "funcDescMaxLength" },
+    "suggestion": "Functional description exceeds the limit: condense it into one readable paragraph (500 characters by default), keeping only the core functionality and business value."
+  },
+  {
+    "id": "req/func-id-format",
+    "severity": "error",
+    "given": "$",
+    "field": "funcId",
+    "kind": "pattern",
+    "pattern": "^[A-Z0-9]{1,8}(-[A-Z0-9]{1,8})+$",
+    "mustMatch": true,
+    "suggestion": "Invalid funcId format: copy it verbatim from the upstream plan function (uppercase alphanumeric segments joined by '-', at least two segments of 1-8 characters each, e.g. USR-FAV-01)."
+  },
+  {
+    "id": "req/functional-user-role-format",
+    "severity": "error",
+    "given": "$.functionalUsers[*]",
+    "field": "role",
+    "kind": "pattern",
+    "pattern": "^[a-z][a-z0-9-]*$",
+    "mustMatch": true,
+    "suggestion": "Invalid functional user role format: start with a lowercase letter and use only lowercase letters, digits, and hyphens, e.g. customer or user-management-system."
+  },
+  {
+    "id": "req/business-rule-desc-min-length",
+    "severity": "error",
+    "given": "$.businessRules[*]",
+    "field": "description",
+    "kind": "minLength",
+    "min": 10,
+    "suggestion": "Business rule description too short: state the rule and its enforced effect (at least 10 characters), e.g. \"account locks for 30 minutes after 3 failed logins\"."
+  }
+]

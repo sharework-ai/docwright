@@ -1,0 +1,49 @@
+[
+  {
+    "id": "req/func-desc-min-length",
+    "severity": "error",
+    "given": "$",
+    "field": "funcDesc",
+    "kind": "minLength",
+    "min": 10,
+    "suggestion": "功能描述过短：以自然语言段落补充触发条件、处理过程、输出与异常处理，使读者能理解核心功能点与业务价值（不少于 10 个字符，目标不超过 500 字）。"
+  },
+  {
+    "id": "req/func-desc-max-length",
+    "severity": "warning",
+    "given": "$",
+    "field": "funcDesc",
+    "kind": "maxLength",
+    "max": { "param": "funcDescMaxLength" },
+    "suggestion": "功能描述超过上限：精简为一段可读的自然语言段落（默认不超过 500 字），只保留核心功能点与业务价值。"
+  },
+  {
+    "id": "req/func-id-format",
+    "severity": "error",
+    "given": "$",
+    "field": "funcId",
+    "kind": "pattern",
+    "pattern": "^[A-Z0-9]{1,8}(-[A-Z0-9]{1,8})+$",
+    "mustMatch": true,
+    "suggestion": "funcId 格式不合法：从上游 plan 对应 function 原样复制（大写字母/数字分段、段间 `-` 连接、至少两段，每段 1-8 字符，如 USR-FAV-01）。"
+  },
+  {
+    "id": "req/functional-user-role-format",
+    "severity": "error",
+    "given": "$.functionalUsers[*]",
+    "field": "role",
+    "kind": "pattern",
+    "pattern": "^[a-z][a-z0-9-]*$",
+    "mustMatch": true,
+    "suggestion": "功能用户 role 格式不合法：小写字母开头，仅含小写字母/数字/连字符，如 customer、user-management-system。"
+  },
+  {
+    "id": "req/business-rule-desc-min-length",
+    "severity": "error",
+    "given": "$.businessRules[*]",
+    "field": "description",
+    "kind": "minLength",
+    "min": 10,
+    "suggestion": "业务规则描述过短：写明规则内容与约束效果（不少于 10 个字符），如\"登录失败 3 次锁定账户 30 分钟\"。"
+  }
+]

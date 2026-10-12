@@ -1,0 +1,28 @@
+{
+  "name": "cosmic-req",
+  "version": "0.1.0",
+  "description": "COSMIC requirements analysis for one plan function: functional description, system-level functional users with user stories, and business rules (consumes a green cosmic-plan artifact).",
+  "consumes": ["cosmic-plan"],
+  "languages": ["zh-CN", "en-US"],
+  "params": {
+    "cfpsPerFunc": {
+      "type": "number",
+      "default": 30,
+      "min": 10,
+      "max": 100,
+      "description": "CFP budget per business rule when sizing the businessRules array (rule req/business-rule-count)"
+    },
+    "functionalUserRoles": {
+      "type": "string",
+      "default": "customer,operator,manager,business-partner,supplier,3rd-payment-service",
+      "description": "Comma-separated allowlist of system-level functional user roles (rule req/functional-user-roles); override per deployment"
+    },
+    "funcDescMaxLength": {
+      "type": "number",
+      "default": 500,
+      "min": 100,
+      "max": 2000,
+      "description": "Maximum functional description length in characters (rule req/func-desc-max-length; the schema hard ceiling is 2000)"
+    }
+  }
+}
