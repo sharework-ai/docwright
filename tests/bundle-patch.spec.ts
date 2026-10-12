@@ -37,8 +37,8 @@ describe('package distribution shape', () => {
 
 // Regression: ISSUE-001 — bundle patch rows must import the real package name.
 // A cordis entry's `name` is the loader's import specifier, not a display
-// label: `name: hanzeep` booted the real dsh host to
-// "Cannot find package 'hanzeep'" while all unit tests stayed green (they
+// label: `name: docwright` booted the real dsh host to
+// "Cannot find package 'docwright'" while all unit tests stayed green (they
 // mount the plugin programmatically and never cross the patch layer).
 // Found by /qa on 2026-08-27 via a `dsh plugin add` host-mount smoke.
 describe('cordis.patch.yml bundle shape', () => {

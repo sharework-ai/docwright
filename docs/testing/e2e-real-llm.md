@@ -10,18 +10,18 @@ baseURL `open.bigmodel.cn/api/coding/paas/v4`).
 ## 1. Build and pack the plugin
 
 ```sh
-cd ~/projects/lab/hanzeep && corepack pnpm build && corepack pnpm pack --pack-destination /tmp/hanzeep-zai
+cd ~/projects/lab/docwright && corepack pnpm build && corepack pnpm pack --pack-destination /tmp/docwright-zai
 ```
 
 ## 2. Sandbox a dsh home + profile
 
 ```sh
-export DSH_HOME=/tmp/hanzeep-zai/home   # throwaway home; keeps ~/.dsh clean
+export DSH_HOME=/tmp/docwright-zai/home   # throwaway home; keeps ~/.dsh clean
 cd ~/projects/lab/deepseek-harness      # dsh from source (pnpm dsh script)
-corepack pnpm dsh plugin --profile e2e add /tmp/hanzeep-zai/dsh-plugin-hanzeep-*.tgz
+corepack pnpm dsh plugin --profile e2e add /tmp/docwright-zai/@sharework-ai/dsh-docwright-*.tgz
 # e2e needs the one-shot runner, which plugin add does not include — declare the
 # headless bundle in profiles/e2e/package.json:
-#   "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless", "dsh-plugin-hanzeep"] } }
+#   "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless", "@sharework-ai/dsh-docwright"] } }
 ```
 
 Gotchas (each cost us time once):
@@ -33,13 +33,13 @@ Gotchas (each cost us time once):
   bundle — declare it in `profiles/e2e/package.json` (see above; `scripts/host-smoke.ts`
   skips it because it only boots the tool registry).
 - `dsh plugin add` does more than pnpm: it appends bundles declaring `dsh.bundle` to
-  `dsh.profile.bundles`. A manual `pnpm add <tgz>` must append `dsh-plugin-hanzeep` to that
-  list by hand, or the plugin's patch layer never loads (`patch: entry "hanzeep" not found`).
+  `dsh.profile.bundles`. A manual `pnpm add <tgz>` must append `@sharework-ai/dsh-docwright` to that
+  list by hand, or the plugin's patch layer never loads (`patch: entry "docwright" not found`).
 - Re-adding a SAME-VERSION tarball does not refresh the installed copy (pnpm skips it):
-  `dsh plugin --profile <name> remove dsh-plugin-hanzeep` first, then add again, or new
+  `dsh plugin --profile <name> remove @sharework-ai/dsh-docwright` first, then add again, or new
   packs/dirs silently stay absent.
 - `pnpm --dir <dsh> dsh …` switches cwd to the dsh repo — pin the workspace with the
-  hanzeep `workspaceRoot` config instead of relying on cwd.
+  docwright `workspaceRoot` config instead of relying on cwd.
 - Running dsh sources from a foreign cwd (e.g. a script) needs `TSX_TSCONFIG_PATH`
   pointed at the dsh checkout's `tsconfig.base.json` — its `paths` map `@deepseek-ai/*`
   onto vendored TS sources, and the committed `lib/` outputs can lag. `scripts/host-smoke.ts`
@@ -59,12 +59,12 @@ Gotchas (each cost us time once):
     provider: zai-coding-cn
     model: glm-5.3-flash
 
-- id: hanzeep
+- id: docwright
   config:
     provider: "zai-coding-cn"
     model: "glm-5.3-flash"
     defaultLanguage: "zh-CN"
-    workspaceRoot: "/tmp/hanzeep-zai/ws"
+    workspaceRoot: "/tmp/docwright-zai/ws"
 ```
 
 ## 4. Run
@@ -72,14 +72,14 @@ Gotchas (each cost us time once):
 ```sh
 export ZAI_CODING_CN_API_KEY=<key>   # env only; never commit
 export DSH_PERMISSION_MODE=danger-full-access DSH_TELEMETRY_DISABLED=1
-mkdir -p /tmp/hanzeep-zai/ws/references   # put req.md there
-cd /tmp/hanzeep-zai/ws
+mkdir -p /tmp/docwright-zai/ws/references   # put req.md there
+cd /tmp/docwright-zai/ws
 corepack pnpm --pm-on-fail=ignore --dir ~/projects/lab/deepseek-harness dsh --profile e2e \
   '请调用 doc_generate 工具：pack 用 cosmic-plan，materials 传 ["req.md"]，artifactName 用 e2e-1。报告 receipt 的 isValid/iterations。'
 ```
 
 `--pm-on-fail=ignore` bypasses the repo's pinned-pnpm version check. Artifacts land in
-`/tmp/hanzeep-zai/ws/output/` (`<name>.json` + `.receipt.json` + `.md`). Follow with a
+`/tmp/docwright-zai/ws/output/` (`<name>.json` + `.receipt.json` + `.md`). Follow with a
 `doc_validate` task for the deterministic replay (`hashMatches` must be `true`).
 
 ## Calibration notes (D2 open questions 1/4)

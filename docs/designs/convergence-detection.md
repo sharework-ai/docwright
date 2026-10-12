@@ -2,7 +2,7 @@
 
 Status: IMPLEMENTED (2026-10-11)。
 Date: 2026-10-11
-关联: docs/designs/hanzeep-mvp.md 第 3.2 节、TODOS.md D2-convergence
+关联: docs/designs/docwright-mvp.md 第 3.2 节、TODOS.md D2-convergence
 
 ## 现状与缺陷
 

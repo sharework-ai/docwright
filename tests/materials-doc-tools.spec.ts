@@ -13,20 +13,20 @@ function packsRoot(): string {
 
 describe('materials', () => {
   it('reads files relative to the materials root', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-ws-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-ws-'))
     await writeFile(join(root, 'req.md'), '需求内容', 'utf8')
     expect(await readMaterials(['req.md'], root, root)).toEqual(['需求内容'])
   })
 
   it('resolves against a references subdirectory when passed as the materials root', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-ws-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-ws-'))
     await mkdir(join(root, 'references'), { recursive: true })
     await writeFile(join(root, 'references', 'req.md'), 'ref content', 'utf8')
     expect(await readMaterials(['req.md'], root, join(root, 'references'))).toEqual(['ref content'])
   })
 
   it('allows ../ references that stay inside the workspace root', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-ws-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-ws-'))
     await mkdir(join(root, 'references'), { recursive: true })
     await mkdir(join(root, 'docs'), { recursive: true })
     await writeFile(join(root, 'docs', 'a.md'), 'doc content', 'utf8')
@@ -34,19 +34,19 @@ describe('materials', () => {
   })
 
   it('reads CJK and space filenames (test-plan edge case)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-ws-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-ws-'))
     await mkdir(join(root, '子 目录'), { recursive: true })
     await writeFile(join(root, '子 目录', '需求 素材.md'), ' spaced content ', 'utf8')
     expect(await readMaterials(['子 目录/需求 素材.md'], root, root)).toEqual([' spaced content '])
   })
 
   it('rejects path traversal outside the workspace root', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-ws-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-ws-'))
     await expect(readMaterials(['../../etc/passwd'], root, root)).rejects.toThrow(/escapes the workspace root/)
   })
 
   it('rejects traversal escaping the workspace from the materials root', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-ws-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-ws-'))
     await expect(readMaterials(['../../../etc/passwd'], root, join(root, 'references'))).rejects.toThrow(/escapes the workspace root/)
   })
 
@@ -55,7 +55,7 @@ describe('materials', () => {
   })
 
   it('rejects a missing file with a readable error', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-ws-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-ws-'))
     await expect(readMaterials(['nope.md'], root, root)).rejects.toThrow(/not readable/)
   })
 
@@ -72,7 +72,7 @@ describe('doc-service generateDocument', () => {
     const { readFile } = await import('node:fs/promises')
     const packs = await loadPacks(packsRoot(), { builtin: [] })
     const pack = packs.get('cosmic-plan')!
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-gen-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-gen-'))
     const llm = { async complete() { return JSON.stringify(pack.goldenSample) } }
     const out = await generateDocument({
       pack, language: 'zh-CN', materials: ['#!inline\n素材'], artifactName: 't1',
@@ -100,7 +100,7 @@ describe('doc-service generateDocument', () => {
     const { readFile } = await import('node:fs/promises')
     const packs = await loadPacks(packsRoot(), { builtin: [] })
     const pack = packs.get('cosmic-plan')!
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-gen-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-gen-'))
     const customOut = join(root, '交付物')
     const llm = { async complete() { return JSON.stringify(pack.goldenSample) } }
     const out = await generateDocument({
@@ -120,7 +120,7 @@ describe('doc-service generateDocument', () => {
     const { readFile } = await import('node:fs/promises')
     const packs = await loadPacks(packsRoot(), { builtin: [] })
     const pack = packs.get('cosmic-plan')!
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-gen-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-gen-'))
     const bad = JSON.parse(JSON.stringify(pack.goldenSample))
     bad.functions[0].funcDesc = '短'
     const llm = { async complete() { return JSON.stringify(bad) } }
@@ -140,7 +140,7 @@ describe('doc-service generateDocument', () => {
     const { generateDocument } = await import('../src/doc-service.ts')
     const packs = await loadPacks(packsRoot(), { builtin: [] })
     const pack = packs.get('cosmic-plan')!
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-gen-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-gen-'))
     const llm = { async complete() { return JSON.stringify(pack.goldenSample) } }
     await expect(generateDocument({
       pack, language: 'zh-CN', materials: ['#!inline\n素材'], artifactName: 't3',

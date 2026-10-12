@@ -50,7 +50,7 @@ export function normalizeWindowsPath(
   return wslpath(ref) ?? regexWindowsToWsl(ref)
 }
 
-/** Minimal execution-context shape hanzeep reads; avoids importing dsh types. */
+/** Minimal execution-context shape docwright reads; avoids importing dsh types. */
 export interface SessionWorkspaceCarrier {
   readonly agent?: { readonly session?: { readonly cwd?: string } } | undefined
 }

@@ -11,7 +11,7 @@ import { truncateSnapshot } from './issue.ts'
 
 /**
  * Mini rule engine (bake-off winner over @stoplight/spectral-core; see
- * docs/designs/hanzeep-mvp.md Approach A: probe found CJS-only packaging and
+ * docs/designs/docwright-mvp.md Approach A: probe found CJS-only packaging and
  * custom-function wiring friction; every COSMIC rule family maps here in
  * ~100 lines). Runs declarative rules then function rules over the artifact.
  */

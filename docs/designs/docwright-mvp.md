@@ -1,20 +1,20 @@
-# hanzeep 功能说明书（MVP）
+# docwright 功能说明书（MVP）
 
 Status: CURRENT — 本文描述插件现状，与代码不一致时以代码为准。
-Repo: sharework-ai/dsh-plugin-hanzeep
+Repo: sharework-ai/docwright
 Updated: 2026-10-11
 
-> 本文前身是 2026-08-27 /office-hours + /autoplan 产出的设计决策文档（含 44 条决策审计、评审报告）。现已重写为 current-state 功能说明书；遵循"规格零历史"纪律，正文不含设计推演——原决策过程记录只在 git 历史中（`git log -- docs/designs/hanzeep-mvp.md`），进行中的设计提案见 docs/designs/ 下各 PROPOSED 文档。
+> 本文前身是 2026-08-27 /office-hours + /autoplan 产出的设计决策文档（含 44 条决策审计、评审报告）。现已重写为 current-state 功能说明书；遵循"规格零历史"纪律，正文不含设计推演——原决策过程记录只在 git 历史中（`git log -- docs/designs/docwright-mvp.md`），进行中的设计提案见 docs/designs/ 下各 PROPOSED 文档。
 
 ## 1. 产品定位
 
-hanzeep 是 deepseek-harness（dsh）的文档生成插件：AI 生成结构化 JSON 文档 → 强制校验 → 不合格打回重写，直到全绿；每份文档自带机器可读的验证回执，任何人可离线复验。
+docwright 是 deepseek-harness（dsh）的文档生成插件：AI 生成结构化 JSON 文档 → 强制校验 → 不合格打回重写，直到全绿；每份文档自带机器可读的验证回执，任何人可离线复验。
 
 解决的问题：AI 大量生成文档时质量不可控、结果不可验证。
 
 读者可能会问：让 LLM 输出 JSON 并在校验失败时自动重试，不是已经有现成轮子了吗？确实有——instructor、BAML、Guardrails AI 这类结构化输出框架都内置"schema 校验 + 重试"。但它们只判断**结构对不对**（字段齐不齐、类型对不对），判断不了**内容合不合格**——"功能描述要写满 80 字""名称不许用'管理/系统'这类泛化词""估算值总和要落在业务区间"这类标准因文档类型而异，框架无从知晓。
 
-hanzeep 的差异化就在"内容合格性"这一层，由三件事组成：
+docwright 的差异化就在"内容合格性"这一层，由三件事组成：
 
 1. **领域规则包（pack）**：每类文档的合格标准（schema + 领域规则 + prompt + 模板）声明在可插拔的数据包里，换文档类型不换代码；
 2. **可复验回执（receipt）**：校验结果作为机器可读文件随文档落盘，任何人可事后复验——"全绿"从一次过程变成一件产物；
@@ -26,7 +26,7 @@ hanzeep 的差异化就在"内容合格性"这一层，由三件事组成：
 
 | 概念 | 是什么 | 由谁提供 |
 |---|---|---|
-| **插件（hanzeep）** | 引擎：闭环、校验执行、回执、路径安全、dsh 工具注册。不含任何文档领域知识 | 本仓库 TypeScript 代码 |
+| **插件（docwright）** | 引擎：闭环、校验执行、回执、路径安全、dsh 工具注册。不含任何文档领域知识 | 本仓库 TypeScript 代码 |
 | **pack（场景包）** | 内容：一类文档的 schema、规则、生成 prompt、渲染模板、golden 样例。纯 JSON 数据 + 至多一个 JS 规则文件 | `packs/<name>/` 目录，任何人可编写 |
 | **闭环（repair loop）** | 生成 → 校验 → 把 Issue 喂回模型重写 → 直到全绿或迭代耗尽 | 插件 |
 | **验证回执（receipt）** | 全绿状态的机器可读快照（产物哈希、规则集快照、逐规则结果），随产物落盘，可离线复验 | 插件生成；pack 提供被快照的规则 |
@@ -35,7 +35,7 @@ hanzeep 的差异化就在"内容合格性"这一层，由三件事组成：
 
 ## 3. 插件功能（机制层）
 
-插件导出 `name: 'hanzeep'`、`inject: ['tools', 'llm']`、`Config`；`apply()` 时加载全部 pack 并注册三个工具（`doc_packs` / `doc_generate` / `doc_validate`）。pack 加载失败（坏 manifest、坏规则、Config 默认语言不被支持）在 apply 期直接报错，不会带病进入会话。
+插件导出 `name: 'docwright'`、`inject: ['tools', 'llm']`、`Config`；`apply()` 时加载全部 pack 并注册三个工具（`doc_packs` / `doc_generate` / `doc_validate`）。pack 加载失败（坏 manifest、坏规则、Config 默认语言不被支持）在 apply 期直接报错，不会带病进入会话。
 
 ### 3.0 工具 `doc_packs` — 能力发现（拉式）
 
@@ -129,7 +129,7 @@ Schema 的 ajv 编译在首次构建该 (pack, language) 的 DocService 时发�
 ### 3.7 配置（cordis.yml，no hardcoded tunables）
 
 ```yaml
-- id: hanzeep
+- id: docwright
   config:
     packsDir: ""            # 额外 pack 目录；同名覆盖内置
     workspaceRoot: ""       # 无会话 workspace 时的兜底根（默认 cwd）
@@ -207,11 +207,11 @@ COSMIC 需求分析文档（从 cosmic-claude Req 阶段迁移），per-function
 
 ### 4.7 现有 pack：cosmic-func（v0.1.0）
 
-COSMIC 概要设计文档（功能过程设计，从 cosmic-claude Func 阶段迁移），per-function 粒度：`index`/`funcId`/`desiredCfps` 从上游 req 产物原样复制，`diagrams`（mermaid 源码）+ `processes[]`（name/description/originator/receiver/origination_event）。相对原 schema 的两处偏差：`metadata`（时间戳等文档元信息）删除——hanzeep 无手工编辑 UX，版本由回执承载。`consumes: ["cosmic-req"]`，双语，无参数。规则 7 条：声明式 3 条（**E002** 过程名禁用"进行/执行/异常处理/设计/校验/conduct/execute" [error，v1 审计器默认与 v2 关键字文件合并]、**A001** 过程名后缀"处理/过程/闭环/流程/管理/等等/待定/TBD/etc." [info，ADVICE→info，用 pattern+mustMatch:false 表达]、**W001** 过程名警示词"计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序" [warning]）；函数规则 4 条（**E001** originator≠receiver [error]、过程名文档内唯一、过程 index 从 1 连续、**req 三点对齐**——index/funcId/desiredCfps 与上游 req 一致，缺失/非 req 上游一律响亮报错）。原 Func 审计器的 expected_functions 外部计数检查未迁移（hanzeep 无对应外部输入，过程规模由 tech 阶段 CFP 预算约束兜底）。
+COSMIC 概要设计文档（功能过程设计，从 cosmic-claude Func 阶段迁移），per-function 粒度：`index`/`funcId`/`desiredCfps` 从上游 req 产物原样复制，`diagrams`（mermaid 源码）+ `processes[]`（name/description/originator/receiver/origination_event）。相对原 schema 的两处偏差：`metadata`（时间戳等文档元信息）删除——docwright 无手工编辑 UX，版本由回执承载。`consumes: ["cosmic-req"]`，双语，无参数。规则 7 条：声明式 3 条（**E002** 过程名禁用"进行/执行/异常处理/设计/校验/conduct/execute" [error，v1 审计器默认与 v2 关键字文件合并]、**A001** 过程名后缀"处理/过程/闭环/流程/管理/等等/待定/TBD/etc." [info，ADVICE→info，用 pattern+mustMatch:false 表达]、**W001** 过程名警示词"计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序" [warning]）；函数规则 4 条（**E001** originator≠receiver [error]、过程名文档内唯一、过程 index 从 1 连续、**req 三点对齐**——index/funcId/desiredCfps 与上游 req 一致，缺失/非 req 上游一律响亮报错）。原 Func 审计器的 expected_functions 外部计数检查未迁移（docwright 无对应外部输入，过程规模由 tech 阶段 CFP 预算约束兜底）。
 
 ### 4.8 现有 pack：cosmic-tech（v0.1.0）
 
-COSMIC 技术拆分文档（功能点拆分表，从 cosmic-claude Tech 阶段迁移），per-function 粒度：锚点同 func（index/funcId/desiredCfps 从上游 func 复制），`processes[].subProcesses[]` 为数据移动（description/dataMovementType E-X-R-W/dataGroup/dataProperties/cfp=1）。相对原 schema 的两处偏差：`metadata` 删除（同 4.7）；`revised`（人工复核标记）删除——hanzeep 无人工修订流。`consumes: ["cosmic-func"]`，双语。参数两个：`cfpMinRatio`（默认 0.9，区间 [0.5,1]）、`cfpMaxRatio`（默认 1.5，区间 [1,3]），即 CFP 预算错误边界 [desiredCfps×min, desiredCfps×max]。规则 13 条：声明式 1 条（funcId 格式）；函数规则 11 条，全部迁移自 tech_auditor，其中两条因 FunctionRule 单 severity 契约从原规则分拆：移动计数 **E107/E109/E103**（1/2/>6 [error]）与 **A101**（5-6 个 [info]）分属 `tech/movement-count`/`tech/movement-split-advice`；CFP 预算错误带（<0.9× / >1.5× [error]）与警示带（[min,1) / (1.2,max] [warning]，对应 W100/W200）分属 `tech/cfp-total-vs-budget`/`tech/cfp-budget-advice`。其余：**E101** 首移动必 E、**E105** E/W/X 不连相同类型（R 可连续）、**E108** 非首 E 前必 X、**W103** 同过程内移动三元组（类型+数据组+数据属性）不重复 [warning]、**W101** 子过程描述警示词 [warning]、**W102** 数据属性 ≥2 [warning]、**func 对齐**——三点锚定加过程名覆盖（上游 func 每个过程必须出现在 tech.processes 中，同名）。嵌套作用域（subProcesses）规则全部走函数规则——声明式 `given` 仅支持根与一层 `$.field[*]`，嵌套由函数规则的整产物视角覆盖，引擎无需扩展。
+COSMIC 技术拆分文档（功能点拆分表，从 cosmic-claude Tech 阶段迁移），per-function 粒度：锚点同 func（index/funcId/desiredCfps 从上游 func 复制），`processes[].subProcesses[]` 为数据移动（description/dataMovementType E-X-R-W/dataGroup/dataProperties/cfp=1）。相对原 schema 的两处偏差：`metadata` 删除（同 4.7）；`revised`（人工复核标记）删除——docwright 无人工修订流。`consumes: ["cosmic-func"]`，双语。参数两个：`cfpMinRatio`（默认 0.9，区间 [0.5,1]）、`cfpMaxRatio`（默认 1.5，区间 [1,3]），即 CFP 预算错误边界 [desiredCfps×min, desiredCfps×max]。规则 13 条：声明式 1 条（funcId 格式）；函数规则 11 条，全部迁移自 tech_auditor，其中两条因 FunctionRule 单 severity 契约从原规则分拆：移动计数 **E107/E109/E103**（1/2/>6 [error]）与 **A101**（5-6 个 [info]）分属 `tech/movement-count`/`tech/movement-split-advice`；CFP 预算错误带（<0.9× / >1.5× [error]）与警示带（[min,1) / (1.2,max] [warning]，对应 W100/W200）分属 `tech/cfp-total-vs-budget`/`tech/cfp-budget-advice`。其余：**E101** 首移动必 E、**E105** E/W/X 不连相同类型（R 可连续）、**E108** 非首 E 前必 X、**W103** 同过程内移动三元组（类型+数据组+数据属性）不重复 [warning]、**W101** 子过程描述警示词 [warning]、**W102** 数据属性 ≥2 [warning]、**func 对齐**——三点锚定加过程名覆盖（上游 func 每个过程必须出现在 tech.processes 中，同名）。嵌套作用域（subProcesses）规则全部走函数规则——声明式 `given` 仅支持根与一层 `$.field[*]`，嵌套由函数规则的整产物视角覆盖，引擎无需扩展。
 
 ## 5. 插件 / pack 职责边界（总表）
 

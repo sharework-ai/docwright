@@ -21,7 +21,7 @@ export interface LlmRoute {
 
 export function createLlmPort(ctx: Context, route: LlmRoute): LlmPort {
   const llm = (ctx as Context & { llm: LlmRuntime }).llm
-  if (llm === undefined) throw new Error('hanzeep: ctx.llm is not available; inject the dsh llm plugin before hanzeep')
+  if (llm === undefined) throw new Error('docwright: ctx.llm is not available; inject the dsh llm plugin before docwright')
   return {
     async complete({ system, user, maxTokens, signal }) {
       const options: GenerateOptions = {

@@ -38,7 +38,7 @@ describe('pack loader', () => {
   })
 
   it('fails loud on a broken manifest', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-bad-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-bad-root-'))
     const dir = join(root, 'bad-pack')
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, 'manifest.json'), '{"name": ""}', 'utf8')
@@ -46,7 +46,7 @@ describe('pack loader', () => {
   })
 
   it('fails loud when manifest.description is missing', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-desc-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-desc-root-'))
     const dir = join(root, 'no-desc')
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'no-desc', version: '1', languages: ['zh-CN'] }), 'utf8')
@@ -54,7 +54,7 @@ describe('pack loader', () => {
   })
 
   it('fails loud when a rules file is not an array', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-root-'))
     const dir = join(root, 'broken-pack')
     await mkdir(join(dir, 'rules'), { recursive: true })
     await mkdir(join(dir, 'prompts'), { recursive: true })
@@ -70,7 +70,7 @@ describe('pack loader', () => {
   })
 
   it('extra dirs override same-name builtin packs', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'hanzeep-override-'))
+    const root = await mkdtemp(join(tmpdir(), 'docwright-override-'))
     const dir = join(root, 'cosmic-plan')
     const src = join(packsRoot, 'cosmic-plan')
     const { cp } = await import('node:fs/promises')

@@ -71,7 +71,7 @@ async function makeDeps(llm: unknown) {
     config: {
       provider: 'p',
       model: 'test-model',
-      workspaceRoot: await mkdtemp(join(tmpdir(), 'hanzeep-tech-chain-')),
+      workspaceRoot: await mkdtemp(join(tmpdir(), 'docwright-tech-chain-')),
       maxIterations: 3,
       promptTokenBudget: 60_000,
     } as never,

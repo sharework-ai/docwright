@@ -5,14 +5,14 @@
  * headless profile → `dsh plugin add` the tarball → write the minimal boot
  * patch (model routing rows, per docs/testing/e2e-real-llm.md) → boot the
  * profile in-process via the dsh launcher's `runProfile` → assert the three
- * hanzeep tools registered → dispose. No API key, no model call.
+ * docwright tools registered → dispose. No API key, no model call.
  *
  * Prerequisites: the sibling dsh checkout is installed and `build:lib:host`-built
  * (see README Development). The sandbox is deleted on success; pass `--keep` to
  * inspect it (path printed either way).
  *
  * Usage: node --import tsx/esm scripts/host-smoke.ts [--keep]
- * Env:   HANZEEP_DSH_REPO — dsh checkout path (default ../deepseek-harness)
+ * Env:   DOCWRIGHT_DSH_REPO — dsh checkout path (default ../deepseek-harness)
  */
 
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const PROFILE = 'hanzeep-smoke'
+const PROFILE = 'docwright-smoke'
 const EXPECTED_TOOLS = ['doc_generate', 'doc_validate', 'doc_packs']
 
 /** Minimal structural view of the booted host surface the smoke needs. */
@@ -36,7 +36,7 @@ function fail(message: string): never {
 }
 
 const repoRoot = resolve(import.meta.dirname, '..')
-const dshRepo = resolve(repoRoot, process.env['HANZEEP_DSH_REPO'] ?? '../deepseek-harness')
+const dshRepo = resolve(repoRoot, process.env['DOCWRIGHT_DSH_REPO'] ?? '../deepseek-harness')
 const keep = process.argv.includes('--keep')
 
 // The dsh checkout runs its own sources through tsx with tsconfig.base.json
@@ -45,12 +45,12 @@ const keep = process.argv.includes('--keep')
 // and stale lib builds surface (e.g. cordis FiberState). Respawn once with
 // TSX_TSCONFIG_PATH pointed at the dsh checkout so resolution matches
 // `pnpm dsh` exactly.
-if (process.env['HANZEEP_SMOKE_RESPAWNED'] !== '1') {
+if (process.env['DOCWRIGHT_SMOKE_RESPAWNED'] !== '1') {
   const { status } = spawnSync(process.execPath, ['--import', 'tsx/esm', import.meta.filename, ...process.argv.slice(2)], {
     cwd: repoRoot,
     env: {
       ...process.env,
-      HANZEEP_SMOKE_RESPAWNED: '1',
+      DOCWRIGHT_SMOKE_RESPAWNED: '1',
       TSX_TSCONFIG_PATH: join(dshRepo, 'tsconfig.base.json'),
     },
     stdio: 'inherit',
@@ -58,7 +58,7 @@ if (process.env['HANZEEP_SMOKE_RESPAWNED'] !== '1') {
   process.exit(status ?? 1)
 }
 
-const root = mkdtempSync(join(tmpdir(), 'hanzeep-host-smoke-'))
+const root = mkdtempSync(join(tmpdir(), 'docwright-host-smoke-'))
 const home = join(root, 'home')
 console.log(`host-smoke: sandbox ${root}`)
 
@@ -76,7 +76,7 @@ console.log(`host-smoke: packed ${tarball}`)
 const env = {
   ...process.env,
   DSH_HOME: home,
-  HANZEEP_SMOKE_DUMMY_KEY: 'smoke-dummy-key',
+  DOCWRIGHT_SMOKE_DUMMY_KEY: 'smoke-dummy-key',
 }
 const profileDir = join(home, 'profiles', PROFILE)
 try {
@@ -94,7 +94,7 @@ writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), `
   config:
     providers:
       zai-coding-cn:
-        apiKeyEnv: HANZEEP_SMOKE_DUMMY_KEY
+        apiKeyEnv: DOCWRIGHT_SMOKE_DUMMY_KEY
 - id: agent-default-model
   config:
     provider: zai-coding-cn
@@ -122,7 +122,7 @@ try {
   fail(`profile boot failed: ${(error as Error).message}`)
 }
 
-// 5. Assert the three hanzeep tools registered in the live host, then dispose.
+// 5. Assert the three docwright tools registered in the live host, then dispose.
 const registered = new Set(host.tools.schemas().map(schema => schema.name))
 const missing = EXPECTED_TOOLS.filter(name => !registered.has(name))
 await dispose().catch(error => console.error(`host-smoke: dispose warning: ${(error as Error).message}`))

@@ -2,7 +2,7 @@
  * ajv's published .d.ts uses extensionless relative imports that NodeNext
  * cannot resolve, so its types degrade to unusable under this repo's module
  * resolution. Runtime default-import interop with the CJS build is fine;
- * this declaration types the minimal surface hanzeep uses.
+ * this declaration types the minimal surface docwright uses.
  */
 declare module 'ajv' {
   export interface ErrorObject {

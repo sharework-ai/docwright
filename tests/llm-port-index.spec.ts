@@ -53,7 +53,7 @@ describe('llm port', () => {
 describe('plugin apply', () => {
   it('registers all three tools against a minimal fake context', async () => {
     const { name, inject, apply } = await import('../src/index.ts')
-    expect(name).toBe('hanzeep')
+    expect(name).toBe('docwright')
     expect(inject).toContain('tools')
     const registered: string[] = []
     const ctx = { tools: { register: (t: { name: string }) => { registered.push(t.name) } } }
@@ -71,7 +71,7 @@ describe('plugin apply', () => {
     const { apply } = await import('../src/index.ts')
     const registered: string[] = []
     const ctx = { tools: { register: (t: { name: string }) => { registered.push(t.name) } } }
-    await apply(ctx as never, { packsDir: '/nonexistent-hanzeep-packs', provider: 'p', model: 'm' })
+    await apply(ctx as never, { packsDir: '/nonexistent-docwright-packs', provider: 'p', model: 'm' })
     expect(registered).toEqual(['doc_packs', 'doc_generate', 'doc_validate'])
   })
 })

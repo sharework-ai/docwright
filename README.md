@@ -1,4 +1,4 @@
-# hanzeep
+# docwright
 
 Closed-loop AI document generation for [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness): **domain rule packs + replayable validation receipts + a repair loop that refuses to ship red documents**.
 
@@ -7,7 +7,7 @@ JSON is the single source of truth. Every generated document is validated agains
 ## Quickstart (deterministic, ~2 minutes, no API key)
 
 ```sh
-dsh plugin add dsh-plugin-hanzeep   # 1. install the bundle into your profile
+dsh plugin add @sharework-ai/dsh-docwright   # 1. install the bundle into your profile
 dsh                                 # 2. start a session with the profile
 ```
 
@@ -53,7 +53,7 @@ Chained packs accept an optional `upstream` string[] (the same paths used at gen
 ## Configuration (cordis.yml)
 
 ```yaml
-- id: hanzeep
+- id: docwright
   config:
     packsDir: ""            # extra pack dirs; same-name packs override built-ins
     workspaceRoot: ""       # fallback root when no session workspace (default: cwd)
@@ -100,7 +100,7 @@ packs/cosmic-plan/
 
 ## Docs
 
-- [Functional spec](docs/designs/hanzeep-mvp.md) — current-state behavior: tool semantics, loop and receipt details, and the plugin-vs-pack responsibility boundary (what the engine does vs. what a pack author writes).
+- [Functional spec](docs/designs/docwright-mvp.md) — current-state behavior: tool semantics, loop and receipt details, and the plugin-vs-pack responsibility boundary (what the engine does vs. what a pack author writes).
 - [Design docs](docs/designs/) — D1 pack discovery, D2 convergence detection, D3 parameter bridge (all implemented; kept for rationale and veto principles).
 - [Real-LLM e2e runbook](docs/testing/e2e-real-llm.md) — reproduce the closed loop against a live provider (zai coding plan).
 

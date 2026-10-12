@@ -1,9 +1,9 @@
-# dsh bundle layer: inserts hanzeep into a profile's plugin composition.
+# dsh bundle layer: inserts docwright into a profile's plugin composition.
 # The config block maps 1:1 to src/config.ts; omit optional keys entirely
 # (empty strings are NOT nullish and would break the language fallback).
 - insert:
-    - id: hanzeep
-      name: dsh-plugin-hanzeep
+    - id: docwright
+      name: "@sharework-ai/dsh-docwright"
       config:
         maxIterations: 5
         promptTokenBudget: 60000

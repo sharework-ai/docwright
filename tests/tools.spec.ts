@@ -17,7 +17,7 @@ async function makeDeps(overrides: Record<string, unknown> = {}) {
     config: {
       provider: 'deepseek',
       model: 'test-model',
-      workspaceRoot: await mkdtemp(join(tmpdir(), 'hanzeep-tools-')),
+      workspaceRoot: await mkdtemp(join(tmpdir(), 'docwright-tools-')),
       maxIterations: 3,
       promptTokenBudget: 60_000,
       ...overrides,
