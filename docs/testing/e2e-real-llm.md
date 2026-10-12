@@ -1,6 +1,7 @@
 # E2E: real-LLM closed loop (zai coding plan)
 
-Validated 2026-10-11 against `zai-coding-cn` / `glm-4.7`: doc_generate went green in
+Validated 2026-10-11/12 against `zai-coding-cn` (`glm-4.7` pre-dsh-0.2.x, `glm-5.3-flash`
+after): doc_generate went green in
 1 round (score 100), `doc_validate` replayed with `hashMatches: true`,
 `packVersionStale: false`. This runbook reproduces it. No dsh upgrade needed —
 `zai-coding-cn` is already in the pi-ai 0.85.1 provider catalog (`ZAI_CODING_CN_API_KEY`,
@@ -53,12 +54,12 @@ Gotchas (each cost us time once):
 - id: agent-default-model        # base row pins deepseek-official; headless boots need it routed too
   config:
     provider: zai-coding-cn
-    model: glm-4.7
+    model: glm-5.3-flash
 
 - id: hanzeep
   config:
     provider: "zai-coding-cn"
-    model: "glm-4.7"
+    model: "glm-5.3-flash"
     defaultLanguage: "zh-CN"
     workspaceRoot: "/tmp/hanzeep-zai/ws"
 ```
@@ -80,7 +81,23 @@ corepack pnpm --pm-on-fail=ignore --dir ~/projects/lab/deepseek-harness dsh --pr
 
 ## Calibration notes (D2 open questions 1/4)
 
-The 2026-10-11 run needed 1 round (score 100 immediately), so it exercises the happy path
-only. Weight/threshold calibration still needs multi-round runs: prompt for documents that
-violate rules (e.g. omit required fields, short descriptions) and compare `rounds[].score`
-trajectories and `terminationReason` against the default weights (10/3/1) and K=D=3.
+Multi-round observations, 2026-10-12 (`master` @ T2-core, dsh 0.2.1-alpha.2, key from the
+shared zai account in `~/.claude/settings.json` `ANTHROPIC_API_KEY`):
+
+- **Repair path confirmed** (`e2e-multi-1`, legacy-inventory material on glm-4.7): round 1
+  kept the material's violations verbatim (4 errors → score 60), round 2 went green (score
+  100). Score arithmetic matches the built-in severity weights exactly (100 − 10×error);
+  both rounds carry distinct `promptHash` values (initial ≠ repair prompt), so the receipt
+  alone reconstructs what each model call saw. `doc_validate` replayed the receipt with
+  `hashMatches: true` on the NEWER dsh — receipts are cross-version stable.
+- **Round-1 green under strong models** (`e2e-multi-2/3/4` on glm-5.3-flash): three
+  violation-inducing framings — contradictory hard constraints, a 12-row violating
+  inventory, and a verbatim adopt-this-JSON archive — ALL went green in round 1. The model
+  ranks pack rules above material instructions (the guardrail working as designed), so
+  repair and stagnation/decline paths (K=D=3) stay exercised by deterministic tests only.
+  Observing real-LLM stagnation needs a weaker model or a pack whose rules the model
+  genuinely cannot satisfy; defaults (10/3/1, K=D=3) are safely loose for glm-5.3-class
+  models.
+- **Model catalog note**: dsh 0.2.x pi-ai (1.0.2) retired `glm-4.7`; the zai-coding-cn
+  catalog now lists `glm-5.3`, `glm-5.3-flash`, `glm-5.3-highspeed`, `glm-4.6v`. The patch
+  above pins `glm-5.3-flash`.

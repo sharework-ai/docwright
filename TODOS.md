@@ -4,7 +4,7 @@ Source: functional spec at docs/designs/hanzeep-mvp.md. 本文件记录真正待
 
 ## Open
 
-- [ ] **E2E-real-llm** — 真实 LLM 闭环端到端。**管道已验证（2026-10-11）**：zai-coding-cn / glm-4.7 走 headless 会话，doc_generate 1 轮全绿（round score 100）+ doc_validate 复验 hashMatches=true（runbook：docs/testing/e2e-real-llm.md，无需升级 dsh）。**剩余**：多轮修复路径的实测观测（构造违规素材触发 repair/stagnation），用 cosmic-claude 历史产物校准 D2 默认评分权重（10/3/1）与 stagnation/decline 阈值（设计开放问题 1/4）（原脚本已被 tmp 清理，按此描述重写）
+- [ ] **E2E-real-llm** — 真实 LLM 闭环端到端。**已观测（2026-10-12）**：多轮修复路径实证（60→100 轨迹，权重 10/error 精确对账，两轮 promptHash 各异，跨 dsh 版本回执复验 hashMatches=true）；但 glm-5.3-flash 下三种违规素材均一轮全绿（模型把 pack 规则置于素材之上，护栏按设计工作），stagnation/decline 阈值（K=D=3）在真实 LLM 下不可触达，仍由确定性单测覆盖（runbook Calibration 节）。**剩余**：换更弱模型或"规则无法满足"的 pack 观测真实停滞——价值有限，可长期挂起（原脚本已被 tmp 清理，按此描述重写）
 
 ## Deferred
 
