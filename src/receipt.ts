@@ -18,6 +18,13 @@ export type ReceiptRound = {
   readonly warningCount: number
   /** Convergence score of the round (score mode only, 0-100). */
   readonly score?: number
+  /**
+   * sha256 of the exact generator prompt sent this round. Pins the round's
+   * model-visible inputs (template + materials + params + prior draft/issues)
+   * so the receipt — embedded verbatim in the session log via the doc_generate
+   * tool result — alone reconstructs what each LLM call saw.
+   */
+  readonly promptHash?: string
 }
 
 export type ReceiptRuleResult = {

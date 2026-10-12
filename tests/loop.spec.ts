@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { INTERNAL_INVALID_OUTPUT, INTERNAL_LLM_ERROR, runRepairLoop } from '../src/loop.ts'
 import type { LlmPort } from '../src/llm-port.ts'
 import type { Issue } from '../src/issue.ts'
+import { sha256 } from '../src/receipt.ts'
 
 /** Scripted LLM fake: pops replies in order (deterministic loop tests). */
 function fakeLlm(replies: string[], opts: { throws?: Error } = {}): LlmPort & { calls: string[] } {
@@ -49,6 +50,28 @@ describe('repair loop', () => {
     // Repair prompt must carry the issue and the instruction
     expect(llm.calls[1]).toContain('validation-issues')
     expect(llm.calls[1]).toContain('Fix ONLY the listed issues')
+  })
+
+  it('records each round promptHash as sha256 of the exact prompt sent', async () => {
+    const llm = fakeLlm([JSON.stringify(badDoc), JSON.stringify(goodDoc)])
+    const result = await runRepairLoop({ ...base, llm, validate: validateGood }, () => {})
+    expect(result.status).toBe('green')
+    if (result.status === 'green') {
+      expect(result.rounds[0]!.promptHash).toBe(sha256(llm.calls[0]!))
+      expect(result.rounds[1]!.promptHash).toBe(sha256(llm.calls[1]!))
+      // Repair changes the prompt, so the two rounds cannot share a hash.
+      expect(result.rounds[0]!.promptHash).not.toBe(result.rounds[1]!.promptHash)
+    }
+  })
+
+  it('records the attempted prompt hash on an llm-error round', async () => {
+    const llm = fakeLlm([], { throws: new Error('HTTP 429') })
+    const result = await runRepairLoop({ ...base, llm, validate: validateGood }, () => {})
+    expect(result.status).toBe('exhausted')
+    if (result.status === 'exhausted') {
+      expect(result.reason).toBe('llm-error')
+      expect(result.rounds[0]!.promptHash).toBe(sha256(llm.calls[0]!))
+    }
   })
 
   it('maps unparseable output to internal/invalid-output', async () => {

@@ -92,7 +92,7 @@ sidecar 文件 `<产物名>.receipt.json` 与产物同目录；同时内联在�
 | `schemaHash` | pack schema 的 sha256 |
 | `rulesetSnapshot` | **声明式规则全文**（按语言）+ `functions.js` 源码哈希——pack 升级后历史回执仍可解释当时依据 |
 | `upstreamHashes` | 链式锚点：每个上游的 pack/packVersion/artifactHash |
-| `iterations` / `rounds` | 闭环轮数；每轮 `{round, errorCount, warningCount}` 及评分（score 模式，0-100） |
+| `iterations` / `rounds` | 闭环轮数；每轮 `{round, errorCount, warningCount}` 及评分（score 模式，0-100）与 `promptHash`（该轮生成 prompt 的 sha256） |
 | `rules` | 逐规则 rollup：`{ruleId, severity, status: pass\|fail, count}`；schema 违规归并为 `schema/*` 族 |
 | `isValid` | 全绿与否 |
 | `terminationReason` | 红回执的终止原因（`stagnation` / `decline` / `fingerprint-repeat` / `max-iterations` / `llm-error`）；绿回执无此字段 |
@@ -229,6 +229,6 @@ COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`con
 ## 7. 当前限制与路线（未实现，按优先级参考 TODOS.md）
 
 - 真实 LLM 的闭环端到端尚未验证（无 API key 环境，确定性路径全覆盖）。
-- 闭环每轮数据目前只进回执；独立的 doc-gen-round session 事件（model-visible ⟺ logged 的专项审计流）延后。
+- 闭环每轮数据（含各轮 promptHash）进回执；回执整体作为 doc_generate 工具结果内容逐字进入 session log，审计流由该通道承载。独立 doc-gen-round session 事件类型延后：dsh 未提供插件事件类型写侧 `ignorable` 标记的入口，未经标记的未知类型会使会话在 stock 宿主下不可重载。
 - 草稿续修（从红回执草稿断点继续修）工具、MCP 包装（宿主无关分发）、pack npm 分发、cosmic Req/Func/Tech 后续阶段 pack——均未启动。
 - 同名产物的并发写入无跨文件锁（单文件原子，artifact/receipt 对可能交错，last-writer-wins）。

@@ -182,8 +182,10 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         config: deps.config,
         llm,
         signal: exec.signal,
-        // Round data lives in the receipt returned with the tool result;
-        // dedicated session events are tracked in TODOS.md.
+        // Round data (incl. per-round prompt hash) lives in the receipt, which
+        // rides the tool result content into the session log verbatim. A
+        // dedicated session event type stays deferred: dsh has no write-side
+        // knob to mark plugin event types ignorable (see TODOS.md).
         onRound: () => {},
       })
       return (upstreamWarnings === undefined ? result : { ...result, upstreamWarnings }) as unknown as GenerateToolResult
