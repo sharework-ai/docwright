@@ -86,7 +86,13 @@ function describeValue(value: unknown): string {
 export type ParamRow = {
   readonly name: string
   readonly type: string
-  readonly value: Json
+  /**
+   * Effective value; omitted while `source` is "unset". An explicitly
+   * `undefined` property is not lossless JSON, and the gate result rides the
+   * dsh tool-output snapshot verbatim — one such property poisons the whole
+   * result (INVALID_TOOL_OUTPUT before the model ever sees the table).
+   */
+  readonly value?: Json
   /** Where the effective value came from: the call, the upstream receipt, the declared default, or nothing yet. */
   readonly source: 'explicit' | 'upstream' | 'default' | 'unset'
   readonly required: boolean
@@ -141,7 +147,7 @@ export function previewParams(
     if (source === 'explicit' && base !== undefined && base[name] !== undefined && canonicalJson(base[name]) !== canonicalJson(value)) {
       drift.push({ name, from: base[name] as Json, to: value as Json })
     }
-    rows.push({ name, type: spec.type, value: value as Json, source, required: spec.required === true, confirm: spec.confirm === true, overridable: spec.overridable === true, description: spec.description })
+    rows.push({ name, type: spec.type, ...(value === undefined ? {} : { value: value as Json }), source, required: spec.required === true, confirm: spec.confirm === true, overridable: spec.overridable === true, description: spec.description })
   }
   return { rows, missingRequired, drift }
 }

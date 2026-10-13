@@ -27,12 +27,13 @@ export interface ToolDeps {
   readonly ctx: object & { llm?: unknown }
 }
 
-/** Normalize a model-supplied params bag; anything but a JSON object fails loud. */
+/**
+ * Normalize a model-supplied params bag. Shape enforcement lives at the input
+ * schema (`type: 'object'` — the runner rejects non-objects before the body
+ * runs), so post-schema the value is a plain object or absent.
+ */
 function normalizeParams(raw: unknown): Record<string, unknown> | undefined {
   if (raw === undefined) return undefined
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    throw new Error(`params must be a JSON object of { name: value } (got ${Array.isArray(raw) ? 'an array' : typeof raw}; fix: pass declared param names as keys, e.g. {"cfpUpper": 45})`)
-  }
   return raw as Record<string, unknown>
 }
 
@@ -319,7 +320,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn")' },
       artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>)' },
       maxRounds: { type: 'number', description: 'Round cap for this call (e.g. when the user asks to try more rounds); clamped to config maxRoundsCeiling' },
-      params: { type: 'json', description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpTotal": {"value": 100, "downFactor": 0.9, "upFactor": 1.2}}; unknown names, out-of-range values, and missing required params fail loud; explicit params always trigger the confirmation gate' },
+      params: { type: 'object', additionalProperties: true, description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpTotal": {"value": 100, "downFactor": 0.9, "upFactor": 1.2}}; unknown names, out-of-range values, and missing required params fail loud; explicit params always trigger the confirmation gate' },
       confirm: { type: 'boolean', description: 'Execute after the pendingConfirmation param table was presented to and approved by the user' },
     },
     output: {
@@ -464,7 +465,7 @@ export function defineDocValidateTool(deps: ToolDeps) {
       artifactPath: { type: 'string', required: true, description: 'Workspace-relative path to the artifact JSON' },
       pack: { type: 'string', required: true, description: 'Pack name the artifact belongs to' },
       language: { type: 'string', description: 'Language whose ruleset to run; defaults to the receipt-recorded language, then config defaultLanguage' },
-      params: { type: 'json', description: 'Optional pack-param overrides; defaults to the receipt-recorded as-run params (revalidate by the original standards)' },
+      params: { type: 'object', additionalProperties: true, description: 'Optional pack-param overrides; defaults to the receipt-recorded as-run params (revalidate by the original standards)' },
       upstream: { type: 'array', items: { type: 'string' }, description: 'For chained packs: workspace-relative paths to the same upstream artifacts used at generation (green-receipt verified); required to replay chained-pack rules like plan-alignment checks' },
     },
     output: {

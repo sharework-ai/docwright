@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import { describe, expect, it } from 'vitest'
 import { loadPacks } from '../src/pack-loader.ts'
 import type { Pack } from '../src/pack.ts'
@@ -236,6 +237,15 @@ describe('previewParams: table, missing, and drift', () => {
     expect(row.confirm).toBe(true)
   })
 
+  it('omits value on unset rows so the row stays lossless JSON', async () => {
+    const pack = await packOf('cosmic-plan')
+    const preview = previewParams(pack, undefined, undefined)
+    const unset = preview.rows.find(r => r.source === 'unset')!
+    expect(unset.name).toBe('cfpTotal')
+    expect('value' in unset).toBe(false)
+    for (const row of preview.rows) expect(snapshotJsonValue(row)).not.toBeUndefined()
+  })
+
   it('detects drift only against recorded base values (canonical compare)', async () => {
     const pack = await packOf('cosmic-plan')
     const base = { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 }, cfpPerSubProc: 2.5 }
@@ -283,6 +293,23 @@ describe('doc_generate: confirmation gate', () => {
     expect(budget.required).toBe(true)
     const limit = out.paramTable.find(r => r.name === 'limit')!
     expect(limit.source).toBe('default')
+  })
+
+  it('gate result survives the dsh lossless-JSON output snapshot the runner applies', async () => {
+    // The real runtime snapshots every tool result before model delivery
+    // (createSuccessResult → snapshotJsonValue); one explicit `undefined`
+    // property anywhere poisons the whole result into INVALID_TOOL_OUTPUT.
+    const deps = await gateDeps({ provider: undefined, model: undefined })
+    const tool = defineDocGenerateTool(deps as never)
+    const out = await tool.execute({ pack: 'gate-pack', materials: ['#!inline\nm'] } as never, { signal } as never)
+    expect(snapshotJsonValue(out)).not.toBeUndefined()
+  })
+
+  it('rejects params passed as a JSON-encoded string at the schema layer', async () => {
+    const deps = await gateDeps({ provider: undefined, model: undefined })
+    const tool = defineDocGenerateTool(deps as never)
+    await expect(tool.execute({ pack: 'gate-pack', materials: ['#!inline\nm'], params: '{"budget": {"v": 1}}' } as never, { signal } as never))
+      .rejects.toThrow(/invalid arguments[\s\S]*params/)
   })
 
   it('gates on explicit params until confirmed, then executes and records as-run params', async () => {

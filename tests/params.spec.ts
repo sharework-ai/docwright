@@ -263,7 +263,10 @@ describe('doc_generate: maxRounds chain and params override (end to end)', () =>
   it('fails loud on non-object params and invalid maxRounds', async () => {
     const deps = await makeDeps()
     const tool = defineDocGenerateTool(deps)
-    await expect(tool.execute({ pack: 'param-pack', materials: ['#!inline\nm'], params: [1] } as never, { signal } as never)).rejects.toThrow(/params must be a JSON object/)
+    // Non-object params now fail at the input schema layer (type: 'object'),
+    // before the tool body's normalizeParams defense line is reached.
+    await expect(tool.execute({ pack: 'param-pack', materials: ['#!inline\nm'], params: [1] } as never, { signal } as never)).rejects.toThrow(/invalid arguments[\s\S]*params/)
+    await expect(tool.execute({ pack: 'param-pack', materials: ['#!inline\nm'], params: '{"budget": 1}' } as never, { signal } as never)).rejects.toThrow(/invalid arguments[\s\S]*params/)
     await expect(tool.execute({ pack: 'param-pack', materials: ['#!inline\nm'], maxRounds: 1.5 } as never, { signal } as never)).rejects.toThrow(/maxRounds must be a positive integer/)
   })
 })
