@@ -52,20 +52,28 @@ export function normalizeWindowsPath(
 
 /** Minimal execution-context shape docwright reads; avoids importing dsh types. */
 export interface SessionWorkspaceCarrier {
-  readonly agent?: { readonly session?: { readonly cwd?: string } } | undefined
+  readonly agent?: {
+    readonly session?: {
+      readonly cwd?: string
+      /** dsh exposes the session's static working directory on the header (see its working-directory service). */
+      readonly header?: { readonly cwd?: string } | undefined
+    } | undefined
+  } | undefined
 }
 
 /**
  * Per-call workspace root: the session's workspace directory (the
  * conversation's cwd, e.g. the folder picked in the dsh web UI) wins; a
  * session-less call (scripts, tests) falls back to config `workspaceRoot`,
- * then the process cwd.
+ * then the process cwd. dsh carries that directory on `session.header.cwd`;
+ * a top-level `session.cwd` is accepted for callers that shape it that way.
  */
 export function effectiveWorkspaceRoot(
   exec: SessionWorkspaceCarrier | undefined,
   configRoot: string | undefined,
 ): string {
-  const sessionCwd = exec?.agent?.session?.cwd
+  const session = exec?.agent?.session
+  const sessionCwd = session?.cwd ?? session?.header?.cwd
   if (typeof sessionCwd === 'string' && sessionCwd.length > 0) return resolve(normalizeWindowsPath(sessionCwd))
   return resolve(configRoot !== undefined && configRoot.length > 0 ? normalizeWindowsPath(configRoot) : process.cwd())
 }

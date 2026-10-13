@@ -16,9 +16,23 @@ describe('effectiveWorkspaceRoot', () => {
     expect(root).toBe('/tmp/session-ws')
   })
 
+  it('reads the dsh session header cwd when the top-level cwd is absent', () => {
+    const root = effectiveWorkspaceRoot({ agent: { session: { header: { cwd: '/tmp/dsh-ws' } } } }, '/tmp/config-ws')
+    expect(root).toBe('/tmp/dsh-ws')
+  })
+
+  it('prefers a top-level session cwd over the header cwd when both exist', () => {
+    const root = effectiveWorkspaceRoot(
+      { agent: { session: { cwd: '/tmp/session-ws', header: { cwd: '/tmp/dsh-ws' } } } },
+      undefined,
+    )
+    expect(root).toBe('/tmp/session-ws')
+  })
+
   it('falls back to config workspaceRoot without a session cwd', () => {
     expect(effectiveWorkspaceRoot(undefined, '/tmp/config-ws')).toBe('/tmp/config-ws')
     expect(effectiveWorkspaceRoot({ agent: { session: { cwd: '' } } }, '/tmp/config-ws')).toBe('/tmp/config-ws')
+    expect(effectiveWorkspaceRoot({ agent: { session: { header: { cwd: '' } } } }, '/tmp/config-ws')).toBe('/tmp/config-ws')
   })
 
   it('falls back to the process cwd when neither is set', () => {
