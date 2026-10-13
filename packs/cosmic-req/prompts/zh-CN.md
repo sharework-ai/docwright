@@ -6,7 +6,7 @@
 - 顶层字段：
   - `docType`（string）：固定为 `"req"`。
   - `language`（string）：固定为 `"zh-CN"`。
-  - `index`（整数，≥1）：目标功能在上游 plan `functions` 数组中的位置（1-based）。用户指明了要分析的功能时按其定位；未指明时选 index 1。
+  - `index`（整数，≥1）：等于生效参数 `targetIndex`（1-based，定位上游 plan `functions` 数组中的目标功能）。
   - `desiredCfps`（整数，≥1）：从上游 plan 对应 function 的 `estimatedCfps` 原样复制。
   - `funcId`（string）：从上游 plan 对应 function 的 `funcId` 原样复制。
   - `funcDesc`（string）：功能需求描述——不超过 500 字的自然语言段落，讲清核心功能点与业务价值；可在素材基础上补充完善，但不得虚构素材中不存在的功能；避免列表与过于技术化的语言。
@@ -20,7 +20,7 @@
 
 ## 硬性约束
 
-1. `index`、`funcId`、`desiredCfps` 必须与上游 plan 中对应 function 完全一致，不得改写。
+1. `index` 必须等于生效参数 `targetIndex`；`index`、`funcId`、`desiredCfps` 必须与上游 plan `functions[targetIndex-1]` 完全一致，不得改写。
 2. `funcDesc` 不超过 500 字，写成一段连贯的自然语言；`functionalUsers[].role` 必须在白名单内。
 3. 业务规则数量必须在配比区间内（不足与超出都会被校验拒绝）。
 

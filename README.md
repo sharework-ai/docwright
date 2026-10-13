@@ -39,6 +39,8 @@ Zero-arg discovery tool: lists installed packs as `[{ name, version, description
 | `params` | object? | overrides for pack-declared tunables (see `doc_packs`); unknown names, out-of-range values, and missing required (default-less) params fail loud; **passing params always triggers the confirmation gate** |
 | `confirm` | boolean? | execute after the `pendingConfirmation` param table was presented to and approved by the user |
 
+Per-function fan-out (`docs/designs/params-and-chain-contract.md`): chained packs declare a required `targetIndex` (1-based position in the upstream plan's `functions[]`); a missing one fails loud with the full candidate list (index, funcId, l2Name). Calls without an explicit `artifactName` default to `<pack>-<funcId>` so distinct functions never collide; results carry a `coverage` line (`{ covered, total, missing }`) showing how much of the reference function set this stage has already produced. `doc_chain_status` gives the whole-chain matrix.
+
 Returns `{ artifactPath, markdownPath, receipt }`. Artifacts, receipts, and markdown land in the output root (default `<workspace>/output/`). Exhausted loops throw AND keep the draft + red receipt on disk.
 
 ### `doc_validate`
@@ -50,6 +52,10 @@ Also returns `packVersionStale`: `true` when the sidecar receipt was written by 
 Validation replays by the receipt-recorded as-run pack params (original standards); pass `params` explicitly for what-if checks.
 
 Chained packs accept an optional `upstream` string[] (the same paths used at generation): it re-runs the green-receipt verification and feeds the parsed artifacts into function rules, so cross-artifact rules (e.g. cosmic-req's plan-alignment) replay too — the fresh receipt then records the `upstreamHashes` anchors. Omitting it leaves those rules failing loud with a message that points here.
+
+### `doc_chain_status`
+
+Per-function fan-out accounting — deterministic, no LLM. Pass `plan` (workspace-relative path to a green plan artifact); the tool walks the consuming stages via each pack's `consumes`, scans the output root for green per-function artifacts, and returns the coverage matrix: which plan functions have artifacts at which stage, per-stage `{ covered, total }` counts, and any `orphaned` green artifacts whose funcId matches no plan function. Run it before presenting a fan-out chain as complete.
 
 ## Configuration (cordis.yml)
 

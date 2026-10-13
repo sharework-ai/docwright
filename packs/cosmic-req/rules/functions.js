@@ -88,7 +88,7 @@ export const rules = [
     // E303 generalized: index/funcId/desiredCfps must align with the upstream plan function.
     id: 'req/plan-alignment',
     severity: 'error',
-    suggestion: 'index/funcId/desiredCfps 必须与上游 plan 中对应 function 完全一致：index 是该 function 在 plan.functions 中的 1-based 位置，funcId 与 desiredCfps（=estimatedCfps）从那里原样复制；doc_validate 复验时请传入与生成时相同的 upstream 路径。',
+    suggestion: 'index/funcId/desiredCfps 必须与上游 plan 中对应 function 完全一致：index 必须等于生效参数 targetIndex（生成哪个功能由调用方指定），funcId 与 desiredCfps（=estimatedCfps）从那里原样复制；doc_validate 复验时请传入与生成时相同的 upstream 路径。',
     check(artifact, context) {
       if (!isObject(artifact)) return []
       const upstream = Array.isArray(context?.upstream) ? context.upstream : []
@@ -110,6 +110,17 @@ export const rules = [
             `index 超出上游 plan functions 范围：期望 1-${functions.length}，实际 ${String(index)}`,
             `index is outside the upstream plan functions range: expected 1-${functions.length}, got ${String(index)}`),
           snapshot: `index=${String(index)}`,
+        }]
+      }
+      // The caller's targetIndex picks the function; the artifact index must match it.
+      const targetIndex = context?.params?.targetIndex
+      if (typeof targetIndex === 'number' && index !== targetIndex) {
+        return [{
+          jsonPath: '$.index',
+          message: say(artifact,
+            `index 与生效参数 targetIndex 不一致：index 为 ${index}，targetIndex 为 ${targetIndex}（生成哪个功能由 targetIndex 决定）`,
+            `index mismatches the effective param targetIndex: index is ${index}, targetIndex is ${targetIndex} (the target function is picked by targetIndex)`),
+          snapshot: `index=${index}`,
         }]
       }
       const fn = functions[index - 1]
