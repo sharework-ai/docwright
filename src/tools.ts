@@ -2,7 +2,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type UpstreamVersionPolicy } from './config.ts'
-import { generateDocument, getDocService, parseUpstreamArtifacts } from './doc-service.ts'
+import { generateDocument, getDocService, parseUpstreamArtifacts, summarizeArtifact, writeAtomic } from './doc-service.ts'
 import { createLlmPort } from './llm-port.ts'
 import { previewParams, resolveEffectiveParams, type ParamDrift, type ParamRow } from './params.ts'
 import type { Pack } from './pack.ts'
@@ -80,6 +80,8 @@ export type GenerateToolResult = {
   readonly artifactPath: string
   readonly markdownPath: string
   readonly receipt: Receipt
+  /** Best-effort artifact metrics (counts, totalCfps) — saves a file read. */
+  readonly summary: ReturnType<typeof summarizeArtifact>
   /** Present under upstreamVersionPolicy: "warn" when an upstream receipt records a different pack version. */
   readonly upstreamWarnings?: string[]
   /** Fan-out progress for per-function packs: this stage's green artifacts vs the reference function set. */
@@ -129,6 +131,10 @@ export type ValidateToolResult = {
   readonly hashMatches: boolean | null
   /** true: sidecar receipt records another pack version (stale — regenerate); false: versions match; null: no sidecar receipt. */
   readonly packVersionStale: boolean | null
+  /** true: the green re-validation re-issued the sidecar receipt (seal) so downstream consumption can proceed. */
+  readonly sealed?: boolean
+  /** Best-effort artifact metrics (counts, totalCfps). */
+  readonly summary: ReturnType<typeof summarizeArtifact>
 }
 
 /**
@@ -308,7 +314,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       + 'maxRounds caps this call\'s loop rounds.',
     parameters: {
       pack: { type: 'string', required: true, description: 'Pack name; discover installed packs with doc_packs (e.g. cosmic-plan)' },
-      materials: { type: 'array', required: true, items: { type: 'string' }, description: 'Material references: paths relative to the materials root (default references/ under the workspace) or #!inline text' },
+      materials: { type: 'array', items: { type: 'string' }, description: 'Material references: paths relative to the materials root (default references/ under the workspace) or #!inline text. Optional for chained packs whose upstream artifacts carry the context' },
       language: { type: 'string', description: 'Output language (default: config defaultLanguage)' },
       upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn")' },
       artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>)' },
@@ -320,10 +326,10 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       schema: { type: 'json' },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args: { pack: string; materials: unknown[]; language?: string; upstream?: unknown[]; artifactName?: string; maxRounds?: number; params?: unknown; confirm?: boolean }, exec) {
+    async execute(args: { pack: string; materials?: unknown[]; language?: string; upstream?: unknown[]; artifactName?: string; maxRounds?: number; params?: unknown; confirm?: boolean }, exec) {
       const pack = resolvePack(deps, args.pack)
       const language = resolveLanguage(deps, pack, args.language)
-      const materials = args.materials as string[]
+      const materials = (args.materials as string[] | undefined) ?? []
       const upstream = args.upstream as string[] | undefined
       const workspaceRoot = effectiveWorkspaceRoot(exec as SessionWorkspaceCarrier | undefined, deps.config.workspaceRoot)
       const materialsRoot = resolveRootWithin(workspaceRoot, deps.config.materialsRoot, 'materialsRoot')
@@ -342,6 +348,11 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         upstreamAnchors = verified.anchors
         upstreamWarnings = verified.warnings.length > 0 ? verified.warnings : undefined
         upstreamRecords = verified.records
+      }
+      // Some input must exist: materials, or the upstream artifacts of a
+      // chained pack (whose text already feeds the prompt).
+      if (materials.length === 0 && upstreamTexts === undefined) {
+        throw new Error('materials must not be empty: provide at least one material reference (a workspace file path or #!inline text), or pass upstream artifacts for chained packs')
       }
       // Confirmation gate (docs/designs/params-and-chain-contract.md): zero
       // LLM cost — resolved before the route check. Explicit params always
@@ -445,7 +456,8 @@ export function defineDocValidateTool(deps: ToolDeps) {
   return defineTool({
     name: 'doc_validate',
     description: 'Re-validate an existing document artifact against its pack ruleset and compare its hash with the sidecar receipt. '
-      + 'Deterministic, no LLM. Call doc_packs to see which packs are installed. '
+      + 'Deterministic, no LLM. A GREEN validation re-issues (seals) the sidecar receipt for the current content, so externally edited artifacts can rejoin a chain; a red validation never touches it. '
+      + 'Call doc_packs to see which packs are installed. '
       + 'Returns a fresh receipt; hashMatches=false means the artifact changed after generation; hashMatches=null means no prior receipt exists. '
       + 'packVersionStale=true means the sidecar receipt was written by a different pack version — the artifact predates the installed pack and its green receipt certifies the OLD rules; regenerate it.',
     parameters: {
@@ -527,7 +539,17 @@ export function defineDocValidateTool(deps: ToolDeps) {
         ...(verifiedUpstream !== undefined ? { upstream: verifiedUpstream.anchors } : {}),
         ...(Object.keys(effectiveParams).length > 0 ? { params: effectiveParams } : {}),
       })
-      return { artifactPath, receipt, hashMatches, packVersionStale } as unknown as ValidateToolResult
+      // Seal (docs/designs/params-and-chain-contract.md): a green re-validation
+      // re-issues the sidecar receipt for the CURRENT content — the quality
+      // station earns the same issuing right as the generation line. Failing
+      // validation never touches the sidecar; the hash still binds the
+      // certificate to the exact content version.
+      let sealed: boolean | undefined
+      if (isValid) {
+        await writeAtomic(artifactPath.replace(/\.json$/, '') + '.receipt.json', `${JSON.stringify(receipt, null, 2)}\n`)
+        sealed = true
+      }
+      return { artifactPath, receipt, hashMatches, packVersionStale, ...(sealed === undefined ? {} : { sealed }), summary: summarizeArtifact(artifact) } as unknown as ValidateToolResult
     },
   })
 }
