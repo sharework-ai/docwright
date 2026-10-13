@@ -1,0 +1,26 @@
+commit 97cf30b3fba222b7c5476b7c2c2f4341cfee2c91
+Author: sharework <sharework@qq.com>
+Date:   Wed Sep 23 15:40:23 2026 +0800
+
+    Trust intranet dsh hostname for the client settings plane
+
+diff --git a/packages/client/connection/src/client/index.ts b/packages/client/connection/src/client/index.ts
+index dce8d030bf..3534627f40 100644
+--- a/packages/client/connection/src/client/index.ts
++++ b/packages/client/connection/src/client/index.ts
+@@ -129,7 +129,14 @@ export function apply(ctx: Context): void {
+   }
+   const handle: ConnectionHandle = {
+     api,
+-    isLoopback: pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
++    // Lab deployment: the settings plane is served on the intranet through
++    // nginx22 -> a local hop that rewrites Host/Origin to loopback, which
++    // already satisfies the server-side privileged-method gate. Trust the
++    // deployed hostname so the client settings mirror stays in host mode.
++    isLoopback:
++      pageLocation === undefined ||
++      isLoopbackHostname(pageLocation.hostname) ||
++      pageLocation.hostname === 'dsh.mosipdev.xiongdi.asia',
+     hostDescription: {
+       getSnapshot: () => description,
+       subscribe: (listener) => {
