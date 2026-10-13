@@ -16,9 +16,9 @@ export async function readMaterials(
   workspaceRoot: string,
   materialsRoot: string,
 ): Promise<readonly string[]> {
-  if (refs.length === 0) {
-    throw new Error('materials must not be empty: provide at least one material reference (a workspace file path or #!inline text)')
-  }
+  // An empty list is legal: chained packs may rely on the upstream artifact
+  // alone for context. The tool layer enforces "some input exists".
+  if (refs.length === 0) return []
   const root = await realpath(resolve(workspaceRoot))
   const materialBase = resolve(root, materialsRoot)
   const out: string[] = []

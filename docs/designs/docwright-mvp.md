@@ -46,7 +46,7 @@ docwright 的差异化就在"内容合格性"这一层，由三件事组成：
 | 参数 | 类型 | 语义 |
 |---|---|---|
 | `pack` | string，必填 | pack 名；未知名称报错并列出全部可用 pack |
-| `materials` | string[]，必填 | 素材引用，≥1 条。两种形态：相对 materialsRoot（默认 `<workspace>/references/`）的文件路径；或以 `#!inline` 开头的内联文本（显式标记，无启发式判断） |
+| `materials` | string[]? | 素材引用。两种形态：相对 materialsRoot（默认 `<workspace>/references/`）的文件路径；或以 `#!inline` 开头的内联文本（显式标记，无启发式判断）。链式 pack 可省略（上游产物文本已入 prompt）；两个都没有时 fail loud 并同时列出两条路 |
 | `language` | string? | 输出语言。优先级：tool 参数 > Config `defaultLanguage` > pack 的第一个语言；不被该 pack 支持即调用期报错 |
 | `upstream` | string[]? | 上游产物路径（workspace 相对）。仅当 pack 声明了 `consumes` 时必填，见 3.5 |
 | `artifactName` | string? | 输出基础名，仅允许 `[A-Za-z0-9._-]` 的纯 basename（拒绝路径形状与 `..`）；缺省时：per-function 调用（targetIndex 可解析）为 `<pack>-<funcId>`（不同功能不冲突、重生成幂等），其余为 `<pack>-<时间戳>`；显式传名逐字生效 |
@@ -57,7 +57,7 @@ docwright 的差异化就在"内容合格性"这一层，由三件事组成：
 
 行为：素材读取与首 prompt token 预检 → 闭环（3.2）→ 落盘三个文件（产物 JSON、sidecar 回执、Markdown 渲染），全部 tmp+rename 原子写、产物先于回执落盘（崩溃只会留下可读草稿，不会留下孤儿回执）。
 
-返回 `{ artifactPath, markdownPath, receipt }`（回执内联全量，agent 无需二次读文件）；warn 策略下追加 `upstreamWarnings`；per-function pack 追加 `coverage`（本阶段绿色产物相对参照功能集的 `{ covered, total, missing }`——req 参照 plan functions，func/tech 参照上游阶段已覆盖集）。required 的 `targetIndex` 缺失时 fail loud 并列出上游全部候选（index、funcId、l2Name），pendingConfirmation 同样携带 `candidates`。全绿时产物是正式产物；**迭代耗尽时工具抛错（fail loud），但草稿 + 红回执（`isValid: false` + 全部未解决 Issue）保留在磁盘上**，供人工救援，绝不静默采用最后一轮。
+返回 `{ artifactPath, markdownPath, receipt, summary }`（回执内联全量；`summary` 为产物关键计数——functions/processes/subProcesses/totalCfps，按字段存在性给出，省一次文件回读）；warn 策略下追加 `upstreamWarnings`；per-function pack 追加 `coverage`（本阶段绿色产物相对参照功能集的 `{ covered, total, missing }`——req 参照 plan functions，func/tech 参照上游阶段已覆盖集）。required 的 `targetIndex` 缺失时 fail loud 并列出上游全部候选（index、funcId、l2Name），pendingConfirmation 同样携带 `candidates`。全绿时产物是正式产物；**迭代耗尽时工具抛错（fail loud），但草稿 + 红回执（`isValid: false` + 全部未解决 Issue）保留在磁盘上**，供人工救援，绝不静默采用最后一轮。
 
 ### 3.2 闭环修复循环（核心机制）
 
@@ -103,7 +103,7 @@ sidecar 文件 `<产物名>.receipt.json` 与产物同目录；同时内联在�
 
 ### 3.4 工具 `doc_validate` — 确定性复验（零 LLM）
 
-参数：`artifactPath`（workspace 相对路径）、`pack`、`language?`、`params?`、`upstream?`（链式 pack 复验用，同生成时的 workspace 相对路径数组）。对既有产物用**当前安装的 pack 规则**重跑校验，返回 `{ artifactPath, receipt, hashMatches, packVersionStale }`。校验默认使用回执记录的 as-run 参数（**按当时的标准复验**）；显式传 `params` 可做 what-if 校验。传入 `upstream` 时走与 `doc_generate` 相同的六项上游校验，解析后的产物注入函数规则 context（跨产物规则得以复验），回执同步记录 `upstreamHashes` 锚点。
+参数：`artifactPath`（workspace 相对路径）、`pack`、`language?`、`params?`、`upstream?`（链式 pack 复验用，同生成时的 workspace 相对路径数组）。对既有产物用**当前安装的 pack 规则**重跑校验，返回 `{ artifactPath, receipt, hashMatches, packVersionStale, sealed?, summary }`。**seal（回执回签）**：绿色校验把新回执写入 sidecar——发证渠道从「只有生产线（doc_generate）」扩展为「生产线 + 质检站（doc_validate）」，人工/外部编辑的产物借此重新入链；红色校验绝不触碰 sidecar，hash 依旧把合格证绑定到具体内容版本。`sealed: true` 即本次回签；`hashMatches` 仍报告回签前的篡改证据。返回值同时带 `summary` 关键计数。校验默认使用回执记录的 as-run 参数（**按当时的标准复验**）；显式传 `params` 可做 what-if 校验。传入 `upstream` 时走与 `doc_generate` 相同的六项上游校验，解析后的产物注入函数规则 context（跨产物规则得以复验），回执同步记录 `upstreamHashes` 锚点。
 
 - `hashMatches`：`true` 产物与 sidecar 回执哈希一致；`false` 生成后被改动过（篡改可见）；`null` 无 sidecar（如手工拷入的样例）。
 - `packVersionStale`：`true` 回执由**另一个 pack 版本**写入——绿回执证明的是旧规则，应重新生成（无版本记录的回执也算 stale）；`false` 版本一致；`null` 无回执。

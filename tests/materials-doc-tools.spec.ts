@@ -50,8 +50,8 @@ describe('materials', () => {
     await expect(readMaterials(['../../../etc/passwd'], root, join(root, 'references'))).rejects.toThrow(/escapes the workspace root/)
   })
 
-  it('rejects an empty materials list', async () => {
-    await expect(readMaterials([], '/tmp', '/tmp')).rejects.toThrow(/must not be empty/)
+  it('an empty materials list is legal (chained packs may rely on upstream alone)', async () => {
+    await expect(readMaterials([], '/tmp', '/tmp')).resolves.toEqual([])
   })
 
   it('rejects a missing file with a readable error', async () => {

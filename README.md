@@ -31,7 +31,7 @@ Zero-arg discovery tool: lists installed packs as `[{ name, version, description
 | Parameter | Type | Notes |
 |---|---|---|
 | `pack` | string | e.g. `cosmic-plan`; unknown names list available packs |
-| `materials` | string[] | paths relative to the materials root (default `<workspace>/references/`), or inline text starting with `#!inline` |
+| `materials` | string[]? | paths relative to the materials root (default `<workspace>/references/`), or inline text starting with `#!inline`; optional for chained packs whose upstream carries the context |
 | `language` | string? | default: config `defaultLanguage`, else the pack's first language |
 | `upstream` | string[]? | workspace-relative paths to upstream artifacts; each must carry a green sidecar receipt (hash-verified, pack type matched against `consumes`, and recording the installed pack version — see `upstreamVersionPolicy`) |
 | `artifactName` | string? | output base name (default `<pack>-<timestamp>`) |
@@ -46,6 +46,8 @@ Returns `{ artifactPath, markdownPath, receipt }`. Artifacts, receipts, and mark
 ### `doc_validate`
 
 Re-runs the ruleset over an existing artifact — deterministic, no LLM. `artifactPath` is workspace-relative (e.g. `output/plan-123.json`). Returns a fresh receipt; a hash mismatch means the artifact changed after generation.
+
+**Sealing**: a green validation re-issues (seals) the sidecar receipt for the current content (`sealed: true`) — externally edited artifacts that revalidate green rejoin the chain without regeneration. A red validation never touches the sidecar. Results also carry a best-effort artifact `summary` (counts and totalCfps).
 
 Also returns `packVersionStale`: `true` when the sidecar receipt was written by a different pack version — the artifact predates the installed pack and its green receipt certifies the OLD rules, so regenerate; `false` when versions match; `null` when no receipt exists.
 

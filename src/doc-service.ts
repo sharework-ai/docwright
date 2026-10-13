@@ -135,6 +135,8 @@ export interface GenerateOutput {
   readonly artifactPath: string
   readonly markdownPath: string
   readonly receipt: Receipt
+  /** Best-effort artifact metrics (counts, totalCfps) — saves a file read. */
+  readonly summary: ReturnType<typeof summarizeArtifact>
 }
 
 /** Artifact names become filesystem basenames; reject anything path-shaped. */
@@ -145,9 +147,31 @@ export function assertSafeArtifactName(name: string): void {
 }
 
 /** Write via tmp+rename so a crash never leaves a half-written file. */
-async function writeAtomic(path: string, content: string): Promise<void> {
+export async function writeAtomic(path: string, content: string): Promise<void> {
   await writeFile(`${path}.tmp`, content, 'utf8')
   await rename(`${path}.tmp`, path)
+}
+
+/**
+ * Best-effort artifact metrics for the tool result summary: the counts a
+ * caller would otherwise burn a file read to learn. Only present fields
+ * appear — packs define their own shapes.
+ */
+export function summarizeArtifact(artifact: unknown): { functions?: number; processes?: number; subProcesses?: number; totalCfps?: number } {
+  if (typeof artifact !== 'object' || artifact === null) return {}
+  const doc = artifact as Record<string, unknown>
+  const out: { functions?: number; processes?: number; subProcesses?: number; totalCfps?: number } = {}
+  if (Array.isArray(doc.functions)) out.functions = doc.functions.length
+  if (Array.isArray(doc.processes)) {
+    out.processes = doc.processes.length
+    const movements = doc.processes.reduce((sum, p) => {
+      const subs = (p as { subProcesses?: unknown } | null)?.subProcesses
+      return Array.isArray(subs) ? sum + subs.length : sum
+    }, 0)
+    if (movements > 0) out.subProcesses = movements
+  }
+  if (typeof doc.totalCfps === 'number') out.totalCfps = doc.totalCfps
+  return out
 }
 
 /**
@@ -249,5 +273,5 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
   if (!isValid) {
     throw new Error(`doc_generate exhausted after ${result.iterations} iterations without going green; draft + red receipt kept at ${artifactPath}. Unresolved: ${unresolved.slice(0, 5).map(i => i.ruleId).join(', ')}${unresolved.length > 5 ? '…' : ''}`)
   }
-  return { artifactPath, markdownPath, receipt }
+  return { artifactPath, markdownPath, receipt, summary: summarizeArtifact(artifact) }
 }
