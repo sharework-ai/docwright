@@ -1,7 +1,36 @@
 {
   "name": "cosmic-func",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "COSMIC functional-process design for one function: mermaid diagrams plus the functional process list (originator, receiver, origination event) refined from a green cosmic-req artifact.",
-  "consumes": ["cosmic-req"],
-  "languages": ["zh-CN", "en-US"]
+  "consumes": [
+    "cosmic-req"
+  ],
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
+  "params": {
+    "cfpPerFunc": {
+      "type": "object",
+      "default": {
+        "value": 30,
+        "min": 10,
+        "max": 100
+      },
+      "confirm": true,
+      "description": "Per-function CFP budget {value, min, max}; inherited from the upstream receipt and re-recorded for the chain"
+    },
+    "cfpTotal": {
+      "type": "object",
+      "confirm": true,
+      "description": "Total CFP budget {value, downFactor, upFactor}; the chain head states it, downstream stages inherit it from the upstream receipt"
+    },
+    "cfpPerSubProc": {
+      "type": "number",
+      "default": 2.5,
+      "min": 1,
+      "max": 10,
+      "description": "Average CFP per data movement; sizing guidance carried down the chain"
+    }
+  }
 }

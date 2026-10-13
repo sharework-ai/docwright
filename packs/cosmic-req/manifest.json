@@ -1,17 +1,15 @@
 {
   "name": "cosmic-req",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "COSMIC requirements analysis for one plan function: functional description, system-level functional users with user stories, and business rules (consumes a green cosmic-plan artifact).",
-  "consumes": ["cosmic-plan"],
-  "languages": ["zh-CN", "en-US"],
+  "consumes": [
+    "cosmic-plan"
+  ],
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
   "params": {
-    "cfpsPerFunc": {
-      "type": "number",
-      "default": 30,
-      "min": 10,
-      "max": 100,
-      "description": "CFP budget per business rule when sizing the businessRules array (rule req/business-rule-count)"
-    },
     "functionalUserRoles": {
       "type": "string",
       "default": "customer,operator,manager,business-partner,supplier,3rd-payment-service",
@@ -23,6 +21,35 @@
       "min": 100,
       "max": 2000,
       "description": "Maximum functional description length in characters (rule req/func-desc-max-length; the schema hard ceiling is 2000)"
+    },
+    "cfpsPerRule": {
+      "type": "number",
+      "default": 30,
+      "min": 10,
+      "max": 100,
+      "description": "CFP budget per business rule when sizing the businessRules array (rule req/business-rule-count)"
+    },
+    "cfpPerFunc": {
+      "type": "object",
+      "default": {
+        "value": 30,
+        "min": 10,
+        "max": 100
+      },
+      "confirm": true,
+      "description": "Per-function CFP budget {value, min, max}; inherited from the upstream receipt and re-recorded for the chain"
+    },
+    "cfpTotal": {
+      "type": "object",
+      "confirm": true,
+      "description": "Total CFP budget {value, downFactor, upFactor}; the chain head states it, downstream stages inherit it from the upstream receipt"
+    },
+    "cfpPerSubProc": {
+      "type": "number",
+      "default": 2.5,
+      "min": 1,
+      "max": 10,
+      "description": "Average CFP per data movement; sizing guidance carried down the chain"
     }
   }
 }

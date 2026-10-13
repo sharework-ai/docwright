@@ -1,7 +1,28 @@
 {
   "name": "cosmic-plan",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "COSMIC function-point estimation plan: decomposes one requirement into leaf functions with hierarchical names, descriptions, and estimated CFPs, validated by COSMIC audit rules (root pack, no upstream consumed).",
   "consumes": [],
-  "languages": ["zh-CN", "en-US"]
+  "languages": ["zh-CN", "en-US"],
+  "params": {
+    "cfpPerFunc": {
+      "type": "object",
+      "default": { "value": 30, "min": 10, "max": 100 },
+      "confirm": true,
+      "description": "Per-function CFP budget {value, min, max}: every estimatedCfps must fall inside [min, max] (rule plan/cfp-per-func-band)"
+    },
+    "cfpTotal": {
+      "type": "object",
+      "required": true,
+      "confirm": true,
+      "description": "Total CFP budget {value, downFactor, upFactor}: totalCfps must fall inside [value*downFactor, value*upFactor] (rule plan/cfp-total-band); no default — state the budget via params, downstream stages inherit it"
+    },
+    "cfpPerSubProc": {
+      "type": "number",
+      "default": 2.5,
+      "min": 1,
+      "max": 10,
+      "description": "Average CFP per data movement; sizing guidance carried to the downstream func/tech stages"
+    }
+  }
 }

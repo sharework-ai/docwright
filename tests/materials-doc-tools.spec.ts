@@ -75,7 +75,7 @@ describe('doc-service generateDocument', () => {
     const root = await mkdtemp(join(tmpdir(), 'docwright-gen-'))
     const llm = { async complete() { return JSON.stringify(pack.goldenSample) } }
     const out = await generateDocument({
-      pack, language: 'zh-CN', materials: ['#!inline\n素材'], artifactName: 't1',
+      pack, language: 'zh-CN', materials: ['#!inline\n素材'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, artifactName: 't1',
       materialsRoot: root, workspaceRoot: root, outputRoot: join(root, 'output'),
       config: { maxIterations: 3, promptTokenBudget: 60_000, model: 'test' },
       llm,
@@ -104,7 +104,7 @@ describe('doc-service generateDocument', () => {
     const customOut = join(root, '交付物')
     const llm = { async complete() { return JSON.stringify(pack.goldenSample) } }
     const out = await generateDocument({
-      pack, language: 'zh-CN', materials: ['#!inline\n素材'], artifactName: 'custom',
+      pack, language: 'zh-CN', materials: ['#!inline\n素材'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, artifactName: 'custom',
       materialsRoot: root, workspaceRoot: root, outputRoot: customOut,
       config: { maxIterations: 3, promptTokenBudget: 60_000, model: 'test' },
       llm,
@@ -125,7 +125,7 @@ describe('doc-service generateDocument', () => {
     bad.functions[0].funcDesc = '短'
     const llm = { async complete() { return JSON.stringify(bad) } }
     await expect(generateDocument({
-      pack, language: 'zh-CN', materials: ['#!inline\n素材'], artifactName: 't2',
+      pack, language: 'zh-CN', materials: ['#!inline\n素材'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, artifactName: 't2',
       materialsRoot: root, workspaceRoot: root, outputRoot: join(root, 'output'),
       config: { maxIterations: 3, promptTokenBudget: 60_000, model: 'test' }, llm, onRound: () => {},
     })).rejects.toThrow(/exhausted/)
@@ -143,7 +143,7 @@ describe('doc-service generateDocument', () => {
     const root = await mkdtemp(join(tmpdir(), 'docwright-gen-'))
     const llm = { async complete() { return JSON.stringify(pack.goldenSample) } }
     await expect(generateDocument({
-      pack, language: 'zh-CN', materials: ['#!inline\n素材'], artifactName: 't3',
+      pack, language: 'zh-CN', materials: ['#!inline\n素材'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, artifactName: 't3',
       materialsRoot: root, workspaceRoot: root, outputRoot: join(root, 'output'),
       config: { maxIterations: 3, promptTokenBudget: 5, model: 'test' }, llm, onRound: () => {},
     })).rejects.toThrow(/token budget/)

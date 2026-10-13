@@ -42,7 +42,7 @@ describe('doc_packs tool', () => {
     const packs = await tool.execute({} as never, { signal } as never) as Array<{ name: string; version: string; description: string; languages: string[]; consumes: string[] }>
     expect(packs).toHaveLength(4)
     const plan = packs.find(p => p.name === 'cosmic-plan')!
-    expect(plan).toMatchObject({ version: '0.1.0', languages: ['zh-CN', 'en-US'], consumes: [] })
+    expect(plan).toMatchObject({ version: '0.2.0', languages: ['zh-CN', 'en-US'], consumes: [] })
     expect(plan.description.length).toBeGreaterThan(0)
   })
 
@@ -61,7 +61,7 @@ describe('doc_generate tool', () => {
     const deps = await makeDeps()
     const tool = defineDocGenerateTool(deps)
     const out = await tool.execute(
-      { pack: 'cosmic-plan', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'tool1' } as never,
+      { pack: 'cosmic-plan', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'tool1', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never,
       { signal } as never,
     ) as { artifactPath: string; markdownPath: string; receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(true)
@@ -83,7 +83,7 @@ describe('doc_generate tool', () => {
   it('fails loud when the LLM route is unset', async () => {
     const deps = await makeDeps({ provider: undefined, model: undefined })
     const tool = defineDocGenerateTool(deps)
-    await expect(tool.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'] } as never, { signal } as never)).rejects.toThrow(/provider and model/)
+    await expect(tool.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never, { signal } as never)).rejects.toThrow(/provider and model/)
   })
 })
 
@@ -96,7 +96,7 @@ describe('doc_validate tool', () => {
     await mkdir(join(root, 'output'), { recursive: true })
     await writeFile(join(root, 'output', 'a.json'), JSON.stringify(pack.goldenSample), 'utf8')
     const tool = defineDocValidateTool(deps)
-    const out = await tool.execute({ artifactPath: 'output/a.json', pack: 'cosmic-plan', language: 'zh-CN' } as never, { signal } as never) as { receipt: { isValid: boolean } }
+    const out = await tool.execute({ artifactPath: 'output/a.json', pack: 'cosmic-plan', language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } } } as never, { signal } as never) as { receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(true)
   })
 
@@ -110,7 +110,7 @@ describe('doc_validate tool', () => {
     await mkdir(join(root, 'output'), { recursive: true })
     await writeFile(join(root, 'output', 'b.json'), JSON.stringify(tampered), 'utf8')
     const tool = defineDocValidateTool(deps)
-    const out = await tool.execute({ artifactPath: 'output/b.json', pack: 'cosmic-plan', language: 'zh-CN' } as never, { signal } as never) as { receipt: { isValid: boolean } }
+    const out = await tool.execute({ artifactPath: 'output/b.json', pack: 'cosmic-plan', language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } } } as never, { signal } as never) as { receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(false)
   })
 

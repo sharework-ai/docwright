@@ -122,7 +122,7 @@ describe('session-driven roots end to end (doc_generate via tool)', () => {
       },
     })
     const out = await tool.execute(
-      { pack: 'cosmic-plan', materials: ['req.md'], artifactName: 'sess' } as never,
+      { pack: 'cosmic-plan', materials: ['req.md'], artifactName: 'sess', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never,
       { agent: { session: { cwd: sessionWs } }, signal } as never,
     ) as unknown as { artifactPath: string }
     expect(out.artifactPath).toBe(join(sessionWs, 'output', 'sess.json'))

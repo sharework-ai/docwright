@@ -54,21 +54,21 @@ export const rules = [
     // E302 migrated: businessRules sized against the function's CFP budget.
     id: 'req/business-rule-count',
     severity: 'error',
-    suggestion: '业务规则数量须落在配比区间 [ceil(desiredCfps/cfpsPerFunc), floor(ceil×1.5)] 内：不足则从素材继续提取约束，超出则合并同类规则。',
+    suggestion: '业务规则数量须落在配比区间 [ceil(desiredCfps/cfpsPerRule), floor(ceil×1.5)] 内：不足则从素材继续提取约束，超出则合并同类规则。',
     check(artifact, context) {
       if (!isObject(artifact)) return []
       const desiredCfps = artifact.desiredCfps
       if (typeof desiredCfps !== 'number' || !Number.isInteger(desiredCfps) || desiredCfps < 1) return []
       const actual = Array.isArray(artifact.businessRules) ? artifact.businessRules.length : 0
-      const perFunc = typeof context?.params?.cfpsPerFunc === 'number' ? context.params.cfpsPerFunc : 30
+      const perFunc = typeof context?.params?.cfpsPerRule === 'number' ? context.params.cfpsPerRule : 30
       const minRules = Math.ceil(desiredCfps / perFunc)
       const maxRules = Math.floor(minRules * 1.5)
       if (actual < minRules) {
         return [{
           jsonPath: '$.businessRules',
           message: say(artifact,
-            `业务规则数量不足：期望至少 ${minRules} 条（desiredCfps=${desiredCfps}，cfpsPerFunc=${perFunc}），实际 ${actual} 条`,
-            `Too few business rules: expected at least ${minRules} (desiredCfps=${desiredCfps}, cfpsPerFunc=${perFunc}), got ${actual}`),
+            `业务规则数量不足：期望至少 ${minRules} 条（desiredCfps=${desiredCfps}，cfpsPerRule=${perFunc}），实际 ${actual} 条`,
+            `Too few business rules: expected at least ${minRules} (desiredCfps=${desiredCfps}, cfpsPerRule=${perFunc}), got ${actual}`),
           snapshot: `businessRules.length=${actual}`,
         }]
       }
@@ -76,8 +76,8 @@ export const rules = [
         return [{
           jsonPath: '$.businessRules',
           message: say(artifact,
-            `业务规则数量过多：期望最多 ${maxRules} 条（desiredCfps=${desiredCfps}，cfpsPerFunc=${perFunc}），实际 ${actual} 条`,
-            `Too many business rules: expected at most ${maxRules} (desiredCfps=${desiredCfps}, cfpsPerFunc=${perFunc}), got ${actual}`),
+            `业务规则数量过多：期望最多 ${maxRules} 条（desiredCfps=${desiredCfps}，cfpsPerRule=${perFunc}），实际 ${actual} 条`,
+            `Too many business rules: expected at most ${maxRules} (desiredCfps=${desiredCfps}, cfpsPerRule=${perFunc}), got ${actual}`),
           snapshot: `businessRules.length=${actual}`,
         }]
       }

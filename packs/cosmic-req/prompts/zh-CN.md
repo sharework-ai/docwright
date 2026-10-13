@@ -14,7 +14,7 @@
     - `role`（string）：小写字母开头，仅含小写字母/数字/连字符，如 `customer`。
     - `description`（string）：该功能用户与本功能的关系（不少于 10 个字符）。
     - `userStories`（字符串数组，至少 1 条）：用户故事，格式 `As a <role>, I want <action>, so that <benefit>`，每条不少于 20 个字符。
-  - `businessRules`（数组，至少 1 项）：从素材与需求约束中提取的业务规则，数量须落在 CFP 配比区间内（区间为 [ceil(desiredCfps/cfpsPerFunc), floor(ceil×1.5)]，`cfpsPerFunc` 见生效参数）。每项：
+  - `businessRules`（数组，至少 1 项）：从素材与需求约束中提取的业务规则，数量须落在 CFP 配比区间内（区间为 [ceil(desiredCfps/cfpsPerRule), floor(ceil×1.5)]，`cfpsPerRule` 见生效参数）。每项：
     - `ruleType`（string）：`event`（触发性，如"登录失败 3 次锁定账户"）/ `condition`（条件性，如"密码必须包含字母和数字"）/ `complex`（复合规则，含多个条件与事件）。
     - `description`（string）：规则内容与约束效果（不少于 10 个字符）。
 

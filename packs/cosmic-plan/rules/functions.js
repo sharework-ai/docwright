@@ -1,6 +1,8 @@
 // Cross-field rules for the cosmic-plan pack, migrated from
 // cosmic-claude cosmic_core/auditors/plan_auditor.py (E204 funcId unique,
-// E205 path unique, E200/W100/W101 CFP range families).
+// E205 path unique, E200 family) plus the shared-budget band rules
+// plan/cfp-per-func-band and plan/cfp-total-band
+// (docs/designs/params-and-chain-contract.md).
 // Contract: export `rules`; each check(artifact) returns RuleIssue[]
 // ({ jsonPath, message, snapshot? }); an empty array means pass.
 
@@ -68,23 +70,53 @@ export const rules = [
     },
   },
   {
-    // W101 migrated from plan_auditor.py: per-function recommended 20-50.
-    id: 'plan/func-cfps-recommended-range',
-    severity: 'warning',
-    suggestion: '调整该功能的 estimatedCfps 到建议区间 20-50（schema 硬边界 10-100）',
-    check: (artifact) => {
+    // Band rule driven by the shared param cfpPerFunc {value, min, max}
+    // (docs/designs/params-and-chain-contract.md): user budgets are first-
+    // class validation, not prompt prose. Skips when params are absent
+    // (programmatic misuse); required chain-head params guarantee presence.
+    id: 'plan/cfp-per-func-band',
+    severity: 'error',
+    suggestion: '调整该功能的 estimatedCfps 到生效参数 cfpPerFunc 的 [min, max] 区间内；如需调整预算请向用户确认后修改 params',
+    check(artifact, context) {
+      const budget = context?.params?.cfpPerFunc
+      if (typeof budget !== 'object' || budget === null || typeof budget.min !== 'number' || typeof budget.max !== 'number') return []
       const issues = []
       getFunctions(artifact).forEach((fn, index) => {
         const cfps = fn?.estimatedCfps
-        if (typeof cfps === 'number' && Number.isFinite(cfps) && (cfps < 20 || cfps > 50)) {
+        if (typeof cfps === 'number' && Number.isFinite(cfps) && (cfps < budget.min || cfps > budget.max)) {
           issues.push({
             jsonPath: `$.functions[${index}].estimatedCfps`,
-            message: `单功能CFP超出建议区间：${cfps}，建议 20-50`,
+            message: `单功能CFP超出预算区间：${cfps}，允许 [${budget.min}, ${budget.max}]（cfpPerFunc）`,
             snapshot: String(cfps),
           })
         }
       })
       return issues
+    },
+  },
+  {
+    // Band rule driven by the shared param cfpTotal {value, downFactor,
+    // upFactor}: the total must stay inside [value*downFactor, value*upFactor].
+    id: 'plan/cfp-total-band',
+    severity: 'error',
+    suggestion: '调整各功能的 estimatedCfps，使 totalCfps 落在生效参数 cfpTotal 的 [value×downFactor, value×upFactor] 区间内；如需调整预算请向用户确认后修改 params',
+    check(artifact, context) {
+      const budget = context?.params?.cfpTotal
+      if (typeof budget !== 'object' || budget === null || typeof budget.value !== 'number' || typeof budget.downFactor !== 'number' || typeof budget.upFactor !== 'number') return []
+      const total = getFunctions(artifact).reduce((sum, fn) => {
+        const cfps = fn?.estimatedCfps
+        return typeof cfps === 'number' && Number.isFinite(cfps) ? sum + cfps : sum
+      }, 0)
+      const floor = budget.value * budget.downFactor
+      const ceil = budget.value * budget.upFactor
+      if (total < floor || total > ceil) {
+        return [{
+          jsonPath: '$.functions',
+          message: `CFP总数超出预算区间：实际 ${total}，允许 [${floor}, ${ceil}]（cfpTotal.value=${budget.value}）`,
+          snapshot: String(total),
+        }]
+      }
+      return []
     },
   },
   {

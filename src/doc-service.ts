@@ -119,6 +119,8 @@ export interface GenerateInput {
   readonly maxRounds?: number | undefined
   /** Call-time pack-param overrides; validated against the manifest declaration. */
   readonly params?: Readonly<Record<string, unknown>> | undefined
+  /** Inherited base (upstream receipts' as-run params); explicit overrides win over it, then defaults. */
+  readonly paramsBase?: Readonly<Record<string, unknown>> | undefined
   readonly artifactName: string
   readonly workspaceRoot: string
   /** Absolute root artifacts/receipts/markdown are written to (tool layer). */
@@ -175,14 +177,17 @@ export function parseUpstreamArtifacts(texts?: readonly string[] | undefined): r
 export async function generateDocument(input: GenerateInput): Promise<GenerateOutput> {
   assertSafeArtifactName(input.artifactName)
   const service = getDocService(input.pack, input.language)
-  const effectiveParams = resolveEffectiveParams(input.pack, input.params)
+  const effectiveParams = resolveEffectiveParams(input.pack, input.params, input.paramsBase)
+  const overridableParams = Object.entries(input.pack.manifest.params ?? {})
+    .filter(([, spec]) => spec.overridable === true)
+    .map(([name]) => name)
   const materialTexts = await readMaterials(input.materials, input.workspaceRoot, input.materialsRoot)
   const upstreamArtifacts = parseUpstreamArtifacts(input.upstream)
   const ruleContext: RuleContext = {
     materials: materialTexts,
     ...(upstreamArtifacts === undefined ? {} : { upstream: upstreamArtifacts }),
   }
-  const firstPrompt = assembleGeneratorPrompt({ promptTemplate: service.promptTemplate, materials: materialTexts, upstream: input.upstream, params: effectiveParams })
+  const firstPrompt = assembleGeneratorPrompt({ promptTemplate: service.promptTemplate, materials: materialTexts, upstream: input.upstream, params: effectiveParams, overridableParams })
   const budget = estimateTokens(firstPrompt)
   const tokenBudget = input.config.promptTokenBudget ?? DEFAULT_PROMPT_TOKEN_BUDGET
   if (budget > tokenBudget) {
@@ -204,6 +209,7 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
       materials: materialTexts,
       upstream: input.upstream,
       params: effectiveParams,
+      overridableParams,
       maxIterations,
       promptTokenBudget: tokenBudget,
       model,

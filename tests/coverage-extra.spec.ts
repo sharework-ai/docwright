@@ -226,7 +226,7 @@ describe('coverage: final line gaps', () => {
     const pack = packs.get('cosmic-plan')!
     const root = await mkdtemp(join(tmpdir(), 'docwright-def-'))
     const llm = { async complete() { return JSON.stringify(pack.goldenSample) } }
-    const out = await generateDocument({ pack, language: 'zh-CN', materials: ['#!inline\nx'], artifactName: 'def', materialsRoot: root, workspaceRoot: root, outputRoot: join(root, 'output'), config: {}, llm, onRound: () => {} })
+    const out = await generateDocument({ pack, language: 'zh-CN', materials: ['#!inline\nx'], artifactName: 'def', materialsRoot: root, workspaceRoot: root, outputRoot: join(root, 'output'), config: {}, llm, onRound: () => {}, params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } } })
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.model).toBe('unknown')
   })

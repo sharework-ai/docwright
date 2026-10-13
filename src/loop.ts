@@ -21,6 +21,8 @@ export interface LoopOptions {
   readonly upstream?: readonly string[] | undefined
   /** Effective pack params; rendered into the {{params}} slot of every round's prompt. */
   readonly params?: Readonly<Record<string, unknown>> | undefined
+  /** Declared overridable param names; renders the materials-may-adjust hint after the params block. */
+  readonly overridableParams?: readonly string[] | undefined
   readonly maxIterations: number
   readonly promptTokenBudget: number
   readonly model: string
@@ -89,6 +91,7 @@ export async function runRepairLoop(
     materials: options.materials,
     upstream: options.upstream,
     params: options.params,
+    overridableParams: options.overridableParams,
   })
   let request = originalRequest
   let iterations = 0

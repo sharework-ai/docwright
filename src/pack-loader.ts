@@ -25,25 +25,37 @@ function assertParamSpec(raw: unknown, dir: string, name: string): ParamSpec {
   const where = `pack ${dir}: manifest.params.${name}`
   if (typeof raw !== 'object' || raw === null) throw new Error(`${where} must be an object`)
   const s = raw as Partial<ParamSpec>
-  if (s.type !== 'number' && s.type !== 'string' && s.type !== 'boolean') throw new Error(`${where}.type must be number|string|boolean`)
+  if (s.type !== 'number' && s.type !== 'string' && s.type !== 'boolean' && s.type !== 'object') throw new Error(`${where}.type must be number|string|boolean|object`)
   if (typeof s.description !== 'string' || s.description.length === 0) throw new Error(`${where}.description must be a non-empty string`)
-  const defaultMatches = s.default !== undefined && (s.type === 'number' ? typeof s.default === 'number' && Number.isFinite(s.default) : typeof s.default === s.type)
-  if (!defaultMatches) throw new Error(`${where}.default is required and must match type "${s.type}"`)
-  if (s.enum !== undefined) {
-    if (!Array.isArray(s.enum) || s.enum.length === 0 || s.enum.some(v => typeof v !== s.type)) {
-      throw new Error(`${where}.enum must be a non-empty array of ${s.type} values`)
-    }
-    if (!s.enum.includes(s.default)) throw new Error(`${where}.default must be one of the declared enum values`)
+  for (const flag of ['required', 'overridable', 'confirm'] as const) {
+    if (s[flag] !== undefined && typeof s[flag] !== 'boolean') throw new Error(`${where}.${flag} must be a boolean when present`)
   }
-  if (s.type === 'number') {
-    if (s.min !== undefined && (typeof s.min !== 'number' || !Number.isFinite(s.min))) throw new Error(`${where}.min must be a finite number`)
-    if (s.max !== undefined && (typeof s.max !== 'number' || !Number.isFinite(s.max))) throw new Error(`${where}.max must be a finite number`)
-    if (s.min !== undefined && s.max !== undefined && s.min > s.max) throw new Error(`${where}.min must be <= max`)
-    const d = s.default as number
-    if (s.min !== undefined && d < s.min) throw new Error(`${where}.default must be >= min`)
-    if (s.max !== undefined && d > s.max) throw new Error(`${where}.default must be <= max`)
-  } else if (s.min !== undefined || s.max !== undefined) {
-    throw new Error(`${where}.min/max are only valid for number-typed params`)
+  if (s.required === true) {
+    if (s.default !== undefined) throw new Error(`${where}.default is forbidden on a required param (required means the caller states the value; drop the default or drop required)`)
+  } else if (s.default !== undefined) {
+    const defaultMatches = s.type === 'number' ? typeof s.default === 'number' && Number.isFinite(s.default) : s.type === 'object' ? typeof s.default === 'object' && s.default !== null && !Array.isArray(s.default) : typeof s.default === s.type
+    if (!defaultMatches) throw new Error(`${where}.default must match type "${s.type}"`)
+  }
+  if (s.type === 'object') {
+    if (s.enum !== undefined) throw new Error(`${where}.enum is not supported for object params`)
+    if (s.min !== undefined || s.max !== undefined) throw new Error(`${where}.min/max are only valid for number-typed params`)
+  } else {
+    if (s.enum !== undefined) {
+      if (!Array.isArray(s.enum) || s.enum.length === 0 || s.enum.some(v => typeof v !== s.type)) {
+        throw new Error(`${where}.enum must be a non-empty array of ${s.type} values`)
+      }
+      if (!s.enum.includes(s.default)) throw new Error(`${where}.default must be one of the declared enum values`)
+    }
+    if (s.type === 'number') {
+      if (s.min !== undefined && (typeof s.min !== 'number' || !Number.isFinite(s.min))) throw new Error(`${where}.min must be a finite number`)
+      if (s.max !== undefined && (typeof s.max !== 'number' || !Number.isFinite(s.max))) throw new Error(`${where}.max must be a finite number`)
+      if (s.min !== undefined && s.max !== undefined && s.min > s.max) throw new Error(`${where}.min must be <= max`)
+      const d = s.default as number | undefined
+      if (d !== undefined && s.min !== undefined && d < s.min) throw new Error(`${where}.default must be >= min`)
+      if (d !== undefined && s.max !== undefined && d > s.max) throw new Error(`${where}.default must be <= max`)
+    } else if (s.min !== undefined || s.max !== undefined) {
+      throw new Error(`${where}.min/max are only valid for number-typed params`)
+    }
   }
   return s as ParamSpec
 }
@@ -62,6 +74,9 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
   if (m.maxRounds !== undefined && (!Number.isInteger(m.maxRounds) || m.maxRounds < 1)) {
     throw new Error(`pack ${dir}: manifest.maxRounds must be a positive integer`)
   }
+  if (m.paramDriftPolicy !== undefined && m.paramDriftPolicy !== 'regenerate' && m.paramDriftPolicy !== 'revalidate') {
+    throw new Error(`pack ${dir}: manifest.paramDriftPolicy must be "regenerate" or "revalidate"`)
+  }
   let params: Readonly<Record<string, ParamSpec>> | undefined
   if (m.params !== undefined) {
     if (typeof m.params !== 'object' || m.params === null || Array.isArray(m.params)) {
@@ -71,7 +86,7 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
     for (const [name, spec] of Object.entries(m.params)) out[name] = assertParamSpec(spec, dir, name)
     params = out
   }
-  return { name: m.name, version: m.version, description: m.description, consumes: m.consumes ?? [], languages: m.languages, ...(m.maxRounds === undefined ? {} : { maxRounds: m.maxRounds }), ...(params === undefined ? {} : { params }) }
+  return { name: m.name, version: m.version, description: m.description, consumes: m.consumes ?? [], languages: m.languages, ...(m.maxRounds === undefined ? {} : { maxRounds: m.maxRounds }), ...(m.paramDriftPolicy === undefined ? {} : { paramDriftPolicy: m.paramDriftPolicy }), ...(params === undefined ? {} : { params }) }
 }
 
 /**
@@ -89,6 +104,9 @@ function assertBound(value: unknown, dir: string, i: number, kind: string, side:
     }
     if (spec.type !== 'number') {
       throw new Error(`pack ${dir}: rules[${i}].${kind}.${side} references param "${value.param}" of type "${spec.type}"; bound references require a number-typed param`)
+    }
+    if (spec.default === undefined && spec.required !== true) {
+      throw new Error(`pack ${dir}: rules[${i}].${kind}.${side} references param "${value.param}" which has no default; bound references require a param that is always present (give it a default or mark it required)`)
     }
     return
   }
