@@ -28,7 +28,7 @@ function funcContext(func: Pack): RuleContext {
 }
 
 function validateOf(pack: Pack, lang: string, artifact: unknown, params?: Readonly<Record<string, unknown>>, context?: RuleContext): readonly Issue[] {
-  return new DocService(pack, lang).validate(artifact, resolveEffectiveParams(pack, params), context)
+  return new DocService(pack, lang).validate(artifact, { targetIndex: 1, ...resolveEffectiveParams(pack, { ...params, targetIndex: params?.targetIndex ?? 1 }) }, context)
 }
 
 function issueRuleIds(issues: readonly Issue[]): Set<string> {
@@ -85,11 +85,11 @@ async function generateFuncChain(deps: { ctx: { llm: unknown } }, func: Pack, re
   await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
   deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
   await defineDocGenerateTool(deps).execute({
-    pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
+    pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
   } as never, { signal } as never)
   deps.ctx.llm = scriptedLlm([JSON.stringify(func.goldenSample)])
   await defineDocGenerateTool(deps).execute({
-    pack: 'cosmic-func', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'func', upstream: ['output/req.json'],
+    pack: 'cosmic-func', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'func', upstream: ['output/req.json'], params: { targetIndex: 1 }, confirm: true,
   } as never, { signal } as never)
 }
 
@@ -98,7 +98,7 @@ describe('cosmic-tech pack shape', () => {
     const { tech } = await packs()
     expect(tech.manifest.consumes).toEqual(['cosmic-func'])
     expect(tech.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(tech.manifest.params ?? {}).sort()).toEqual(['cfpPerFunc', 'cfpPerSubProc', 'cfpTotal'])
+    expect(Object.keys(tech.manifest.params ?? {}).sort()).toEqual(['cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'targetIndex'])
     expect(tech.functionRules.map(r => r.id)).toEqual([
       'tech/func-alignment',
       'tech/movement-count',
@@ -333,7 +333,7 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     await generateFuncChain(deps, func, req, plan)
     deps.ctx.llm = scriptedLlm([JSON.stringify(tech.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-tech', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['output/func.json'],
+      pack: 'cosmic-tech', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['output/func.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string; artifactHash: string }>; params?: Record<string, unknown> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.upstreamHashes).toHaveLength(1)
@@ -349,7 +349,7 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     const wrong = mutate(tech.goldenSample, d => { d.desiredCfps = 40 })
     deps.ctx.llm = scriptedLlm([JSON.stringify(wrong), JSON.stringify(tech.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-tech', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['output/func.json'],
+      pack: 'cosmic-tech', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['output/func.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; iterations: number; rounds: Array<{ errorCount: number }> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.iterations).toBe(2)
@@ -363,7 +363,7 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     await generateFuncChain(deps, func, req, plan)
     deps.ctx.llm = scriptedLlm([JSON.stringify(tech.goldenSample)])
     await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-tech', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['output/func.json'],
+      pack: 'cosmic-tech', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['output/func.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
 
     const withUpstream = await defineDocValidateTool(deps).execute({

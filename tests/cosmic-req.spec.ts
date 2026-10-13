@@ -29,7 +29,7 @@ function planContext(plan: Pack): RuleContext {
 
 /** Validate with the effective defaults (param rules fail loud without them). */
 function validateOf(pack: Pack, lang: string, artifact: unknown, params?: Readonly<Record<string, unknown>>, context?: RuleContext): readonly Issue[] {
-  return new DocService(pack, lang).validate(artifact, resolveEffectiveParams(pack, params), context)
+  return new DocService(pack, lang).validate(artifact, { targetIndex: 1, ...resolveEffectiveParams(pack, { ...params, targetIndex: params?.targetIndex ?? 1 }) }, context)
 }
 
 function issueRuleIds(issues: readonly Issue[]): Set<string> {
@@ -85,7 +85,7 @@ describe('cosmic-req pack shape', () => {  it('declares the chain and the three 
     const { req } = await packs()
     expect(req.manifest.consumes).toEqual(['cosmic-plan'])
     expect(req.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(req.manifest.params ?? {}).sort()).toEqual(['cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'cfpsPerRule', 'funcDescMaxLength', 'functionalUserRoles'])
+    expect(Object.keys(req.manifest.params ?? {}).sort()).toEqual(['cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'cfpsPerRule', 'funcDescMaxLength', 'functionalUserRoles', 'targetIndex'])
     expect(req.functionRules.map(r => r.id)).toEqual(['req/functional-user-roles', 'req/business-rule-count', 'req/plan-alignment'])
   })
 
@@ -215,7 +215,7 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
     await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
+      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string; artifactHash: string }>; params?: Record<string, unknown> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.upstreamHashes).toHaveLength(1)
@@ -231,7 +231,7 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
     const wrong = mutate(req.goldenSample, d => { d.funcId = 'USR-DEL' })
     deps.ctx.llm = scriptedLlm([JSON.stringify(wrong), JSON.stringify(req.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
+      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; iterations: number; rounds: Array<{ errorCount: number; promptHash?: string }> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.iterations).toBe(2)
@@ -245,7 +245,7 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
     await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
     await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
+      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
 
     const withUpstream = await defineDocValidateTool(deps).execute({

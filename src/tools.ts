@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises'
-import { relative, resolve } from 'node:path'
+import { readFile, readdir } from 'node:fs/promises'
+import { join, relative, resolve } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type UpstreamVersionPolicy } from './config.ts'
 import { generateDocument, getDocService, parseUpstreamArtifacts } from './doc-service.ts'
@@ -82,6 +82,22 @@ export type GenerateToolResult = {
   readonly receipt: Receipt
   /** Present under upstreamVersionPolicy: "warn" when an upstream receipt records a different pack version. */
   readonly upstreamWarnings?: string[]
+  /** Fan-out progress for per-function packs: this stage's green artifacts vs the reference function set. */
+  readonly coverage?: CoverageProgress
+}
+
+/** Fan-out coverage of one stage (docs/designs/params-and-chain-contract.md). */
+export type CoverageProgress = {
+  readonly covered: number
+  readonly total: number
+  readonly missing: string[]
+}
+
+/** One selectable function of the upstream plan (or the chain's current function). */
+export type FunctionCandidate = {
+  readonly index: number
+  readonly funcId: string
+  readonly l2Name?: string
 }
 
 /**
@@ -96,6 +112,8 @@ export type PendingConfirmationResult = {
   readonly language: string
   readonly paramTable: ParamRow[]
   readonly missingRequired: string[]
+  /** Selectable functions when targetIndex is among the missing required params. */
+  readonly candidates?: FunctionCandidate[]
   readonly paramDrift?: ParamDrift[]
   readonly driftImpact?: string
   readonly hint: string
@@ -201,6 +219,81 @@ function revalidateUpstreamUnderParams(
 
 const CONFIRM_HINT = 'Present the paramTable to the user (values, sources, missing required entries, drift impact); then re-call with the same arguments plus confirm: true to execute.'
 
+/**
+ * Selectable functions of the fan-out: a plan-shaped upstream lists its
+ * functions; a single-function upstream (req/func stage) contributes itself.
+ * Drives the targetIndex candidate list and the per-function artifact naming
+ * (docs/designs/params-and-chain-contract.md, fan-out contract).
+ */
+function planCandidates(records: readonly { artifact: unknown }[]): FunctionCandidate[] {
+  for (const record of records) {
+    const artifact = record.artifact as { functions?: unknown } | null
+    if (artifact !== null && typeof artifact === 'object' && Array.isArray(artifact.functions)) {
+      const out: FunctionCandidate[] = []
+      for (const [i, fn] of (artifact.functions as unknown[]).entries()) {
+        const funcId = (fn as { funcId?: unknown } | null)?.funcId
+        if (typeof funcId !== 'string') continue
+        const l2Name = (fn as { l2Name?: unknown } | null)?.l2Name
+        out.push({ index: i + 1, funcId, ...(typeof l2Name === 'string' && l2Name !== '' ? { l2Name } : {}) })
+      }
+      return out
+    }
+  }
+  const first = records[0]?.artifact as { index?: unknown; funcId?: unknown } | null
+  if (first !== null && typeof first === 'object' && typeof first.funcId === 'string' && typeof first.index === 'number') {
+    return [{ index: first.index, funcId: first.funcId }]
+  }
+  return []
+}
+
+/** Green sidecar-receipted artifacts of one pack in the output root: funcId → artifact basename. */
+async function scanStageArtifacts(outputRoot: string, packName: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  let entries
+  try {
+    entries = await readdir(outputRoot, { withFileTypes: true })
+  } catch {
+    return out
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.endsWith('.receipt.json')) continue
+    const base = entry.name.slice(0, -'.json'.length)
+    try {
+      const receipt = JSON.parse(await readFile(join(outputRoot, `${base}.receipt.json`), 'utf8')) as { pack?: unknown; isValid?: unknown }
+      if (receipt.pack !== packName || receipt.isValid !== true) continue
+      const artifact = JSON.parse(await readFile(join(outputRoot, entry.name), 'utf8')) as { funcId?: unknown }
+      if (typeof artifact.funcId === 'string') out.set(artifact.funcId, base)
+    } catch {
+      continue
+    }
+  }
+  return out
+}
+
+/** Fan-out progress for a per-function pack relative to its reference function set (plan functions, or the upstream stage's covered set). */
+async function coverageProgress(
+  pack: Pack,
+  records: readonly { pack: string; artifact: unknown }[],
+  outputRoot: string,
+): Promise<CoverageProgress | undefined> {
+  if (pack.manifest.params?.targetIndex === undefined || records.length === 0) return undefined
+  const covered = await scanStageArtifacts(outputRoot, pack.manifest.name)
+  const planLike = records.find(r => {
+    const artifact = r.artifact as { functions?: unknown } | null
+    return artifact !== null && typeof artifact === 'object' && Array.isArray(artifact.functions)
+  })
+  let total: string[]
+  if (planLike !== undefined) {
+    total = ((planLike.artifact as { functions: unknown }).functions as unknown[])
+      .map(fn => (fn as { funcId?: unknown } | null)?.funcId)
+      .filter((id): id is string => typeof id === 'string')
+  } else {
+    total = [...(await scanStageArtifacts(outputRoot, records[0]!.pack)).keys()]
+  }
+  const missing = total.filter(id => !covered.has(id))
+  return { covered: total.length - missing.length, total: total.length, missing }
+}
+
 export function defineDocGenerateTool(deps: ToolDeps) {
   return defineTool({
     name: 'doc_generate',
@@ -276,18 +369,26 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         const driftFields = preview.drift.length > 0
           ? { paramDrift: [...preview.drift], ...(driftImpact === undefined ? {} : { driftImpact }) }
           : {}
+        const candidateFields = preview.missingRequired.includes('targetIndex')
+          ? { candidates: planCandidates(upstreamRecords) }
+          : {}
         return {
           pendingConfirmation: true,
           pack: pack.manifest.name,
           language,
           paramTable: [...preview.rows],
           missingRequired: [...preview.missingRequired],
+          ...candidateFields,
           ...driftFields,
           hint: CONFIRM_HINT,
         } satisfies PendingConfirmationResult as unknown as DocGenerateResult
       }
       if (preview.missingRequired.length > 0) {
-        throw new Error(`missing required pack params for "${pack.manifest.name}": ${preview.missingRequired.join(', ')} (declared without defaults; cause: these values must come from the caller; fix: ask the user for the value(s) and pass them via params)`)
+        const candidates = preview.missingRequired.includes('targetIndex') ? planCandidates(upstreamRecords) : []
+        const listed = candidates.length > 0
+          ? ` Candidates from the upstream plan: ${candidates.map(c => `${c.index}. ${c.funcId}${c.l2Name === undefined ? '' : ` (${c.l2Name})`}`).join('; ')}.`
+          : ''
+        throw new Error(`missing required pack params for "${pack.manifest.name}": ${preview.missingRequired.join(', ')} (declared without defaults; cause: these values must come from the caller; fix: ask the user for the value(s) and pass them via params).${listed}`)
       }
       if (preview.drift.length > 0) {
         const policy = pack.manifest.paramDriftPolicy ?? 'regenerate'
@@ -302,7 +403,15 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       }
       const route = requireRoute(deps)
       const llm = createLlmPort(deps.ctx as never, route)
-      const artifactName = args.artifactName ?? `${pack.manifest.name}-${Date.now()}`
+      // Fan-out naming: a per-function call without an explicit artifactName
+      // defaults to `<pack>-<funcId>`, so distinct functions never collide
+      // and regeneration is idempotent. An explicit name wins verbatim;
+      // non-per-function defaults keep the timestamp form.
+      const targetIndex = (overrides?.targetIndex ?? paramsBase?.targetIndex)
+      const target = typeof targetIndex === 'number' ? planCandidates(upstreamRecords).find(c => c.index === targetIndex) : undefined
+      const artifactName = target !== undefined && args.artifactName === undefined
+        ? `${pack.manifest.name}-${target.funcId}`
+        : args.artifactName ?? `${pack.manifest.name}-${Date.now()}`
       const result = await generateDocument({
         pack,
         language,
@@ -325,7 +434,9 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         // knob to mark plugin event types ignorable (see TODOS.md).
         onRound: () => {},
       })
-      return (upstreamWarnings === undefined ? result : { ...result, upstreamWarnings }) as unknown as DocGenerateResult
+      const coverage = await coverageProgress(pack, upstreamRecords, outputRoot)
+      const withCoverage = coverage === undefined ? result : { ...result, coverage }
+      return (upstreamWarnings === undefined ? withCoverage : { ...withCoverage, upstreamWarnings }) as unknown as DocGenerateResult
     },
   })
 }
@@ -417,6 +528,99 @@ export function defineDocValidateTool(deps: ToolDeps) {
         ...(Object.keys(effectiveParams).length > 0 ? { params: effectiveParams } : {}),
       })
       return { artifactPath, receipt, hashMatches, packVersionStale } as unknown as ValidateToolResult
+    },
+  })
+}
+
+/**
+ * Fan-out coverage accounting (docs/designs/params-and-chain-contract.md):
+ * which plan functions have green artifacts at each downstream stage.
+ * Deterministic, no LLM — the check the agent runs before presenting a
+ * per-function chain as complete.
+ */
+export function defineDocChainStatusTool(deps: ToolDeps) {
+  return defineTool({
+    name: 'doc_chain_status',
+    description: 'Report per-function chain coverage for a fan-out chain: which functions of a plan artifact have green artifacts at each downstream stage (e.g. cosmic-req/cosmic-func/cosmic-tech), plus counts and any artifacts whose funcId matches no plan function. Deterministic, no LLM. Run this before presenting a per-function chain as complete.',
+    parameters: {
+      plan: { type: 'string', required: true, description: 'Workspace-relative path to the plan artifact JSON (must carry a green sidecar receipt)' },
+    },
+    output: {
+      schema: { type: 'json' },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    async execute(args: { plan: string }, exec) {
+      const workspaceRoot = effectiveWorkspaceRoot(exec as SessionWorkspaceCarrier | undefined, deps.config.workspaceRoot)
+      const planPath = confinePath(workspaceRoot, args.plan, 'plan')
+      const outputRoot = resolveRootWithin(workspaceRoot, deps.config.outputRoot, 'outputRoot')
+      let planArtifact: { functions?: unknown }
+      let planPackName: string
+      try {
+        planArtifact = JSON.parse(await readFile(planPath, 'utf8')) as { functions?: unknown }
+      } catch (error) {
+        throw new Error(`plan artifact ${args.plan} is not readable JSON: ${(error as Error).message}`)
+      }
+      try {
+        const receipt = JSON.parse(await readFile(planPath.replace(/\.json$/, '') + '.receipt.json', 'utf8')) as { pack?: unknown; isValid?: unknown }
+        if (typeof receipt.pack !== 'string') throw new Error('receipt records no pack')
+        if (receipt.isValid !== true) throw new Error('its receipt is RED; finish or regenerate the plan first')
+        planPackName = receipt.pack
+      } catch (error) {
+        throw new Error(`plan artifact ${args.plan} has no usable sidecar receipt (${(error as Error).message}); generate it with doc_generate first`)
+      }
+      if (!Array.isArray(planArtifact.functions) || planArtifact.functions.length === 0) {
+        throw new Error(`plan artifact ${args.plan} declares no functions[]; coverage is defined over plan functions`)
+      }
+      const planFuncIds = new Set(planArtifact.functions.map(fn => (fn as { funcId?: unknown } | null)?.funcId).filter((id): id is string => typeof id === 'string'))
+      // Stage order: the plan pack, then every pack consuming the frontier.
+      const stages: string[] = [planPackName]
+      let frontier = [planPackName]
+      while (frontier.length > 0) {
+        const next = [...deps.packs.values()]
+          .filter(p => p.manifest.consumes.some(c => frontier.includes(c)) && !stages.includes(p.manifest.name))
+          .map(p => p.manifest.name)
+        stages.push(...next)
+        frontier = next
+      }
+      const rows: Array<{ index: number; funcId: string; l2Name?: string; coverage: Record<string, string | null> }> = []
+      const stageMaps = new Map<string, Map<string, string>>()
+      for (const stage of stages.slice(1)) {
+        stageMaps.set(stage, await scanStageArtifacts(outputRoot, stage))
+      }
+      const orphaned: Array<{ stage: string; file: string }> = []
+      for (const [i, fn] of (planArtifact.functions as unknown[]).entries()) {
+        const funcId = (fn as { funcId?: unknown } | null)?.funcId
+        if (typeof funcId !== 'string') continue
+        const l2Name = (fn as { l2Name?: unknown } | null)?.l2Name
+        const coverage: Record<string, string | null> = {}
+        for (const stage of stages.slice(1)) {
+          const map = stageMaps.get(stage)!
+          coverage[stage] = map.get(funcId) ?? null
+          map.delete(funcId)
+        }
+        rows.push({
+          index: i + 1,
+          funcId,
+          ...(typeof l2Name === 'string' && l2Name !== '' ? { l2Name } : {}),
+          coverage,
+        })
+      }
+      for (const [stage, map] of stageMaps) {
+        for (const [funcId, file] of map) {
+          orphaned.push({ stage, file: `${file}.json (funcId ${funcId} matches no plan function)` })
+        }
+      }
+      const coverage: Record<string, { covered: number; total: number }> = {}
+      for (const stage of stages.slice(1)) {
+        coverage[stage] = { covered: rows.filter(r => r.coverage[stage] !== null).length, total: rows.length }
+      }
+      return {
+        plan: args.plan,
+        stages: stages.slice(1),
+        functions: rows,
+        coverage,
+        ...(orphaned.length > 0 ? { orphaned } : {}),
+      }
     },
   })
 }

@@ -28,7 +28,7 @@ function reqContext(req: Pack): RuleContext {
 }
 
 function validateOf(pack: Pack, lang: string, artifact: unknown, context?: RuleContext): readonly Issue[] {
-  return new DocService(pack, lang).validate(artifact, resolveEffectiveParams(pack), context)
+  return new DocService(pack, lang).validate(artifact, resolveEffectiveParams(pack, { targetIndex: 1 }), context)
 }
 
 function issueRuleIds(issues: readonly Issue[]): Set<string> {
@@ -77,7 +77,7 @@ describe('cosmic-func pack shape', () => {
     const { func } = await packs()
     expect(func.manifest.consumes).toEqual(['cosmic-req'])
     expect(func.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(func.manifest.params ?? {}).sort()).toEqual(['cfpPerFunc', 'cfpPerSubProc', 'cfpTotal'])
+    expect(Object.keys(func.manifest.params ?? {}).sort()).toEqual(['cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'targetIndex'])
     expect(func.functionRules.map(r => r.id)).toEqual([
       'func/originator-receiver-distinct',
       'func/process-name-unique',
@@ -196,11 +196,11 @@ describe('cosmic-func chained generation (deterministic LLM)', () => {
     await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
     await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
+      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(func.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-func', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'func', upstream: ['output/req.json'],
+      pack: 'cosmic-func', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'func', upstream: ['output/req.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string; artifactHash: string }> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.upstreamHashes).toHaveLength(1)
@@ -213,12 +213,12 @@ describe('cosmic-func chained generation (deterministic LLM)', () => {
     await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
     await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
+      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
     const wrong = mutate(func.goldenSample, d => { d.desiredCfps = 40 })
     deps.ctx.llm = scriptedLlm([JSON.stringify(wrong), JSON.stringify(func.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-func', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'func', upstream: ['output/req.json'],
+      pack: 'cosmic-func', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'func', upstream: ['output/req.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; iterations: number; rounds: Array<{ errorCount: number }> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.iterations).toBe(2)
@@ -232,11 +232,11 @@ describe('cosmic-func chained generation (deterministic LLM)', () => {
     await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
     await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
+      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(func.goldenSample)])
     await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-func', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'func', upstream: ['output/req.json'],
+      pack: 'cosmic-func', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'func', upstream: ['output/req.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
 
     const withUpstream = await defineDocValidateTool(deps).execute({

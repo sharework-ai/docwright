@@ -50,6 +50,12 @@
       "min": 1,
       "max": 10,
       "description": "Average CFP per data movement; sizing guidance carried down the chain"
+    },
+    "targetIndex": {
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "description": "1-based position of the target function in the upstream plan functions array; no default — pick from the candidates listed when missing"
     }
   }
 }

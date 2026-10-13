@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { join } from 'node:path'
 import { Config, type Config as DocwrightConfig } from './config.ts'
 import { loadPacks } from './pack-loader.ts'
-import { defineDocGenerateTool, defineDocPacksTool, defineDocValidateTool } from './tools.ts'
+import { defineDocChainStatusTool, defineDocGenerateTool, defineDocPacksTool, defineDocValidateTool } from './tools.ts'
 
 /**
  * docwright — closed-loop document generation for deepseek-harness.
@@ -45,4 +45,5 @@ export async function registerTools(ctx: Context, config: DocwrightConfig, built
   ctx.tools.register(defineDocPacksTool(deps))
   ctx.tools.register(defineDocGenerateTool(deps))
   ctx.tools.register(defineDocValidateTool(deps))
+  ctx.tools.register(defineDocChainStatusTool(deps))
 }
