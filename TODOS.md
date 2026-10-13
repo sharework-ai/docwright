@@ -4,6 +4,7 @@ Source: functional spec at docs/designs/docwright-mvp.md. 本文件记录真正�
 
 ## Open
 
+- [ ] **cosmic-review-scripts** — 按原型技能补全 cosmic pack 检查体系，迁移源 `cosmic-claude/skills_archive/v1.0_skills/cosmic-6-review-documents/scripts`（评审/一致性脚本族，内容待盘点）。实现语言 Node.js/TypeScript，不引入 Python 依赖。
 - [ ] **E2E-real-llm** — 真实 LLM 闭环端到端。**已观测（2026-10-12）**：多轮修复路径实证（60→100 轨迹，权重 10/error 精确对账，两轮 promptHash 各异，跨 dsh 版本回执复验 hashMatches=true）；但 glm-5.3-flash 下三种违规素材均一轮全绿（模型把 pack 规则置于素材之上，护栏按设计工作），stagnation/decline 阈值（K=D=3）在真实 LLM 下不可触达，仍由确定性单测覆盖（runbook Calibration 节）。**剩余**：换更弱模型或"规则无法满足"的 pack 观测真实停滞——价值有限，可长期挂起（原脚本已被 tmp 清理，按此描述重写）
 
 ## Deferred
