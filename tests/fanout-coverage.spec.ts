@@ -18,33 +18,7 @@ async function packs(): Promise<{ req: Pack; plan: Pack }> {
 }
 
 /** Scripted multi-reply LLM seam (one reply per model call). */
-function scriptedLlm(replies: string[]): LlmPort & { stream: unknown } {
-  let call = 0
-  return {
-    async complete() {
-      const reply = replies[Math.min(call, replies.length - 1)]!
-      call++
-      return reply
-    },
-    stream: undefined,
-  } as never
-}
-
 /** dsh-web-style host ctx: the tool layer reads ctx.llm through createLlmPort. */
-function hostCtx(llm: LlmPort): { llm: unknown } {
-  return {
-    llm: {
-      stream: async function* (options: { messages: Array<{ content: Array<{ text: string }> }> }) {
-        void options
-        yield { type: 'block-start', index: 0, blockType: 'text' }
-        yield { type: 'text-delta', index: 0, text: (llm as { lastReply?: string }).lastReply ?? '' }
-        yield { type: 'block-end', index: 0, block: { type: 'text', text: (llm as { lastReply?: string }).lastReply ?? '' } }
-        yield { type: 'finish', reason: 'stop' }
-      },
-    },
-  }
-}
-
 async function makeDeps(replies: string[]) {
   const all = await loadPacks(packsRoot, {})
   const ws = await mkdtemp(join(tmpdir(), 'docwright-fanout-'))
