@@ -22,7 +22,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const PROFILE = 'docwright-smoke'
-const EXPECTED_TOOLS = ['doc_generate', 'doc_validate', 'doc_packs']
+const EXPECTED_TOOLS = ['doc_generate', 'doc_validate', 'doc_packs', 'doc_chain_status']
 
 /** Minimal structural view of the booted host surface the smoke needs. */
 interface SmokeHost {

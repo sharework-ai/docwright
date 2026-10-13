@@ -1,6 +1,6 @@
 # 参数治理与链契约（params & chain contract）
 
-Status: approved（2026-10-13 定稿，待实施）
+Status: implemented（2026-10-13 定稿并当日落地：D5 参数治理 / D6 扇出契约与覆盖账目 / D7 seal 与 API 便利性；packs v0.2.0；scripts/e2e-real-llm.ts 真实模型全链 PASS）
 
 ## 问题
 

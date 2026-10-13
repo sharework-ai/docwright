@@ -1,5 +1,8 @@
 # E2E: real-LLM closed loop (zai coding plan)
 
+> **2026-10-13 起本流程由 `scripts/e2e-real-llm.ts` 承载**：进程内启动真实 dsh host（llm-pi-ai zai 路由，key 仅经环境变量 `ZAI_CODING_CN_API_KEY`），断言确认门控、预算带生成、targetIndex 扇出与自动命名、seal 回签、doc_chain_status 全链对账。`ZAI_CODING_CN_API_KEY=… node --import tsx/esm scripts/e2e-real-llm.ts [--keep]`。以下手工步骤保留为历史验证记录。
+
+
 Validated 2026-10-11/12 against `zai-coding-cn` (`glm-4.7` pre-dsh-0.2.x, `glm-5.3-flash`
 after): doc_generate went green in
 1 round (score 100), `doc_validate` replayed with `hashMatches: true`,
