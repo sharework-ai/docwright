@@ -85,7 +85,7 @@ describe('cosmic-req pack shape', () => {  it('declares the chain and the three 
     const { req } = await packs()
     expect(req.manifest.consumes).toEqual(['cosmic-plan'])
     expect(req.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(req.manifest.params ?? {}).sort()).toEqual(['cfpsPerFunc', 'funcDescMaxLength', 'functionalUserRoles'])
+    expect(Object.keys(req.manifest.params ?? {}).sort()).toEqual(['cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'cfpsPerRule', 'funcDescMaxLength', 'functionalUserRoles'])
     expect(req.functionRules.map(r => r.id)).toEqual(['req/functional-user-roles', 'req/business-rule-count', 'req/plan-alignment'])
   })
 
@@ -156,7 +156,7 @@ describe('cosmic-req mutation tests (guardrail-is-real)', () => {
     expect(issueRuleIds(widened)).not.toContain('req/functional-user-roles')
   })
 
-  it('business-rule-count: too few and too many are caught, cfpsPerFunc param shifts the bounds', async () => {
+  it('business-rule-count: too few and too many are caught, cfpsPerRule param shifts the bounds', async () => {
     const { req, plan } = await packs()
     const tooFew = mutate(req.goldenSample, d => { d.businessRules = (d.businessRules as unknown[]).slice(0, 1) })
     expect(issueRuleIds(validateOf(req, 'zh-CN', tooFew, undefined, planContext(plan)))).toContain('req/business-rule-count')
@@ -164,8 +164,8 @@ describe('cosmic-req mutation tests (guardrail-is-real)', () => {
       d.businessRules = [...(d.businessRules as unknown[]), ...d.businessRules as unknown[]]
     })
     expect(issueRuleIds(validateOf(req, 'zh-CN', tooMany, undefined, planContext(plan)))).toContain('req/business-rule-count')
-    // desiredCfps 35: cfpsPerFunc 10 → min ceil(3.5)=4 rules, so the golden 3 rules become too few.
-    const shifted = validateOf(req, 'zh-CN', req.goldenSample, { cfpsPerFunc: 10 }, planContext(plan))
+    // desiredCfps 35: cfpsPerRule 10 → min ceil(3.5)=4 rules, so the golden 3 rules become too few.
+    const shifted = validateOf(req, 'zh-CN', req.goldenSample, { cfpsPerRule: 10 }, planContext(plan))
     expect(issueRuleIds(shifted)).toContain('req/business-rule-count')
   })
 
@@ -212,7 +212,7 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
   it('generates a green chained artifact and records the upstream anchor', async () => {
     const { req, plan } = await packs()
     const deps = await makeDeps(scriptedLlm([JSON.stringify(plan.goldenSample)]))
-    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', artifactName: 'plan' } as never, { signal } as never)
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({
       pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
@@ -221,13 +221,13 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
     expect(out.receipt.upstreamHashes).toHaveLength(1)
     expect(out.receipt.upstreamHashes[0]!.pack).toBe('cosmic-plan')
     // As-run params (defaults) are recorded for replay.
-    expect(out.receipt.params).toMatchObject({ cfpsPerFunc: 30, funcDescMaxLength: 500 })
+    expect(out.receipt.params).toMatchObject({ cfpsPerRule: 30, funcDescMaxLength: 500 })
   })
 
   it('repairs a cross-artifact violation in a later round (plan-alignment feeds the loop)', async () => {
     const { req, plan } = await packs()
     const deps = await makeDeps(scriptedLlm([JSON.stringify(plan.goldenSample)]))
-    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', artifactName: 'plan' } as never, { signal } as never)
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     const wrong = mutate(req.goldenSample, d => { d.funcId = 'USR-DEL' })
     deps.ctx.llm = scriptedLlm([JSON.stringify(wrong), JSON.stringify(req.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({
@@ -242,7 +242,7 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
   it('doc_validate replays with upstream; without upstream the chained rule fails loud', async () => {
     const { req, plan } = await packs()
     const deps = await makeDeps(scriptedLlm([JSON.stringify(plan.goldenSample)]))
-    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', artifactName: 'plan' } as never, { signal } as never)
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
     await defineDocGenerateTool(deps).execute({
       pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],

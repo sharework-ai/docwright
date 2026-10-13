@@ -1,4 +1,5 @@
 import type { Issue, Severity } from './issue.ts'
+import type { Json } from './receipt.ts'
 
 /**
  * Hybrid pack: declarative JSON rules for simple families plus a JS function
@@ -66,8 +67,15 @@ export function isParamRef(value: unknown): value is ParamRef {
 
 /** Declaration of one pack tunable (manifest `params`); declaration IS the allowlist. */
 export interface ParamSpec {
-  readonly type: 'number' | 'string' | 'boolean'
-  readonly default: number | string | boolean
+  readonly type: 'number' | 'string' | 'boolean' | 'object'
+  /** Absent on required params (the caller must state the value) and on optional-without-default params (present only when inherited or passed). */
+  readonly default?: number | string | boolean | { readonly [key: string]: Json } | undefined
+  /** No default: resolution fails loud unless the call or the upstream receipt provides the value. */
+  readonly required?: boolean | undefined
+  /** Materials content may adjust this param (prompt-rendered permission; the as-run value is still what validation replays). */
+  readonly overridable?: boolean | undefined
+  /** Included in the doc_generate confirmation gate (docs/designs/params-and-chain-contract.md). */
+  readonly confirm?: boolean | undefined
   readonly enum?: readonly (number | string | boolean)[] | undefined
   /** Numeric bounds (number-typed params only); the default must satisfy them. */
   readonly min?: number | undefined
@@ -87,6 +95,8 @@ export interface PackManifest {
   readonly languages: readonly string[]
   /** Optional per-pack round-count default for the repair loop (clamped by config maxRoundsCeiling). */
   readonly maxRounds?: number | undefined
+  /** Behavior when call-time params drift from the upstream receipt's recorded params (docs/designs/params-and-chain-contract.md). */
+  readonly paramDriftPolicy?: 'regenerate' | 'revalidate' | undefined
   /** Declared tunables; declaration is the allowlist — undeclared names are rejected at call time. */
   readonly params?: Readonly<Record<string, ParamSpec>> | undefined
 }

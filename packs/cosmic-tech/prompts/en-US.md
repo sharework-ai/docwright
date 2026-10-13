@@ -34,7 +34,7 @@ You are a senior COSMIC measurement specialist. Based on the functional processe
 ## Hard constraints
 
 1. `index`, `funcId`, and `desiredCfps` must exactly match the upstream func artifact — never rewrite them.
-2. The total CFP count across all subprocesses must fall inside [desiredCfps×cfpMinRatio, desiredCfps×cfpMaxRatio] (see the effective params; default [0.9, 1.5]).
+2. The total CFP count across all subprocesses must fall inside [desiredCfps×downFactor, desiredCfps×upFactor] (the tolerance factors come from the effective `cfpTotal` param; default [0.9, 1.2]).
 3. Every upstream func process must appear in `processes` under the same name.
 
 ## Input materials

@@ -82,7 +82,7 @@ async function makeDeps(llm: unknown) {
 /** Generates the plan→req→func chain so a tech doc_generate/validate call has a green upstream on disk. */
 async function generateFuncChain(deps: { ctx: { llm: unknown } }, func: Pack, req: Pack, plan: Pack): Promise<void> {
   deps.ctx.llm = scriptedLlm([JSON.stringify(plan.goldenSample)])
-  await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', artifactName: 'plan' } as never, { signal } as never)
+  await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
   deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
   await defineDocGenerateTool(deps).execute({
     pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
@@ -98,7 +98,7 @@ describe('cosmic-tech pack shape', () => {
     const { tech } = await packs()
     expect(tech.manifest.consumes).toEqual(['cosmic-func'])
     expect(tech.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(tech.manifest.params ?? {}).sort()).toEqual(['cfpMaxRatio', 'cfpMinRatio'])
+    expect(Object.keys(tech.manifest.params ?? {}).sort()).toEqual(['cfpPerFunc', 'cfpPerSubProc', 'cfpTotal'])
     expect(tech.functionRules.map(r => r.id)).toEqual([
       'tech/func-alignment',
       'tech/movement-count',
@@ -266,8 +266,8 @@ describe('cosmic-tech mutation tests (guardrail-is-real)', () => {
   it('cfp-total-vs-budget: totals outside the ratio band are errors and the params shift the band', async () => {
     const { tech, func } = await packs()
     const ctx = funcContext(func)
-    // Golden total is 36; cfpMaxRatio 1 collapses the ceiling to 35 → error.
-    expect(issueRuleIds(validateOf(tech, 'zh-CN', tech.goldenSample, { cfpMaxRatio: 1 }, ctx))).toContain('tech/cfp-total-vs-budget')
+    // Golden total is 36; cfpTotal.upFactor 0.9 collapses the ceiling to 32.4 → error.
+    expect(issueRuleIds(validateOf(tech, 'zh-CN', tech.goldenSample, { cfpTotal: { value: 36, downFactor: 0.9, upFactor: 0.9 } }, ctx))).toContain('tech/cfp-total-vs-budget')
     // Below the floor: three processes of 4 movements = 12 CFPs < 31.5.
     const skinny = mutate(tech.goldenSample, d => { d.processes = (d.processes as unknown[]).slice(0, 3) })
     expect(issueRuleIds(validateOf(tech, 'zh-CN', skinny, undefined, ctx))).toContain('tech/cfp-total-vs-budget')
@@ -295,7 +295,7 @@ describe('cosmic-tech mutation tests (guardrail-is-real)', () => {
       procs[3]!.subProcesses = [...procs[3]!.subProcesses, extraRead(7), extraRead(8)]
       procs[4]!.subProcesses = [...procs[4]!.subProcesses, extraRead(9)]
     })
-    const issues = validateOf(tech, 'zh-CN', over, undefined, ctx)
+    const issues = validateOf(tech, 'zh-CN', over, { cfpTotal: { value: 36, downFactor: 0.9, upFactor: 1.5 } }, ctx)
     expect(issueRuleIds(issues)).toContain('tech/cfp-budget-advice')
     expect(issues.find(i => i.ruleId === 'tech/cfp-budget-advice')?.severity).toBe('warning')
     expect(issueRuleIds(issues)).not.toContain('tech/cfp-total-vs-budget')
@@ -339,7 +339,7 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     expect(out.receipt.upstreamHashes).toHaveLength(1)
     expect(out.receipt.upstreamHashes[0]!.pack).toBe('cosmic-func')
     // As-run params (defaults) are recorded for replay.
-    expect(out.receipt.params).toMatchObject({ cfpMinRatio: 0.9, cfpMaxRatio: 1.5 })
+    expect(out.receipt.params).toMatchObject({ cfpPerFunc: { value: 30, min: 10, max: 100 }, cfpPerSubProc: 2.5 })
   })
 
   it('repairs a cross-artifact violation in a later round (func-alignment feeds the loop)', async () => {

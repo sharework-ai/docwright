@@ -4,7 +4,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type UpstreamVersionPolicy } from './config.ts'
 import { generateDocument, getDocService, parseUpstreamArtifacts } from './doc-service.ts'
 import { createLlmPort } from './llm-port.ts'
-import { resolveEffectiveParams } from './params.ts'
+import { previewParams, resolveEffectiveParams, type ParamDrift, type ParamRow } from './params.ts'
 import type { Pack } from './pack.ts'
 import { effectiveWorkspaceRoot, normalizeWindowsPath, resolveRootWithin, type SessionWorkspaceCarrier } from './paths.ts'
 import { artifactHashOf, type Receipt, type UpstreamAnchor } from './receipt.ts'
@@ -84,6 +84,26 @@ export type GenerateToolResult = {
   readonly upstreamWarnings?: string[]
 }
 
+/**
+ * Confirmation gate result (docs/designs/params-and-chain-contract.md): the
+ * effective param table to present to the user before executing. Zero LLM
+ * cost — the call is refused before any route/model work until the caller
+ * re-invokes with confirm: true.
+ */
+export type PendingConfirmationResult = {
+  readonly pendingConfirmation: true
+  readonly pack: string
+  readonly language: string
+  readonly paramTable: ParamRow[]
+  readonly missingRequired: string[]
+  readonly paramDrift?: ParamDrift[]
+  readonly driftImpact?: string
+  readonly hint: string
+}
+
+/** doc_generate returns either the generation result or the confirmation gate. */
+export type DocGenerateResult = GenerateToolResult | PendingConfirmationResult
+
 export type ValidateToolResult = {
   readonly artifactPath: string
   readonly receipt: Receipt
@@ -115,11 +135,71 @@ export function defineDocPacksTool(deps: ToolDeps) {
         description: p.manifest.description,
         languages: [...p.manifest.languages],
         consumes: [...p.manifest.consumes],
-        params: Object.entries(p.manifest.params ?? {}).map(([name, spec]) => ({ name, type: spec.type, description: spec.description })),
+        params: Object.entries(p.manifest.params ?? {}).map(([name, spec]) => ({
+          name,
+          type: spec.type,
+          description: spec.description,
+          ...(spec.default !== undefined ? { default: spec.default } : {}),
+          required: spec.required === true,
+          confirm: spec.confirm === true,
+          overridable: spec.overridable === true,
+        })),
       }))
     },
   })
 }
+
+/** Merged inheritance base from the upstream receipts' as-run params. */
+function mergeUpstreamParams(records: readonly { params: Record<string, unknown> | undefined }[]): Record<string, unknown> | undefined {
+  const merged: Record<string, unknown> = {}
+  for (const record of records) {
+    if (record.params !== undefined) Object.assign(merged, record.params)
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined
+}
+
+function shortValue(value: unknown): string {
+  const text = JSON.stringify(value) ?? String(value)
+  return text.length > 60 ? `${text.slice(0, 57)}…` : text
+}
+
+/**
+ * Deterministic revalidation of the upstream artifacts under drifted param
+ * values (paramDriftPolicy "revalidate"): each upstream artifact is checked
+ * by its OWN pack service with the drifted values intersected to that pack's
+ * declared params. Returns human-readable failures; [] means all green.
+ */
+function revalidateUpstreamUnderParams(
+  records: readonly { pack: string; language: string | undefined; params: Record<string, unknown> | undefined; artifact: unknown }[],
+  packs: ReadonlyMap<string, Pack>,
+  overrides: Readonly<Record<string, unknown>>,
+): string[] {
+  const failures: string[] = []
+  for (const record of records) {
+    // verifyUpstreamReceipts already rejected records whose pack is not installed.
+    const upstreamPack = packs.get(record.pack)!
+    const declared = Object.keys(upstreamPack.manifest.params ?? {})
+    const picked = Object.fromEntries(Object.entries(overrides).filter(([name]) => declared.includes(name)))
+    let effective: Record<string, unknown>
+    try {
+      // Drifted values on top of the receipt-recorded as-run params: the
+      // artifact is re-checked under the chain's own baseline plus the drift.
+      effective = resolveEffectiveParams(upstreamPack, picked, record.params)
+    } catch (error) {
+      failures.push(`${record.pack}: ${(error as Error).message}`)
+      continue
+    }
+    const language = record.language !== undefined && upstreamPack.manifest.languages.includes(record.language)
+      ? record.language
+      : upstreamPack.manifest.languages[0]!
+    const issues = getDocService(upstreamPack, language).validate(record.artifact, effective, undefined)
+    const errorRules = [...new Set(issues.filter(i => i.severity === 'error').map(i => i.ruleId))]
+    if (errorRules.length > 0) failures.push(`${record.pack}: ${errorRules.join(', ')}`)
+  }
+  return failures
+}
+
+const CONFIRM_HINT = 'Present the paramTable to the user (values, sources, missing required entries, drift impact); then re-call with the same arguments plus confirm: true to execute.'
 
 export function defineDocGenerateTool(deps: ToolDeps) {
   return defineTool({
@@ -128,8 +208,11 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       + 'Call doc_packs first to see which packs are installed, then pass its name as pack. '
       + 'Returns artifactPath, markdownPath, and the validation receipt. '
       + 'Materials are paths relative to the materials root (default <workspace>/references/) or inline text starting with "#!inline"; '
-      + 'artifacts land under the output root (default <workspace>/output/). '
-      + 'Pack-declared tunables can be overridden via params; maxRounds caps this call\'s loop rounds.',
+      + 'if the workspace references/ folder holds project-context material (system architecture, module map, numbering conventions), include it. '
+      + 'Artifacts land under the output root (default <workspace>/output/). '
+      + 'Pack-declared tunables can be overridden via params; required params (no default) must be provided. '
+      + 'Passing params — or generating a pack with confirm-flagged params whose values are not yet confirmed upstream — returns a pendingConfirmation param table first: present it to the user, then re-call with confirm: true. '
+      + 'maxRounds caps this call\'s loop rounds.',
     parameters: {
       pack: { type: 'string', required: true, description: 'Pack name; discover installed packs with doc_packs (e.g. cosmic-plan)' },
       materials: { type: 'array', required: true, items: { type: 'string' }, description: 'Material references: paths relative to the materials root (default references/ under the workspace) or #!inline text' },
@@ -137,13 +220,14 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn")' },
       artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>)' },
       maxRounds: { type: 'number', description: 'Round cap for this call (e.g. when the user asks to try more rounds); clamped to config maxRoundsCeiling' },
-      params: { type: 'json', description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpUpper": 45}; unknown names or out-of-range values fail loud' },
+      params: { type: 'json', description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpTotal": {"value": 100, "downFactor": 0.9, "upFactor": 1.2}}; unknown names, out-of-range values, and missing required params fail loud; explicit params always trigger the confirmation gate' },
+      confirm: { type: 'boolean', description: 'Execute after the pendingConfirmation param table was presented to and approved by the user' },
     },
     output: {
       schema: { type: 'json' },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args: { pack: string; materials: unknown[]; language?: string; upstream?: unknown[]; artifactName?: string; maxRounds?: number; params?: unknown }, exec) {
+    async execute(args: { pack: string; materials: unknown[]; language?: string; upstream?: unknown[]; artifactName?: string; maxRounds?: number; params?: unknown; confirm?: boolean }, exec) {
       const pack = resolvePack(deps, args.pack)
       const language = resolveLanguage(deps, pack, args.language)
       const materials = args.materials as string[]
@@ -154,6 +238,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       let upstreamTexts: string[] | undefined
       let upstreamAnchors: UpstreamAnchor[] | undefined
       let upstreamWarnings: readonly string[] | undefined
+      let upstreamRecords: readonly { pack: string; language: string | undefined; params: Record<string, unknown> | undefined; artifact: unknown }[] = []
       if (pack.manifest.consumes.length > 0) {
         if (upstream === undefined || upstream.length === 0) {
           throw new Error(`pack "${pack.manifest.name}" consumes upstream artifacts [${pack.manifest.consumes.join(', ')}]; pass their workspace paths via the upstream parameter`)
@@ -163,6 +248,57 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         upstreamTexts = verified.texts
         upstreamAnchors = verified.anchors
         upstreamWarnings = verified.warnings.length > 0 ? verified.warnings : undefined
+        upstreamRecords = verified.records
+      }
+      // Confirmation gate (docs/designs/params-and-chain-contract.md): zero
+      // LLM cost — resolved before the route check. Explicit params always
+      // gate; confirm-flagged params gate until confirmed at the chain head,
+      // after which downstream stages inherit the recorded values.
+      const overrides = normalizeParams(args.params)
+      const paramsProvided = overrides !== undefined && Object.keys(overrides).length > 0
+      const paramsBase = mergeUpstreamParams(upstreamRecords)
+      const preview = previewParams(pack, overrides, paramsBase)
+      const confirmNames = Object.entries(pack.manifest.params ?? {}).filter(([, spec]) => spec.confirm === true).map(([name]) => name)
+      const satisfiedUpstream = confirmNames.length > 0 && paramsBase !== undefined && confirmNames.every(name => paramsBase[name] !== undefined)
+      if ((paramsProvided || (confirmNames.length > 0 && !satisfiedUpstream)) && args.confirm !== true) {
+        let driftImpact: string | undefined
+        if (preview.drift.length > 0) {
+          const policy = pack.manifest.paramDriftPolicy ?? 'regenerate'
+          if (policy === 'regenerate') {
+            driftImpact = `paramDriftPolicy is "regenerate": confirming these params requires regenerating the upstream artifacts first; the call will be refused until then.`
+          } else {
+            const failures = revalidateUpstreamUnderParams(upstreamRecords, deps.packs, overrides ?? {})
+            driftImpact = failures.length === 0
+              ? 'paramDriftPolicy is "revalidate": upstream artifacts revalidated green under the new params; safe to continue.'
+              : `paramDriftPolicy is "revalidate": upstream artifacts fail under the new params (${failures.join('; ')}); the call will be refused.`
+          }
+        }
+        const driftFields = preview.drift.length > 0
+          ? { paramDrift: [...preview.drift], ...(driftImpact === undefined ? {} : { driftImpact }) }
+          : {}
+        return {
+          pendingConfirmation: true,
+          pack: pack.manifest.name,
+          language,
+          paramTable: [...preview.rows],
+          missingRequired: [...preview.missingRequired],
+          ...driftFields,
+          hint: CONFIRM_HINT,
+        } satisfies PendingConfirmationResult as unknown as DocGenerateResult
+      }
+      if (preview.missingRequired.length > 0) {
+        throw new Error(`missing required pack params for "${pack.manifest.name}": ${preview.missingRequired.join(', ')} (declared without defaults; cause: these values must come from the caller; fix: ask the user for the value(s) and pass them via params)`)
+      }
+      if (preview.drift.length > 0) {
+        const policy = pack.manifest.paramDriftPolicy ?? 'regenerate'
+        if (policy === 'regenerate') {
+          const detail = preview.drift.map(d => `${d.name}: ${shortValue(d.from)} → ${shortValue(d.to)}`).join('; ')
+          throw new Error(`params drift from the upstream receipts (${detail}); pack "${pack.manifest.name}" paramDriftPolicy is "regenerate" — regenerate the upstream artifacts under the new params first, then re-run this call`)
+        }
+        const failures = revalidateUpstreamUnderParams(upstreamRecords, deps.packs, overrides ?? {})
+        if (failures.length > 0) {
+          throw new Error(`upstream artifacts fail validation under the new params (${failures.join('; ')}); pack "${pack.manifest.name}" paramDriftPolicy is "revalidate" — regenerate the upstream under the new params or revert the param change`)
+        }
       }
       const route = requireRoute(deps)
       const llm = createLlmPort(deps.ctx as never, route)
@@ -175,7 +311,8 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         upstream: upstreamTexts,
         upstreamAnchors,
         maxRounds: args.maxRounds,
-        params: normalizeParams(args.params),
+        params: overrides,
+        paramsBase,
         artifactName,
         workspaceRoot,
         outputRoot,
@@ -188,7 +325,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         // knob to mark plugin event types ignorable (see TODOS.md).
         onRound: () => {},
       })
-      return (upstreamWarnings === undefined ? result : { ...result, upstreamWarnings }) as unknown as GenerateToolResult
+      return (upstreamWarnings === undefined ? result : { ...result, upstreamWarnings }) as unknown as DocGenerateResult
     },
   })
 }
@@ -290,23 +427,35 @@ export function defineDocValidateTool(deps: ToolDeps) {
  * pack type the consumer declares in `consumes`. Red drafts, tampered
  * artifacts, and wrong-type documents never feed downstream packs. A receipt
  * recording another pack version certifies the OLD ruleset: `strict` rejects
- * the stale upstream, `warn` proceeds and reports it.
+ * the stale upstream, `warn` proceeds and reports it. Records additionally
+ * carry each receipt's language and as-run params — the inheritance base for
+ * chain-shared params (docs/designs/params-and-chain-contract.md).
  */
+export interface UpstreamRecord {
+  readonly pack: string
+  readonly packVersion: string
+  readonly artifactHash: string
+  readonly language: string | undefined
+  readonly params: Record<string, unknown> | undefined
+  readonly artifact: unknown
+}
+
 export async function verifyUpstreamReceipts(
   workspaceRoot: string,
   upstreamPaths: readonly string[],
   pack: Pack,
   packs: ReadonlyMap<string, Pack>,
   policy: UpstreamVersionPolicy,
-): Promise<{ texts: string[]; anchors: UpstreamAnchor[]; warnings: string[] }> {
+): Promise<{ texts: string[]; anchors: UpstreamAnchor[]; warnings: string[]; records: UpstreamRecord[] }> {
   const texts: string[] = []
   const anchors: UpstreamAnchor[] = []
   const warnings: string[] = []
+  const records: UpstreamRecord[] = []
   for (const ref of upstreamPaths) {
     const artifactPath = confinePath(workspaceRoot, ref, 'upstream')
     const receiptPath = `${artifactPath.replace(/\.json$/, '')}.receipt.json`
     let raw: string
-    let stored: { pack?: string; packVersion?: string; artifactHash?: string; isValid?: boolean } | undefined
+    let stored: { pack?: string; packVersion?: string; artifactHash?: string; isValid?: boolean; language?: string; params?: Record<string, unknown> } | undefined
     try {
       raw = await readFile(artifactPath, 'utf8')
     } catch (error) {
@@ -353,6 +502,14 @@ export async function verifyUpstreamReceipts(
     }
     texts.push(JSON.stringify(artifact))
     anchors.push({ pack: stored.pack, packVersion: stored.packVersion ?? 'unknown', artifactHash: stored.artifactHash ?? '' })
+    records.push({
+      pack: stored.pack,
+      packVersion: stored.packVersion ?? 'unknown',
+      artifactHash: stored.artifactHash ?? '',
+      language: typeof stored.language === 'string' && stored.language.length > 0 ? stored.language : undefined,
+      params: typeof stored.params === 'object' && stored.params !== null ? stored.params as Record<string, unknown> : undefined,
+      artifact,
+    })
   }
-  return { texts, anchors, warnings }
+  return { texts, anchors, warnings, records }
 }

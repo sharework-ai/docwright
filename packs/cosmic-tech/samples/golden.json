@@ -16,10 +16,47 @@
       "receiver": "收藏服务",
       "origination_event": "用户在商品详情页点击“收藏”按钮",
       "subProcesses": [
-        { "description": "用户在商品详情页提交收藏请求，携带用户与商品标识", "dataMovementType": "E", "dataGroup": "收藏请求", "dataProperties": ["用户ID", "商品ID"], "cfp": 1 },
-        { "description": "系统将本次收藏写入收藏记录，登记收藏时间", "dataMovementType": "W", "dataGroup": "收藏记录", "dataProperties": ["用户ID", "商品ID", "收藏时间"], "cfp": 1 },
-        { "description": "系统读取商品档案核对商品在售状态", "dataMovementType": "R", "dataGroup": "商品档案", "dataProperties": ["商品ID", "商品状态"], "cfp": 1 },
-        { "description": "系统向用户反馈收藏结果与最新收藏状态", "dataMovementType": "X", "dataGroup": "收藏结果", "dataProperties": ["收藏状态", "提示信息"], "cfp": 1 }
+        {
+          "description": "用户在商品详情页提交收藏请求，携带用户与商品标识",
+          "dataMovementType": "E",
+          "dataGroup": "收藏请求",
+          "dataProperties": [
+            "用户ID",
+            "商品ID"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统将本次收藏写入收藏记录，登记收藏时间",
+          "dataMovementType": "W",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "用户ID",
+            "商品ID",
+            "收藏时间"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取商品档案核对商品在售状态",
+          "dataMovementType": "R",
+          "dataGroup": "商品档案",
+          "dataProperties": [
+            "商品ID",
+            "商品状态"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统向用户反馈收藏结果与最新收藏状态",
+          "dataMovementType": "X",
+          "dataGroup": "收藏结果",
+          "dataProperties": [
+            "收藏状态",
+            "提示信息"
+          ],
+          "cfp": 1
+        }
       ]
     },
     {
@@ -30,10 +67,46 @@
       "receiver": "收藏服务",
       "origination_event": "用户在收藏列表中点击“取消收藏”",
       "subProcesses": [
-        { "description": "用户在收藏列表提交取消收藏请求，指明目标商品", "dataMovementType": "E", "dataGroup": "取消请求", "dataProperties": ["用户ID", "商品ID"], "cfp": 1 },
-        { "description": "系统读取对应收藏记录确认其存在与当前状态", "dataMovementType": "R", "dataGroup": "收藏记录", "dataProperties": ["收藏ID", "记录状态"], "cfp": 1 },
-        { "description": "系统更新收藏记录状态并登记取消时间", "dataMovementType": "W", "dataGroup": "收藏记录", "dataProperties": ["记录状态", "取消时间"], "cfp": 1 },
-        { "description": "系统向用户反馈取消结果", "dataMovementType": "X", "dataGroup": "取消结果", "dataProperties": ["取消状态", "提示信息"], "cfp": 1 }
+        {
+          "description": "用户在收藏列表提交取消收藏请求，指明目标商品",
+          "dataMovementType": "E",
+          "dataGroup": "取消请求",
+          "dataProperties": [
+            "用户ID",
+            "商品ID"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取对应收藏记录确认其存在与当前状态",
+          "dataMovementType": "R",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "收藏ID",
+            "记录状态"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统更新收藏记录状态并登记取消时间",
+          "dataMovementType": "W",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "记录状态",
+            "取消时间"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统向用户反馈取消结果",
+          "dataMovementType": "X",
+          "dataGroup": "取消结果",
+          "dataProperties": [
+            "取消状态",
+            "提示信息"
+          ],
+          "cfp": 1
+        }
       ]
     },
     {
@@ -44,10 +117,37 @@
       "receiver": "收藏服务",
       "origination_event": "用户进入个人中心的收藏页",
       "subProcesses": [
-        { "description": "用户进入收藏页发起列表查询，携带分页参数", "dataMovementType": "E", "dataGroup": "列表请求", "dataProperties": ["用户ID", "页码"], "cfp": 1 },
-        { "description": "系统读取用户的收藏记录清单", "dataMovementType": "R", "dataGroup": "收藏记录", "dataProperties": ["收藏ID", "商品ID", "收藏时间"], "cfp": 1 },
-        { "description": "系统批量读取收藏商品的档案信息用于展示", "dataMovementType": "R", "dataGroup": "商品档案", "dataProperties": ["商品ID", "商品名称", "商品图片"], "cfp": 1 },
-        { "description": "系统向用户返回分页收藏列表与总数", "dataMovementType": "X", "dataGroup": "收藏列表", "dataProperties": ["商品列表", "总数"], "cfp": 1 }
+        {
+          "description": "用户进入收藏页发起列表查询，携带分页参数",
+          "dataMovementType": "E",
+          "dataGroup": "列表请求",
+          "dataProperties": [
+            "用户ID",
+            "页码"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取用户的收藏记录清单",
+          "dataMovementType": "R",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "收藏ID",
+            "商品ID",
+            "收藏时间"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统向用户返回分页收藏列表与总数",
+          "dataMovementType": "X",
+          "dataGroup": "收藏列表",
+          "dataProperties": [
+            "商品列表",
+            "总数"
+          ],
+          "cfp": 1
+        }
       ]
     },
     {
@@ -58,10 +158,47 @@
       "receiver": "商品服务",
       "origination_event": "用户在收藏列表中点击某个商品",
       "subProcesses": [
-        { "description": "用户在收藏列表点击商品发起详情查看请求", "dataMovementType": "E", "dataGroup": "详情请求", "dataProperties": ["用户ID", "商品ID"], "cfp": 1 },
-        { "description": "系统读取该商品的收藏状态与变更时间", "dataMovementType": "R", "dataGroup": "收藏记录", "dataProperties": ["收藏状态", "变更时间"], "cfp": 1 },
-        { "description": "系统读取商品档案中的名称、价格与图文详情", "dataMovementType": "R", "dataGroup": "商品档案", "dataProperties": ["商品名称", "价格", "图文详情"], "cfp": 1 },
-        { "description": "系统向用户展示商品详情并标注收藏标记", "dataMovementType": "X", "dataGroup": "商品详情", "dataProperties": ["详情页数据", "收藏标记"], "cfp": 1 }
+        {
+          "description": "用户在收藏列表点击商品发起详情查看请求",
+          "dataMovementType": "E",
+          "dataGroup": "详情请求",
+          "dataProperties": [
+            "用户ID",
+            "商品ID"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取该商品的收藏状态与变更时间",
+          "dataMovementType": "R",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "收藏状态",
+            "变更时间"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取商品档案中的名称、价格与图文详情",
+          "dataMovementType": "R",
+          "dataGroup": "商品档案",
+          "dataProperties": [
+            "商品名称",
+            "价格",
+            "图文详情"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统向用户展示商品详情并标注收藏标记",
+          "dataMovementType": "X",
+          "dataGroup": "商品详情",
+          "dataProperties": [
+            "详情页数据",
+            "收藏标记"
+          ],
+          "cfp": 1
+        }
       ]
     },
     {
@@ -72,10 +209,46 @@
       "receiver": "收藏服务",
       "origination_event": "系统提示存在失效收藏条目，用户确认清理",
       "subProcesses": [
-        { "description": "用户确认清理提示后提交失效条目清单", "dataMovementType": "E", "dataGroup": "清理请求", "dataProperties": ["用户ID", "失效条目列表"], "cfp": 1 },
-        { "description": "系统读取失效条目的状态与失效原因", "dataMovementType": "R", "dataGroup": "收藏记录", "dataProperties": ["条目状态", "失效原因"], "cfp": 1 },
-        { "description": "系统更新失效条目的清理状态并登记时间", "dataMovementType": "W", "dataGroup": "收藏记录", "dataProperties": ["条目状态", "清理时间"], "cfp": 1 },
-        { "description": "系统向用户反馈本次清理的条目数量", "dataMovementType": "X", "dataGroup": "清理结果", "dataProperties": ["清理数量", "提示信息"], "cfp": 1 }
+        {
+          "description": "用户确认清理提示后提交失效条目清单",
+          "dataMovementType": "E",
+          "dataGroup": "清理请求",
+          "dataProperties": [
+            "用户ID",
+            "失效条目列表"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取失效条目的状态与失效原因",
+          "dataMovementType": "R",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "条目状态",
+            "失效原因"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统更新失效条目的清理状态并登记时间",
+          "dataMovementType": "W",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "条目状态",
+            "清理时间"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统向用户反馈本次清理的条目数量",
+          "dataMovementType": "X",
+          "dataGroup": "清理结果",
+          "dataProperties": [
+            "清理数量",
+            "提示信息"
+          ],
+          "cfp": 1
+        }
       ]
     },
     {
@@ -86,10 +259,46 @@
       "receiver": "收藏服务",
       "origination_event": "用户查看个人中心的收藏总数角标",
       "subProcesses": [
-        { "description": "用户查看收藏角标时发起数量统计请求", "dataMovementType": "E", "dataGroup": "统计请求", "dataProperties": ["用户ID", "统计周期"], "cfp": 1 },
-        { "description": "系统汇总有效条目与失效条目的数量", "dataMovementType": "R", "dataGroup": "收藏记录", "dataProperties": ["条目总数", "失效条目数"], "cfp": 1 },
-        { "description": "系统读取商品在售标记以区分有效收藏", "dataMovementType": "R", "dataGroup": "商品档案", "dataProperties": ["商品ID", "在售标记"], "cfp": 1 },
-        { "description": "系统向用户返回收藏总数用于角标展示", "dataMovementType": "X", "dataGroup": "收藏数量", "dataProperties": ["总数", "角标数据"], "cfp": 1 }
+        {
+          "description": "用户查看收藏角标时发起数量统计请求",
+          "dataMovementType": "E",
+          "dataGroup": "统计请求",
+          "dataProperties": [
+            "用户ID",
+            "统计周期"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统汇总有效条目与失效条目的数量",
+          "dataMovementType": "R",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "条目总数",
+            "失效条目数"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取商品在售标记以区分有效收藏",
+          "dataMovementType": "R",
+          "dataGroup": "商品档案",
+          "dataProperties": [
+            "商品ID",
+            "在售标记"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统向用户返回收藏总数用于角标展示",
+          "dataMovementType": "X",
+          "dataGroup": "收藏数量",
+          "dataProperties": [
+            "总数",
+            "角标数据"
+          ],
+          "cfp": 1
+        }
       ]
     },
     {
@@ -100,10 +309,46 @@
       "receiver": "收藏服务",
       "origination_event": "用户提交收藏请求，系统核对既有收藏",
       "subProcesses": [
-        { "description": "用户提交收藏请求时系统接收查重输入", "dataMovementType": "E", "dataGroup": "收藏请求", "dataProperties": ["用户ID", "商品ID"], "cfp": 1 },
-        { "description": "系统读取既有收藏记录中的已收藏标记", "dataMovementType": "R", "dataGroup": "收藏记录", "dataProperties": ["已收藏标记", "收藏时间"], "cfp": 1 },
-        { "description": "系统读取商品档案核对商品当前状态", "dataMovementType": "R", "dataGroup": "商品档案", "dataProperties": ["商品ID", "商品状态"], "cfp": 1 },
-        { "description": "系统返回是否重复的结论与友好提示", "dataMovementType": "X", "dataGroup": "重复提示", "dataProperties": ["是否重复", "提示信息"], "cfp": 1 }
+        {
+          "description": "用户提交收藏请求时系统接收查重输入",
+          "dataMovementType": "E",
+          "dataGroup": "收藏请求",
+          "dataProperties": [
+            "用户ID",
+            "商品ID"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取既有收藏记录中的已收藏标记",
+          "dataMovementType": "R",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "已收藏标记",
+            "收藏时间"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取商品档案核对商品当前状态",
+          "dataMovementType": "R",
+          "dataGroup": "商品档案",
+          "dataProperties": [
+            "商品ID",
+            "商品状态"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统返回是否重复的结论与友好提示",
+          "dataMovementType": "X",
+          "dataGroup": "重复提示",
+          "dataProperties": [
+            "是否重复",
+            "提示信息"
+          ],
+          "cfp": 1
+        }
       ]
     },
     {
@@ -114,10 +359,46 @@
       "receiver": "通知服务",
       "origination_event": "商品价格变动事件到达价格服务",
       "subProcesses": [
-        { "description": "价格服务发出商品价格变动事件通知", "dataMovementType": "E", "dataGroup": "价格变动", "dataProperties": ["商品ID", "新价格"], "cfp": 1 },
-        { "description": "系统读取收藏该商品的用户清单", "dataMovementType": "R", "dataGroup": "收藏记录", "dataProperties": ["用户ID列表", "收藏时间"], "cfp": 1 },
-        { "description": "系统生成提醒任务并登记计划发送时间", "dataMovementType": "W", "dataGroup": "提醒任务", "dataProperties": ["任务ID", "发送时间"], "cfp": 1 },
-        { "description": "系统向收藏用户发出降价通知", "dataMovementType": "X", "dataGroup": "降价通知", "dataProperties": ["用户ID", "降价信息"], "cfp": 1 }
+        {
+          "description": "价格服务发出商品价格变动事件通知",
+          "dataMovementType": "E",
+          "dataGroup": "价格变动",
+          "dataProperties": [
+            "商品ID",
+            "新价格"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取收藏该商品的用户清单",
+          "dataMovementType": "R",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "用户ID列表",
+            "收藏时间"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统生成提醒任务并登记计划发送时间",
+          "dataMovementType": "W",
+          "dataGroup": "提醒任务",
+          "dataProperties": [
+            "任务ID",
+            "发送时间"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统向收藏用户发出降价通知",
+          "dataMovementType": "X",
+          "dataGroup": "降价通知",
+          "dataProperties": [
+            "用户ID",
+            "降价信息"
+          ],
+          "cfp": 1
+        }
       ]
     },
     {
@@ -128,10 +409,46 @@
       "receiver": "收藏服务",
       "origination_event": "用户在收藏页点击“导出收藏”按钮",
       "subProcesses": [
-        { "description": "用户提交清单导出请求并选择文件格式", "dataMovementType": "E", "dataGroup": "导出请求", "dataProperties": ["用户ID", "文件格式"], "cfp": 1 },
-        { "description": "系统读取用户的收藏记录清单", "dataMovementType": "R", "dataGroup": "收藏记录", "dataProperties": ["收藏ID", "商品ID"], "cfp": 1 },
-        { "description": "系统读取商品档案补充名称与价格信息", "dataMovementType": "R", "dataGroup": "商品档案", "dataProperties": ["商品名称", "价格"], "cfp": 1 },
-        { "description": "系统向用户返回生成的导出文件", "dataMovementType": "X", "dataGroup": "导出文件", "dataProperties": ["文件内容", "导出时间"], "cfp": 1 }
+        {
+          "description": "用户提交清单导出请求并选择文件格式",
+          "dataMovementType": "E",
+          "dataGroup": "导出请求",
+          "dataProperties": [
+            "用户ID",
+            "文件格式"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取用户的收藏记录清单",
+          "dataMovementType": "R",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "收藏ID",
+            "商品ID"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取商品档案补充名称与价格信息",
+          "dataMovementType": "R",
+          "dataGroup": "商品档案",
+          "dataProperties": [
+            "商品名称",
+            "价格"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统向用户返回生成的导出文件",
+          "dataMovementType": "X",
+          "dataGroup": "导出文件",
+          "dataProperties": [
+            "文件内容",
+            "导出时间"
+          ],
+          "cfp": 1
+        }
       ]
     }
   ]

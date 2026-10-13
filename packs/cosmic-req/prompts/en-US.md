@@ -14,7 +14,7 @@ You are a senior COSMIC requirements analyst. Based on the designated function i
     - `role` (string): starts with a lowercase letter; only lowercase letters, digits, and hyphens, e.g. `customer`.
     - `description` (string): this user's relationship to the function (at least 10 characters).
     - `userStories` (string array, at least 1): user stories in the form `As a <role>, I want <action>, so that <benefit>`, each at least 20 characters.
-  - `businessRules` (array, at least 1 item): business rules extracted from the materials and requirement constraints; the count must fall inside the CFP-proportional range [ceil(desiredCfps/cfpsPerFunc), floor(ceil×1.5)] (see `cfpsPerFunc` in the effective params). Each item:
+  - `businessRules` (array, at least 1 item): business rules extracted from the materials and requirement constraints; the count must fall inside the CFP-proportional range [ceil(desiredCfps/cfpsPerRule), floor(ceil×1.5)] (see `cfpsPerRule` in the effective params). Each item:
     - `ruleType` (string): `event` (trigger, e.g. "account locks after 3 failed logins") / `condition` (constraint, e.g. "passwords must contain letters and digits") / `complex` (composite of several conditions and events).
     - `description` (string): the rule and its enforced effect (at least 10 characters).
 

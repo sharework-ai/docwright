@@ -24,7 +24,7 @@ You get an all-green receipt in seconds — zero LLM calls. This is the determin
 
 ### `doc_packs`
 
-Zero-arg discovery tool: lists installed packs as `[{ name, version, description, languages, consumes, params }]` (params = the pack's declared tunables with type and description). The model-facing descriptions of `doc_generate`/`doc_validate` carry a static invitation to call `doc_packs` first; unknown-pack errors also point there. Descriptions never change with the pack set (pull-based progressive disclosure).
+Zero-arg discovery tool: lists installed packs as `[{ name, version, description, languages, consumes, params }]` (params = the pack's declared tunables with type, description, optional default, and the `required`/`confirm`/`overridable` flags). The model-facing descriptions of `doc_generate`/`doc_validate` carry a static invitation to call `doc_packs` first; unknown-pack errors also point there. Descriptions never change with the pack set (pull-based progressive disclosure).
 
 ### `doc_generate`
 
@@ -36,7 +36,8 @@ Zero-arg discovery tool: lists installed packs as `[{ name, version, description
 | `upstream` | string[]? | workspace-relative paths to upstream artifacts; each must carry a green sidecar receipt (hash-verified, pack type matched against `consumes`, and recording the installed pack version — see `upstreamVersionPolicy`) |
 | `artifactName` | string? | output base name (default `<pack>-<timestamp>`) |
 | `maxRounds` | number? | round cap for this call (user intent via the model); clamped to config `maxRoundsCeiling` |
-| `params` | object? | overrides for pack-declared tunables (see `doc_packs`); unknown names or out-of-range values fail loud |
+| `params` | object? | overrides for pack-declared tunables (see `doc_packs`); unknown names, out-of-range values, and missing required (default-less) params fail loud; **passing params always triggers the confirmation gate** |
+| `confirm` | boolean? | execute after the `pendingConfirmation` param table was presented to and approved by the user |
 
 Returns `{ artifactPath, markdownPath, receipt }`. Artifacts, receipts, and markdown land in the output root (default `<workspace>/output/`). Exhausted loops throw AND keep the draft + red receipt on disk.
 
@@ -96,7 +97,7 @@ packs/cosmic-plan/
 └── samples/golden.json  # must pass all-green; feeds mutation tests
 ```
 
-**Pack contract:** `manifest.description` is a required one-liner naming the document this pack generates (load-time enforced; `doc_packs` returns it verbatim to the model); `manifest.params` declares the pack's tunables (declaration IS the allowlist — `{ type, default, description, enum?, min?, max? }` per param; declarative-rule numeric bounds may reference number params via `{ "param": "name" }`); `manifest.maxRounds` optionally sets the pack's default loop rounds; every ERROR rule carries a `suggestion`; every language in `manifest.languages` provides rules + prompt + template; golden sample + per-rule-family mutations are mandatory (a checker that cannot catch a deliberately broken sample is decoration). Function rules receive an optional second argument `context = { upstream, materials, params }` — parsed upstream artifacts, raw material texts, and effective params — for cross-artifact and allowlist checks (see `docs/designs/function-rule-context.md`); single-argument rules keep working unchanged.
+**Pack contract:** `manifest.description` is a required one-liner naming the document this pack generates (load-time enforced; `doc_packs` returns it verbatim to the model); `manifest.params` declares the pack's tunables (declaration IS the allowlist — `{ type: number|string|boolean|object, default?, description, enum?, min?, max?, required?, overridable?, confirm? }` per param; `required: true` forbids a default; optional params may omit the default (inherited-or-explicit only); declarative-rule numeric bounds may reference number params via `{ "param": "name" }`, and the referenced param must always be present (default or required)); `manifest.paramDriftPolicy` (`regenerate` default | `revalidate`) sets the param-drift stance; `manifest.maxRounds` optionally sets the pack's default loop rounds; every ERROR rule carries a `suggestion`; every language in `manifest.languages` provides rules + prompt + template; golden sample + per-rule-family mutations are mandatory (a checker that cannot catch a deliberately broken sample is decoration). Function rules receive an optional second argument `context = { upstream, materials, params }` — parsed upstream artifacts, raw material texts, and effective params — for cross-artifact and allowlist checks (see `docs/designs/function-rule-context.md`); single-argument rules keep working unchanged.
 
 ## Docs
 

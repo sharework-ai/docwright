@@ -131,6 +131,7 @@ describe('generateDocument integration: reason + round scores land in the red re
       artifactName: 'conv-e2e',
       workspaceRoot: ws,
       outputRoot: join(ws, 'output'),
+      params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
       config: { provider: 'p', model: 'm', maxIterations: 5 } as never,
       llm,
       onRound: () => {},

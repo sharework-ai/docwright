@@ -93,7 +93,6 @@ describe('pack loader: params declaration is the allowlist', () => {
   const badSpecs: Array<[string, Record<string, unknown>]> = [
     ['bad type', { type: 'array', default: 'x', description: 'd' }],
     ['missing description', { type: 'string', default: 'x' }],
-    ['missing default', { type: 'string', description: 'd' }],
     ['default type mismatch', { type: 'number', default: 'x', description: 'd' }],
     ['enum not array', { type: 'string', default: 'a', description: 'd', enum: 'a' }],
     ['enum empty', { type: 'string', default: 'a', description: 'd', enum: [] }],
@@ -218,7 +217,7 @@ describe('doc_generate: maxRounds chain and params override (end to end)', () =>
   it('goes green with an override and red without it; receipt records as-run params', async () => {
     const deps = await makeDeps()
     const tool = defineDocGenerateTool(deps)
-    const out = await tool.execute({ pack: 'param-pack', materials: ['#!inline\nm'], artifactName: 'green1', params: { limit: 10 } } as never, { signal } as never) as { receipt: { isValid: boolean; params?: Record<string, unknown> } }
+    const out = await tool.execute({ pack: 'param-pack', materials: ['#!inline\nm'], artifactName: 'green1', params: { limit: 10 }, confirm: true } as never, { signal } as never) as { receipt: { isValid: boolean; params?: Record<string, unknown> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.params).toEqual({ limit: 10 })
     // The generator prompt carried the effective params to the model
@@ -310,6 +309,6 @@ describe('doc_packs: exposes declared params', () => {
     const tool = defineDocPacksTool({ packs, config: { provider: 'p', model: 'm' } as never, ctx: {} })
     const listed = await tool.execute({} as never, { signal } as never) as Array<{ name: string; params: Array<{ name: string; type: string; description: string }> }>
     const pack = listed.find(p => p.name === 'param-pack')!
-    expect(pack.params).toEqual([{ name: 'limit', type: 'number', description: 'max title length' }])
+    expect(pack.params).toEqual([{ name: 'limit', type: 'number', description: 'max title length', default: 3, required: false, confirm: false, overridable: false }])
   })
 })

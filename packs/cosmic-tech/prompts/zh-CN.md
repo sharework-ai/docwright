@@ -34,7 +34,7 @@
 ## 硬性约束
 
 1. `index`、`funcId`、`desiredCfps` 必须与上游 func 产物完全一致，不得改写。
-2. 全部子过程的 CFP 总数必须落在预算区间 [desiredCfps×cfpMinRatio, desiredCfps×cfpMaxRatio] 内（cfpMinRatio/cfpMaxRatio 见生效参数；默认 [0.9, 1.5]）。
+2. 全部子过程的 CFP 总数必须落在预算区间 [desiredCfps×downFactor, desiredCfps×upFactor] 内（容差系数取生效参数 `cfpTotal` 的 downFactor/upFactor；默认 [0.9, 1.2]）。
 3. 上游 func 的每个功能过程都必须出现在 `processes` 中，同名对应。
 
 ## 输入素材

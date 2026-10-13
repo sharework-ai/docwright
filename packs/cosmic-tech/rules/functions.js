@@ -3,7 +3,7 @@
 // movement counts, E101 first entry, E105 no consecutive E/W/X, E108 entry
 // after exit, W103 duplicate movements, W101 subprocess description keywords,
 // W102 data property count) plus the CFP budget check (E101/W100/E200/W200
-// family, parametrized by cfpMinRatio/cfpMaxRatio) and the chain-alignment
+// family, parametrized by the shared cfpTotal downFactor/upFactor factors) and the chain-alignment
 // pattern generalized from the req pack (E303): index/funcId/desiredCfps and
 // process-name coverage against the upstream func artifact.
 // Contract: export `rules`; each check(artifact, context) returns RuleIssue[]
@@ -32,6 +32,15 @@ function getMovements(proc) {
 
 /** W101 keyword list: technical-implementation words that belong in designs, not in subprocess descriptions. */
 const DESC_KEYWORDS = ['计算', '转化', '转换', '拆分', '日志', '解析', '编码', '缓存', '临时', '筛选', '排序']
+
+
+/** Tolerance band around desiredCfps, from the shared cfpTotal {downFactor, upFactor}; defaults tighten the old [0.9, 1.5] to [0.9, 1.2]. */
+function budgetFactors(context) {
+  const shared = context?.params?.cfpTotal
+  const down = typeof shared?.downFactor === 'number' ? shared.downFactor : 0.9
+  const up = typeof shared?.upFactor === 'number' ? shared.upFactor : 1.2
+  return { down, up }
+}
 
 export const rules = [
   {
@@ -312,7 +321,7 @@ export const rules = [
     // FunctionRule carries one severity, so error and warning cannot share a rule.
     id: 'tech/cfp-total-vs-budget',
     severity: 'error',
-    suggestion: '全部子过程的 CFP 总数须落在预算区间 [desiredCfps×cfpMinRatio, desiredCfps×cfpMaxRatio] 内：不足说明拆分粒度太粗（继续从素材细化数据移动），超出说明拆分过细（合并同类子过程）。',
+    suggestion: '全部子过程的 CFP 总数须落在预算区间 [desiredCfps×downFactor, desiredCfps×upFactor] 内（容差系数见生效参数 cfpTotal）：不足说明拆分粒度太粗（继续从素材细化数据移动），超出说明拆分过细（合并同类子过程）。',
     check(artifact, context) {
       if (!isObject(artifact)) return []
       const desired = artifact.desiredCfps
@@ -323,8 +332,9 @@ export const rules = [
           if (isObject(mv) && typeof mv.cfp === 'number') total += mv.cfp
         }
       }
-      const minRatio = typeof context?.params?.cfpMinRatio === 'number' ? context.params.cfpMinRatio : 0.9
-      const maxRatio = typeof context?.params?.cfpMaxRatio === 'number' ? context.params.cfpMaxRatio : 1.5
+      const factors = budgetFactors(context)
+      const minRatio = factors.down
+      const maxRatio = factors.up
       const floor = desired * minRatio
       const ceil = desired * maxRatio
       if (total < floor) {
@@ -353,7 +363,7 @@ export const rules = [
     // than the tolerance bands fixed at [min, 1) and (1.2, max].
     id: 'tech/cfp-budget-advice',
     severity: 'warning',
-    suggestion: 'CFP 总数偏离预算但在容差区间内：低于预算检查是否有过程拆分不足（对照素材补齐数据移动），高于预算 20% 以上检查是否拆分过细（合并同类子过程）。',
+    suggestion: 'CFP 总数偏离预算但在容差区间内（容差系数见生效参数 cfpTotal）：低于预算对照素材补齐数据移动，高于预算检查是否拆分过细（合并同类子过程）。',
     check(artifact, context) {
       if (!isObject(artifact)) return []
       const desired = artifact.desiredCfps
@@ -364,28 +374,16 @@ export const rules = [
           if (isObject(mv) && typeof mv.cfp === 'number') total += mv.cfp
         }
       }
-      const minRatio = typeof context?.params?.cfpMinRatio === 'number' ? context.params.cfpMinRatio : 0.9
-      const maxRatio = typeof context?.params?.cfpMaxRatio === 'number' ? context.params.cfpMaxRatio : 1.5
-      if (total < desired * minRatio || total > desired * maxRatio) return []
-      if (total < desired) {
-        return [{
-          jsonPath: '$.processes',
-          message: say(artifact,
-            `CFP 总数略低于预算：实际 ${total}，期望 ${desired}（差距在容差内，仅提示）`,
-            `Total CFPs slightly below budget: got ${total}, expected ${desired} (within tolerance; advisory only)`),
-          snapshot: `totalCfps=${total}`,
-        }]
-      }
-      if (total > desired * 1.2) {
-        return [{
-          jsonPath: '$.processes',
-          message: say(artifact,
-            `CFP 总数高于预算 20% 以上：实际 ${total}，期望 ${desired}（仅提示，检查是否拆分过细）`,
-            `Total CFPs exceed the budget by more than 20%: got ${total}, expected ${desired} (advisory; check for over-splitting)`),
-          snapshot: `totalCfps=${total}`,
-        }]
-      }
-      return []
+      const factors = budgetFactors(context)
+      if (total < desired * factors.down || total > desired * factors.up) return []
+      if (total === desired) return []
+      return [{
+        jsonPath: '$.processes',
+        message: say(artifact,
+          `CFP 总数偏离预算：实际 ${total}，期望 ${desired}（容差区间 [${factors.down}×${desired}, ${factors.up}×${desired}] 内，仅提示）`,
+          `Total CFPs deviate from the budget: got ${total}, expected ${desired} (within tolerance [${factors.down}×${desired}, ${factors.up}×${desired}]; advisory only)`),
+        snapshot: `totalCfps=${total}`,
+      }]
     },
   },
 ]

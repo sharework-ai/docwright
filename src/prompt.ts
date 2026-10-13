@@ -12,14 +12,22 @@ export function assembleGeneratorPrompt(options: {
   upstream?: readonly string[] | undefined
   /** Effective pack params; rendered into the {{params}} slot when the template offers it. */
   params?: Readonly<Record<string, unknown>> | undefined
+  /** Declared overridable param names; renders the materials-may-adjust hint after the params block. */
+  overridableParams?: readonly string[] | undefined
 }): string {
   const materialsBlock = options.materials.map(m => `<material>\n${m}\n</material>`).join('\n\n')
   const upstreamBlock = options.upstream === undefined || options.upstream.length === 0
     ? ''
     : `\n\n<upstream-artifacts>\n${options.upstream.join('\n\n')}\n</upstream-artifacts>`
-  const paramsBlock = options.params === undefined || Object.keys(options.params).length === 0
+  let paramsBlock = options.params === undefined || Object.keys(options.params).length === 0
     ? ''
     : `\n\n<effective-params>\n${JSON.stringify(options.params, null, 2)}\n</effective-params>`
+  if (paramsBlock !== '' && options.overridableParams !== undefined && options.overridableParams.length > 0) {
+    const present = options.overridableParams.filter(n => options.params?.[n] !== undefined)
+    if (present.length > 0) {
+      paramsBlock += `\n\nMaterials content may adjust these params when the materials clearly justify different values: ${present.join(', ')}. Every other param is a hard constraint — materials must not change it.`
+    }
+  }
   // Replacer functions: replacement strings interpret $&/$`/$' patterns,
   // which would silently corrupt materials containing them.
   return options.promptTemplate
