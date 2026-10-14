@@ -81,4 +81,13 @@ describe('pack loader', () => {
     const packs = await loadPacks(packsRoot, { extra: [root] })
     expect(packs.get('cosmic-plan')?.manifest.version).toBe('9.9.9')
   })
+
+  it('fails loud when two packs within one root declare the same name', async () => {
+    const { cp } = await import('node:fs/promises')
+    const root = await mkdtemp(join(tmpdir(), 'docwright-dup-root-'))
+    for (const sub of ['first', 'second']) {
+      await cp(join(packsRoot, 'cosmic-plan'), join(root, `${sub}-cosmic-plan`), { recursive: true })
+    }
+    await expect(loadPacks(packsRoot, { extra: [root] })).rejects.toThrow(/duplicate pack name "cosmic-plan"/)
+  })
 })
