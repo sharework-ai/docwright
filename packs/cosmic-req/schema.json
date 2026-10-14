@@ -3,28 +3,80 @@
   "title": "COSMIC Req阶段文档Schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["docType", "language", "index", "desiredCfps", "functionalUsers", "funcId", "funcDesc", "businessRules"],
+  "required": [
+    "docType",
+    "language",
+    "index",
+    "desiredCfps",
+    "functionalUsers",
+    "funcId",
+    "funcDesc",
+    "businessRules"
+  ],
   "properties": {
-    "docType": { "const": "req" },
-    "language": { "type": "string", "default": "zh-CN" },
-    "index": { "type": "integer", "minimum": 1, "description": "1-based position of this function in the upstream plan functions array" },
-    "desiredCfps": { "type": "integer", "minimum": 1, "description": "CFP budget copied from the upstream plan function's estimatedCfps; sizes businessRules (rule req/business-rule-count)" },
-    "funcId": { "type": "string", "pattern": "^[A-Z0-9]{1,8}(?:-[A-Z0-9]{1,8})+$" },
-    "funcDesc": { "type": "string", "minLength": 10, "maxLength": 2000 },
+    "docType": {
+      "const": "req"
+    },
+    "language": {
+      "type": "string",
+      "default": "zh-CN"
+    },
+    "index": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "1-based position of this function in the upstream plan functions array"
+    },
+    "desiredCfps": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "CFP budget copied from the upstream plan function's estimatedCfps; sizes businessRules (rule req/business-rule-count)"
+    },
+    "funcId": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{1,8}(?:-[A-Z0-9]{1,8})+$"
+    },
+    "funcDesc": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 2000
+    },
     "functionalUsers": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["role", "description", "userStories"],
+        "required": [
+          "kind",
+          "role",
+          "description",
+          "userStories"
+        ],
         "properties": {
-          "role": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-          "description": { "type": "string", "minLength": 10 },
+          "kind": {
+            "enum": [
+              "person",
+              "organization",
+              "system",
+              "3rd-party"
+            ],
+            "description": "Who the functional user is: a person role, an organizational role, an in-project system, or a third-party system (from the project context roles / thirdPartySystems)"
+          },
+          "role": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 10
+          },
           "userStories": {
             "type": "array",
             "minItems": 1,
-            "items": { "type": "string", "minLength": 20 }
+            "items": {
+              "type": "string",
+              "minLength": 20
+            }
           }
         }
       }
@@ -35,10 +87,22 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["ruleType", "description"],
+        "required": [
+          "ruleType",
+          "description"
+        ],
         "properties": {
-          "ruleType": { "enum": ["event", "condition", "complex"] },
-          "description": { "type": "string", "minLength": 10 }
+          "ruleType": {
+            "enum": [
+              "event",
+              "condition",
+              "complex"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 10
+          }
         }
       }
     }

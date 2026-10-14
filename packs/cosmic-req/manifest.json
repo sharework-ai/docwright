@@ -1,7 +1,7 @@
 {
   "name": "cosmic-req",
-  "version": "0.2.0",
-  "description": "COSMIC requirements analysis for one plan function: functional description, system-level functional users with user stories, and business rules (consumes a green cosmic-plan artifact).",
+  "version": "0.3.0",
+  "description": "COSMIC requirements analysis for one plan function: functional description, functional users (roles or third-party systems) with user stories — the primary source for later flow analysis (which role or module does what) — and business rules (consumes a green cosmic-plan artifact).",
   "consumes": [
     "cosmic-plan"
   ],

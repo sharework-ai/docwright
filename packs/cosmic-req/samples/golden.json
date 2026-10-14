@@ -12,7 +12,8 @@
       "userStories": [
         "As a customer, I want to add a product to my favorites while browsing, so that I can quickly find it again later.",
         "As a customer, I want to remove a product from my favorites, so that my collection stays relevant."
-      ]
+      ],
+      "kind": "person"
     }
   ],
   "businessRules": [

@@ -1,7 +1,7 @@
 {
   "name": "cosmic-tech",
   "version": "0.2.0",
-  "description": "COSMIC technical breakdown for one function: data-movement subprocesses (E/X/R/W) per functional process with exact CFP counts checked against the budget, refined from a green cosmic-func artifact.",
+  "description": "COSMIC technical breakdown: decomposes each functional process into 2-3 subprocesses — data movements (E/X/R/W) — with exact CFP counts checked against the budget, refined from a green cosmic-func artifact.",
   "consumes": [
     "cosmic-func"
   ],

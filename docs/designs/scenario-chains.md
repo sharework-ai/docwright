@@ -95,7 +95,7 @@ manifest 增加必填字段 `scenario`（非空 kebab-case；加载期校验，m
 
 1. pack 总数数十条以上时是否给 `doc_packs` 加按需展开参数（默认仅场景汇总）——等真实规模反馈再定，不为想象中的规模建机制。
 2. scenario 级参数（跨 pack 的场景默认值）——链内参数继承已覆盖（cfpTotal 沿回执传递），拒绝在无第二场景输入时预设场景级参数机制。
-3. 场景级素材约定（每场景默认 materials root）——等第二个场景的真实备料形态出现再定。
+3. ~~场景级素材约定（每场景默认 materials root）~~ 已由 cosmic-context 定案（docs/designs/cosmic-context.md）：项目知识是 workspace 级**产物**（context pack，`scope: "workspace"` + `references/` 备料目录 + 复用预检），不是每场景的素材约定——素材目录按 workspace/topic 两级作用域通用解析，不按场景配置。
 
 ## 已否决（已定案，不再重开）
 

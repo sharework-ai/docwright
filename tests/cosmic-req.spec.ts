@@ -191,6 +191,20 @@ describe('cosmic-req mutation tests (guardrail-is-real)', () => {
     expect(issueRuleIds(validateOf(req, 'zh-CN', req.goldenSample, undefined, notPlan))).toContain('req/plan-alignment')
   })
 
+  it('functionalUsers[].kind: values outside the four kinds are schema-rejected; prompts guide story actors', async () => {
+    const { req, plan } = await packs()
+    const badKind = mutate(req.goldenSample, d => { (d.functionalUsers as Array<{ kind: string }>)[0]!.kind = 'robot' })
+    expect(issueRuleIds(validateOf(req, 'zh-CN', badKind, undefined, planContext(plan))).has('schema/enum')).toBe(true)
+    // The golden's person kind stays green.
+    expect(issueRuleIds(validateOf(req, 'zh-CN', req.goldenSample, undefined, planContext(plan))).has('schema/enum')).toBe(false)
+    // The prompt invites roles/third-party systems and top-level modules as story actors.
+    for (const lang of req.manifest.languages) {
+      const prompt = req.prompts.get(lang) ?? ''
+      expect(prompt).toMatch(/第三方系统|third-party system/i)
+      expect(prompt).toMatch(/顶层模块|top-level module/i)
+    }
+  })
+
   it('every ERROR issue carries a suggestion across all mutations', async () => {
     const { req, plan } = await packs()
     const ctx = planContext(plan)

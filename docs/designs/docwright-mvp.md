@@ -2,7 +2,7 @@
 
 Status: CURRENT — 本文描述插件现状，与代码不一致时以代码为准。
 Repo: sharework-ai/docwright
-Updated: 2026-10-11
+Updated: 2026-10-14
 
 > 本文前身是 2026-08-27 /office-hours + /autoplan 产出的设计决策文档（含 44 条决策审计、评审报告）。现已重写为 current-state 功能说明书；遵循"规格零历史"纪律，正文不含设计推演——原决策过程记录只在 git 历史中（`git log -- docs/designs/docwright-mvp.md`），进行中的设计提案见 docs/designs/ 下各 PROPOSED 文档。
 
@@ -33,6 +33,18 @@ docwright 的差异化就在"内容合格性"这一层，由三件事组成：
 
 一句话分工：**换文档类型 = 新写一个 pack 目录，插件零改动；改闭环/校验/回执行为 = 改插件。**
 
+### 2.1 COSMIC 场景链与领域模型（各 pack 措辞的语义基准）
+
+一套 COSMIC 文档的源头是**一项需求（requirement）**。为了实现它，五个阶段各回答一个问题：
+
+1. **context**（cosmic-context）：项目架构是什么——背景、概述、模块树（1-3 级，每模块有编号 code）、角色（person/organization/system 三分类）、第三方系统、各级编号规则、设计原则；素材未覆盖处由模型假定并**显式登记进 assumptions**。
+2. **plan**（cosmic-plan）：改哪些模块——基于 context 模块树规划**新增/修改**（`functions[].changeKind`），每个被增加或修改的底层模块就是一项 **function**；funcId 的分段即模块 code 链。
+3. **req**（cosmic-req）：一项 function 的需求分析——功能描述、功能用户（kind 四分类，用户故事主体是**角色或第三方系统**，流程性故事可引入**顶层模块**）与用户故事、业务规则；用户故事是后续流程分析的主要来源。
+4. **func**（cosmic-func）：一项 function 拆成若干**功能过程（process）**（发起者/接收者/触发事件）。
+5. **tech**（cosmic-tech）：每个功能过程拆成 2-3 个**子过程**，每个子过程同时是一项**数据移动**（ERX/EW/EX 模式）。
+
+概念定义住在各 pack 的 prompt 里（单 pack 单词汇表，每个 prompt 只讲本阶段概念）；本节是场景级语义基准。项目知识（context）由 plan 消费入链；req/func/tech 需要项目知识时经 `doc_generate.upstream` 按需携带（见 3.5）。
+
 ## 3. 插件功能（机制层）
 
 插件导出 `name: 'docwright'`、`inject: ['tools', 'llm']`、`Config`；`apply()` 时加载全部 pack 并注册三个工具（`doc_packs` / `doc_generate` / `doc_validate`）。pack 加载失败（坏 manifest、坏规则、Config 默认语言不被支持）在 apply 期直接报错，不会带病进入会话。
@@ -51,11 +63,15 @@ docwright 的差异化就在"内容合格性"这一层，由三件事组成：
 | `upstream` | string[]? | 上游产物路径（workspace 相对）。仅当 pack 声明了 `consumes` 时必填，见 3.5 |
 | `artifactName` | string? | 输出基础名，仅允许 `[A-Za-z0-9._-]` 的纯 basename（拒绝路径形状与 `..`）；缺省时：per-function 调用（targetIndex 可解析）为 `<pack>-<funcId>`（不同功能不冲突、重生成幂等），其余为 `<pack>-<时间戳>`；显式传名逐字生效 |
 | `maxRounds` | number? | 当次闭环轮数上限（用户意图经模型转述）；被 Config `maxRoundsCeiling` 硬钳制，任何层不可穿透 |
+| `topic` | string? | 话题目录名（`[A-Za-z0-9._-]` 单段，如需求编号）。给定后产物根为 `<topic>/output/`、素材根为 `<topic>/references/`；workspace 级 pack（见 3.9 作用域）忽略该参数 |
+| `force` | boolean? | 绕过复用预检，强制重建 |
 | `params` | object? | pack 声明参数（`manifest.params`，doc_packs 可见清单）的覆盖值；未知名称/类型/枚举/越界 fail loud 并列出可用参数 |
 
 前置条件：Config 必须配置 `provider` + `model`（宿主 LLM 编排中的路由名），缺失即调用期报错。
 
 行为：素材读取与首 prompt token 预检 → 闭环（3.2）→ 落盘三个文件（产物 JSON、sidecar 回执、Markdown 渲染），全部 tmp+rename 原子写、产物先于回执落盘（崩溃只会留下可读草稿，不会留下孤儿回执）。
+
+**复用预检**：`reuse: true` 的 pack（workspace 级默认开）在生成前扫描产物根：存在同 pack 产物且 sidecar 回执绿、记录版本与安装版本一致、产物当前 hash 与回执一致（staleness 对账，不重跑校验）→ 直接返回该产物（`reused: true` + 原回执），零 LLM 开销；`force: true` 始终重建。人工修正产物后 hash 变化，预检自然不命中。
 
 返回 `{ artifactPath, markdownPath, receipt, summary }`（回执内联全量；`summary` 为产物关键计数——functions/processes/subProcesses/totalCfps，按字段存在性给出，省一次文件回读）；warn 策略下追加 `upstreamWarnings`；per-function pack 追加 `coverage`（本阶段绿色产物相对参照功能集的 `{ covered, total, missing }`——req 参照 plan functions，func/tech 参照上游阶段已覆盖集）。required 的 `targetIndex` 缺失时 fail loud 并列出上游全部候选（index、funcId、l2Name），pendingConfirmation 同样携带 `candidates`。全绿时产物是正式产物；**迭代耗尽时工具抛错（fail loud），但草稿 + 红回执（`isValid: false` + 全部未解决 Issue）保留在磁盘上**，供人工救援，绝不静默采用最后一轮。
 
@@ -103,7 +119,7 @@ sidecar 文件 `<产物名>.receipt.json` 与产物同目录；同时内联在�
 
 ### 3.4 工具 `doc_validate` — 确定性复验（零 LLM）
 
-参数：`artifactPath`（workspace 相对路径）、`pack`、`language?`、`params?`、`upstream?`（链式 pack 复验用，同生成时的 workspace 相对路径数组）。对既有产物用**当前安装的 pack 规则**重跑校验，返回 `{ artifactPath, receipt, hashMatches, packVersionStale, sealed?, summary }`。**seal（回执回签）**：绿色校验把新回执写入 sidecar——发证渠道从「只有生产线（doc_generate）」扩展为「生产线 + 质检站（doc_validate）」，人工/外部编辑的产物借此重新入链；红色校验绝不触碰 sidecar，hash 依旧把合格证绑定到具体内容版本。`sealed: true` 即本次回签；`hashMatches` 仍报告回签前的篡改证据。返回值同时带 `summary` 关键计数。校验默认使用回执记录的 as-run 参数（**按当时的标准复验**）；显式传 `params` 可做 what-if 校验。传入 `upstream` 时走与 `doc_generate` 相同的六项上游校验，解析后的产物注入函数规则 context（跨产物规则得以复验），回执同步记录 `upstreamHashes` 锚点。
+参数：`artifactPath`（workspace 相对路径）、`pack`、`language?`、`params?`、`upstream?`（链式 pack 复验用，同生成时的 workspace 相对路径数组，含随行 rider，见 3.5）。复验全由路径驱动，不设 `topic` 参数。对既有产物用**当前安装的 pack 规则**重跑校验，返回 `{ artifactPath, receipt, hashMatches, packVersionStale, sealed?, summary }`。**seal（回执回签）**：绿色校验把新回执写入 sidecar——发证渠道从「只有生产线（doc_generate）」扩展为「生产线 + 质检站（doc_validate）」，人工/外部编辑的产物借此重新入链；红色校验绝不触碰 sidecar，hash 依旧把合格证绑定到具体内容版本。`sealed: true` 即本次回签；`hashMatches` 仍报告回签前的篡改证据。返回值同时带 `summary` 关键计数。校验默认使用回执记录的 as-run 参数（**按当时的标准复验**）；显式传 `params` 可做 what-if 校验。传入 `upstream` 时走与 `doc_generate` 相同的六项上游校验，解析后的产物注入函数规则 context（跨产物规则得以复验），回执同步记录 `upstreamHashes` 锚点。
 
 - `hashMatches`：`true` 产物与 sidecar 回执哈希一致；`false` 生成后被改动过（篡改可见）；`null` 无 sidecar（如手工拷入的样例）。
 - `packVersionStale`：`true` 回执由**另一个 pack 版本**写入——绿回执证明的是旧规则，应重新生成（无版本记录的回执也算 stale）；`false` 版本一致；`null` 无回执。
@@ -119,10 +135,11 @@ pack 的 `manifest.consumes` 声明其消费的上游产物类型（根 pack 为
 4. 回执内 `artifactHash` 与当前文件内容一致（上游被改过即拒绝）;
 5. 回执的 pack 类型在消费方的 `consumes` 列表中；
 6. 该上游 pack 已安装，且版本 staleness 按 `upstreamVersionPolicy` 处理：`strict`（默认）拒绝版本不符的上游，`warn` 放行但在返回值中附 `upstreamWarnings`。
+7. 消费方的 `consumes` 之外、**已安装 pack** 的绿产物可以作为 **rider（随行上游）** 通过验证并注入 prompt 与函数规则 context（如 req/func/tech 按需携带项目 context）——但至少要有一个 consumed 类型的上游，缺失即报错（链契约不因 rider 松动）。上游注入是**内容注入**：全文渲染进该次调用的 prompt，不跨调用累积。
 
 ### 3.6 pack 装载（apply 期，fail loud）
 
-装载范围 = 插件内置 `packs/` + Config `packsDir`（同名 pack 后者覆盖前者）。加载期强制校验（任何一条不过，整个插件启动失败）：manifest 字段完整；声明的每种语言都有 `rules/<lang>.json` + `prompts/<lang>.md` + `templates/<lang>.hbs` 三件套；声明式规则逐条校验（severity 枚举、kind 枚举、kind 载荷、pattern 可编译、suggestion 非空）；prompt 必须含 `{{materials}}` 槽位（否则素材会被静默丢弃）；`functions.js` 若存在必须可导入且导出 `rules` 数组；golden.json 必须存在；Config 设了 `defaultLanguage` 时所有 pack 都必须支持它；pack 集合为空报错。
+装载范围 = 插件内置 `packs/` + Config `packsDir`（同名 pack 后者覆盖前者）。加载期强制校验（任何一条不过，整个插件启动失败）：manifest 字段完整（含 `scope`（`workspace|topic`，缺省 `topic`）与 `reuse`（布尔；workspace 缺省 true、topic 缺省 false，显式声明覆盖））；声明的每种语言都有 `rules/<lang>.json` + `prompts/<lang>.md` + `templates/<lang>.hbs` 三件套；声明式规则逐条校验（severity 枚举、kind 枚举、kind 载荷、pattern 可编译、suggestion 非空）；prompt 必须含 `{{materials}}` 槽位（否则素材会被静默丢弃）；`functions.js` 若存在必须可导入且导出 `rules` 数组；golden.json 必须存在；Config 设了 `defaultLanguage` 时所有 pack 都必须支持它；pack 集合为空报错。
 
 Schema 的 ajv 编译在首次构建该 (pack, language) 的 DocService 时发生（schema.json JSON 语法错误仍是加载期报错）；编译产物按 (pack, language) 缓存，整个插件生命周期只编译一次。空模板渲染出的空 Markdown 也报错。
 
@@ -159,9 +176,27 @@ workspace root 决策链：会话 workspace（如 dsh web UI 选择的目录）>
 - **素材是受信输入**：素材内容可引导生成结果（二阶注入）；MVP 接受此边界并文档化，nonce 定界符待真实反馈再立项。
 - 回执防误改不防恶意（见 3.3）。
 
-### 3.6 工具 `doc_chain_status` — 扇出覆盖账目
+### 3.9 作用域（workspace / topic）
 
-参数：`plan`（workspace 相对路径，须带绿色 sidecar 回执）。确定性、零 LLM。阶段链从 plan 的 pack 出发按 `consumes` 图逐层展开（内置链即 plan→req→func→tech）；扫描 outputRoot 下各阶段**绿色**产物（回执 `isValid` 且 pack 匹配），按 `funcId` 对齐 plan 的 `functions[]`。返回 `{ plan, stages, functions: [{ index, funcId, l2Name?, coverage: { <stage>: 产物名|null } }], coverage: { <stage>: { covered, total } }, orphaned? }`——`orphaned` 列出 funcId 不属于任何 plan 功能的绿色产物（防错挂）。agent 在收工呈现前跑一次即可全链对账（docs/designs/params-and-chain-contract.md）。
+输入与产物分两级作用域，由 pack manifest 声明（通用机制，非 COSMIC 专属）：
+
+```
+workspaceRoot/
+  references/              ← workspace 级素材（workspace pack 备料）
+  context/                 ← workspace 级产物目录（约定名，固定）
+  <topic>/                 ← 话题目录（每个需求一个）
+    references/            ← topic 级素材
+    output/                ← topic 级产物
+```
+
+- workspace 级 pack（cosmic-context / cosmic-context-sync）忽略 `topic`：素材根固定 `<workspace>/references/`、产物根固定 `<workspace>/context/`；
+- topic 级 pack（缺省）：不传 `topic` 时用 Config 根（现状不变）；传 `topic` 后两个根移到 `<topic>/` 下（仍受 workspace 包含约束）；
+- `reuse` 与 scope 正交：scope 决定目录，reuse 决定 doc_generate 是否做"已有绿产物即复用"预检。默认按作用域语义区分（workspace true——项目分析只做一次；topic false——需求变更在产物 hash 里不可见，复用会拿旧需求产物冒充），pack 可显式覆盖（cosmic-context-sync 声明 `reuse: false`，同步是动作）；
+- `doc_chain_status` 的输出根从 plan 路径推断（plan 所在目录即输出根），topic 目录下的链编排无需额外参数。
+
+### 3.10 工具 `doc_chain_status` — 扇出覆盖账目
+
+参数：`plan`（workspace 相对路径，须带绿色 sidecar 回执）。确定性、零 LLM。阶段链从 plan 的 pack 出发按 `consumes` 图逐层展开（内置链即 context→plan→req→func→tech；workspace 级 pack 不进入扇出——coverage 定义在 plan functions 扇出上，context 是项目级单产物）；扫描 outputRoot 下各阶段**绿色**产物（回执 `isValid` 且 pack 匹配），按 `funcId` 对齐 plan 的 `functions[]`。返回 `{ plan, stages, functions: [{ index, funcId, l2Name?, coverage: { <stage>: 产物名|null } }], coverage: { <stage>: { covered, total } }, orphaned? }`——`orphaned` 列出 funcId 不属于任何 plan 功能的绿色产物（防错挂）。agent 在收工呈现前跑一次即可全链对账（docs/designs/params-and-chain-contract.md）。
 
 **扇出契约（1:N:N:N）**：plan 整需求一份；req/func/tech 与 plan 的 functions 一一对应、份数相等，每个功能一条平行微链。`targetIndex`（req/func/tech 必填无默认）指定目标功能；req 的对齐规则额外校验 `index === targetIndex`，func/tech 经上游锚点传递保持一致。
 
@@ -171,7 +206,7 @@ workspace root 决策链：会话 workspace（如 dsh web UI 选择的目录）>
 
 ```
 packs/<name>/
-├── manifest.json      # name / version / description / consumes / languages / maxRounds? / params?
+├── manifest.json      # name / version / description / consumes / scope? / reuse? / languages / maxRounds? / params?
 ├── schema.json        # JSON Schema（draft-07 或 2020-12），定义"文档长什么样"
 ├── rules/<lang>.json  # 声明式规则，定义"什么算合格"（简单族）
 ├── rules/functions.js # JS 函数规则（可选），跨字段规则（唯一性、求和、区间）
@@ -203,21 +238,29 @@ packs/<name>/
 2. **golden.json 必须全绿**；每条规则族至少配一种"故意损坏"的变异测试，断言 checker 全部抓住——抓不住损坏样本的 checker 是摆设（内置 pack 由测试套件强制，外部 pack 为约定契约）。
 3. `version` 是破坏性变更的逃生门：改规则语义必须升版本，旧产物回执会被 `packVersionStale` / 链式校验识别为过期。
 
-### 4.5 现有 pack：cosmic-plan（v0.2.0）
+### 4.5 现有 pack：cosmic-plan（v0.3.0，consumes cosmic-context）
 
-COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`consumes: []`，双语 zh-CN/en-US。schema 定义 `functions[]`（funcId / l1-l3Name / funcDesc / estimatedCfps）+ totalCfps 等字段。参数三块（docs/designs/params-and-chain-contract.md 的共享预算）：`cfpPerFunc`（object {value, min, max}，默认 {30, 10, 100}，confirm）、`cfpTotal`（object {value, downFactor, upFactor}，**required 无 default**——预算只从用户意图来，confirm）、`cfpPerSubProc`（number，默认 2.5，供下游阶段规模的引导）。规则 7 条：声明式 6 条（funcDesc ≥80 字 [error] / ≤2000 字 [warning]、funcId 格式正则、三级功能名禁用"管理/处理/系统/manage/process/system"等泛化词）；函数规则 5 条（funcId 唯一、层级路径唯一、**cfp-per-func-band** estimatedCfps ∈ cfpPerFunc.[min,max] [error]、**cfp-total-band** totalCfps ∈ cfpTotal.value×[downFactor, upFactor] [error]、CFP 总和 20-1000 且 totalCfps 等于求和）。原「推荐 20-50」警示规则已由参数带规则取代——模板不再与用户预算竞争。
+COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`consumes: ["cosmic-context"]`——链头是项目上下文，plan 必须以绿 context 为 upstream，双语 zh-CN/en-US。schema 定义 `functions[]`（**changeKind**（added|modified，必填）/ funcId / l1-l3Name / funcDesc / estimatedCfps）+ totalCfps 等字段——模块变更语义显式化：每个被新增或修改的底层模块是一项 function。参数三块（docs/designs/params-and-chain-contract.md 的共享预算）：`cfpPerFunc`（object {value, min, max}，默认 {30, 10, 100}，confirm）、`cfpTotal`（object {value, downFactor, upFactor}，**required 无 default**——预算只从用户意图来，confirm）、`cfpPerSubProc`（number，默认 2.5，供下游阶段规模的引导）、`moduleLevels`（number 1-3，默认 2，与 cosmic-context 共享同名参数、沿回执继承——树层级深度是链级契约）。规则 9 条：声明式 6 条（funcDesc ≥80 字 [error] / ≤2000 字 [warning]、funcId 格式正则、三级功能名禁用"管理/处理/系统/manage/process/system"等泛化词）；函数规则 7 条（funcId 唯一、层级路径唯一、**context-alignment**——无绿 context 上游响亮报错；changeKind=modified 的叶子 code 必须已存在于 context 模块树，added 不得撞已有编号且须符合对应层级 `moduleIdConventionForLevelN`（v1 对账叶子 code，全链逐段对齐留 v2）、**name-hierarchy**——l2Name（levels≥2）/l3Name（levels=3）必填性与 funcId 分段数下限（≥moduleLevels）由参数驱动（schema 管结构、规则管策略），**cfp-per-func-band** estimatedCfps ∈ cfpPerFunc.[min,max] [error]、**cfp-total-band** totalCfps ∈ cfpTotal.value×[downFactor, upFactor] [error]、CFP 总和 20-1000 且 totalCfps 等于求和）。原「推荐 20-50」警示规则已由参数带规则取代——模板不再与用户预算竞争。
 
-### 4.6 现有 pack：cosmic-req（v0.2.0）
+### 4.6 现有 pack：cosmic-req（v0.3.0）
 
-COSMIC 需求分析文档（从 cosmic-claude Req 阶段迁移），per-function 粒度：`index` 定位上游 plan `functions` 数组的 1-based 位置，`funcId`/`desiredCfps`（=estimatedCfps）从对应 function 复制。`consumes: ["cosmic-plan"]`，双语 zh-CN/en-US。参数七个：`targetIndex`（必填无默认，1-based 定位上游 plan functions 的目标功能；缺失即 fail loud 并列出候选）、`functionalUserRoles`（功能用户角色白名单，逗号分隔 string，默认 6 个样例角色）、`funcDescMaxLength`（功能描述上限，默认 500；schema 硬顶 2000），外加共享预算三参数 `cfpPerFunc`/`cfpTotal`/`cfpPerSubProc`（从上游回执继承并回录，链条传递用）。E302 文案与建议同步改用 `cfpsPerRule`。规则 8 条：声明式 5 条（funcDesc ≥10 [error] / ≤参数上限 [warning]、funcId 格式、role 格式 `^[a-z][a-z0-9-]*$`、业务规则描述 ≥10 [error]）；函数规则 3 条（**E301** role ∈ 部署白名单、**E302** 规则数 ∈ [ceil(cfps/cfpsPerRule), floor(ceil×1.5)]、**E303 泛化** index/funcId/desiredCfps 与上游 plan 三点对齐——全部 error 阻断，与原系统"审计意见只降分不阻断"不同，差异与理由见 docs/designs/function-rule-context.md）。
+COSMIC 需求分析文档（从 cosmic-claude Req 阶段迁移），per-function 粒度：`index` 定位上游 plan `functions` 数组的 1-based 位置，`funcId`/`desiredCfps`（=estimatedCfps）从对应 function 复制。`consumes: ["cosmic-plan"]`，双语 zh-CN/en-US。参数七个：`targetIndex`（必填无默认，1-based 定位上游 plan functions 的目标功能；缺失即 fail loud 并列出候选）、`functionalUserRoles`（功能用户角色白名单，逗号分隔 string，默认 6 个样例角色）、`funcDescMaxLength`（功能描述上限，默认 500；schema 硬顶 2000），外加共享预算三参数 `cfpPerFunc`/`cfpTotal`/`cfpPerSubProc`（从上游回执继承并回录，链条传递用）。E302 文案与建议同步改用 `cfpsPerRule`。prompt 的领域模型：用户故事主体是**角色（来自 context.roles）或第三方系统（来自 context.thirdPartySystems）**，流程性故事可引入**顶层模块**；需要项目知识时由模型在 upstream 数组按需携带 context（rider）。`functionalUsers[].kind`（必填，四分类 person/organization/system/3rd-party，schema 层）标明功能用户类型；对 context.roles 的引用校验留 v2（upstream 不强制传 context 时无从对账）。规则 8 条：声明式 5 条（funcDesc ≥10 [error] / ≤参数上限 [warning]、funcId 格式、role 格式 `^[a-z][a-z0-9-]*$`、业务规则描述 ≥10 [error]）；函数规则 3 条（**E301** role ∈ 部署白名单、**E302** 规则数 ∈ [ceil(cfps/cfpsPerRule), floor(ceil×1.5)]、**E303 泛化** index/funcId/desiredCfps 与上游 plan 三点对齐——全部 error 阻断，与原系统"审计意见只降分不阻断"不同，差异与理由见 docs/designs/function-rule-context.md）。
 
-### 4.7 现有 pack：cosmic-func（v0.2.0）
+### 4.7 现有 pack：cosmic-func（v0.2.0，prompt 领域措辞对齐 2.1）
 
 COSMIC 概要设计文档（功能过程设计，从 cosmic-claude Func 阶段迁移），per-function 粒度：`index`/`funcId`/`desiredCfps` 从上游 req 产物原样复制，`diagrams`（mermaid 源码）+ `processes[]`（name/description/originator/receiver/origination_event）。相对原 schema 的两处偏差：`metadata`（时间戳等文档元信息）删除——docwright 无手工编辑 UX，版本由回执承载。`consumes: ["cosmic-req"]`，双语，声明共享预算三参数（继承回录用）+ `targetIndex`（必填）。规则 9 条：声明式 5 条（**E002** 过程名禁用"进行/执行/异常处理/设计/校验/conduct/execute" [error，v1 审计器默认与 v2 关键字文件合并]、**A001** 过程名后缀"处理/过程/闭环/流程/管理/等等/待定/TBD/etc." [info，ADVICE→info，用 pattern+mustMatch:false 表达]、**W001** 过程名警示词"计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序" [warning]、**E003** originator/receiver 禁用存储设施字眼"数据库/文件存储" [error，功能用户是业务角色，存储设施是实现载体——单字段单规则故拆为 originator/receiver 两条]）；函数规则 4 条（**E001** originator≠receiver [error]、过程名文档内唯一、过程 index 从 1 连续、**req 三点对齐**——index/funcId/desiredCfps 与上游 req 一致，缺失/非 req 上游一律响亮报错）。原 Func 审计器的 expected_functions 外部计数检查未迁移（docwright 无对应外部输入，过程规模由 tech 阶段 CFP 预算约束兜底）。
 
-### 4.8 现有 pack：cosmic-tech（v0.2.0）
+### 4.8 现有 pack：cosmic-tech（v0.2.0，prompt 领域措辞对齐 2.1）
 
 COSMIC 技术拆分文档（功能点拆分表，从 cosmic-claude Tech 阶段迁移），per-function 粒度：锚点同 func（index/funcId/desiredCfps 从上游 func 复制），`processes[].subProcesses[]` 为数据移动（description/dataMovementType E-X-R-W/dataGroup/dataProperties/cfp=1）。相对原 schema 的两处偏差：`metadata` 删除（同 4.7）；`revised`（人工复核标记）删除——docwright 无人工修订流。`consumes: ["cosmic-func"]`，双语。参数四个：共享预算 `cfpPerFunc`/`cfpTotal`/`cfpPerSubProc`（继承回录用，`cfpPerSubProc` 默认 2.5——即平均每个功能过程约 2.5 个数据移动）+ `targetIndex`（必填）；原 `cfpMinRatio`/`cfpMaxRatio` 参数删除，容差系数改读共享 `cfpTotal` 的 downFactor/upFactor（缺省回退 [0.9, 1.2]，比原 [0.9, 1.5] 收紧——用户预算的偏离带全链一致）。CFP 预算错误带（<down× / >up× [error]）；警示带简化为「带内偏离预算即提示 [warning]」（原 20% 分界随 1.5 上限一并取消）。规则 8 条：声明式 1 条（funcId 格式）；函数规则 7 条。数据移动序列收紧为三种评审安全模式 **`ERX`（查询）/`EW`（落库）/`EX`（转发交互）**——`tech/movement-pattern` 一条函数规则承载，回执给出实际序列与合法模式对比；该模式集蕴含原型的 E101（首移动必 E）、E102（收尾 W/X）、E103/E107/E109（移动计数 1/2/>6）、A101（5-6 个拆分建议）与 E105（E/W/X 不连相同类型）、E108（非首 E 前必 X），上述 7 条原型规则不再单独存在（多轮读写拆多个过程，各自满足模式）；golden 亦按 7×EW + 7×ERX 重排（14 过程 = 35 CFP，恰等预算，平均 2.5）。其余函数规则沿用：**W103** 同过程内移动三元组（类型+数据组+数据属性）不重复 [warning]（`tech/movement-duplicate`）、**W101** 子过程描述警示词 [warning]（`tech/subprocess-desc-keywords`）、**W102** 数据属性 ≥2 [warning]（`tech/data-properties-count`）、CFP 预算错误带与带内偏离提示（对应 W100/W200，分属 `tech/cfp-total-vs-budget` [error] / `tech/cfp-budget-advice` [warning]）、**func 对齐**——三点锚定加过程名覆盖（上游 func 每个过程必须出现在 tech.processes 中，同名，`tech/func-alignment`）。嵌套作用域（subProcesses）规则全部走函数规则——声明式 `given` 仅支持根与一层 `$.field[*]`，嵌套由函数规则的整产物视角覆盖，引擎无需扩展。
+
+### 4.9 现有 pack：cosmic-context（v0.1.0，链头）
+
+COSMIC 项目上下文——场景链的第一个产物、项目知识的唯一承载（docs/designs/cosmic-context.md）。`consumes: []`、`scope: "workspace"`（素材 `references/`、产物 `context/`，忽略 topic）、`reuse: true`（项目分析只做一次；复用预检按 pack+绿回执+hash 对账，`force` 绕过）。schema：`projectName` / `background` / `overview`（各 ≥20 字）/ `modules[]`（树 1-3 级，每模块 `code`（`^[A-Za-z0-9]{1,8}$`，全树唯一，是模块身份——funcId 的段即 code 链）与可选 `path`（代码位置，规则引擎不校验存在性）/ `responsibility`）/ `roles[]`（person|organization|system 三分类）/ `thirdPartySystems[]`（purpose=它是什么，interaction=如何交互）/ `moduleIdConventionForLevel1..3`（numeric|alphabetic，树用到第 N 级必声明）/ `designPrinciples[]` / `assumptions[]`（模型假定显式登记）。参数 `moduleLevels`（1-3，默认 2）——schema 恒表达三级结构，实际树深由参数驱动。规则 4 条（函数）：**module-code-unique**（全树 code 唯一 [error]）、**module-depth**（实际最大深度 = moduleLevels [error]）、**module-id-convention**（第 N 级（N≤moduleLevels）有模块但规则缺失 [error]）、**assumptions-review**（假定非空提示人工审阅 [warning]；修正后 seal 回签重新入链）。
+
+### 4.10 现有 pack：cosmic-context-sync（v0.1.0，同步动作）
+
+把一个话题绿 plan 规划的模块变更（added/modified）合并回 workspace 级 context，产出刷新后的绿 context——项目知识随需求持续演化。`scope: "workspace"`、`reuse: false`（同步是动作，不被复用预检拦截）、`consumes: ["cosmic-context", "cosmic-plan"]`——upstream 显式传旧 context 与本话题绿 plan（缺一即工具层响亮拒绝；模型可见 ⟺ 日志可重建，工具不做隐式扫描），触发时机写进 description：plan 阶段绿后可用。schema 与 cosmic-context 相同（产物是 docType context 的新版本）。生成走标准闭环：LLM 以旧 context + plan 为输入产出合并 context（新增模块按编号规则插入对应层级、修改模块更新职责），规则 = context 四条 + 两条合并对账：**context-sync/coverage**（plan 每个 added/modified 功能的最深层级名称必须出现在合并树中 [error]；v1 按 name 匹配，funcId 段逐段对账留 v2）、**context-sync/preserve**（旧 context 模块在合并产物中缺失 [warning]——防合并丢失，确属下线由人工 seal 裁决）。`doc_chain_status` 的扇出图不含 workspace 级 pack，coverage 矩阵不受影响。
 
 ## 5. 插件 / pack 职责边界（总表）
 
@@ -232,6 +275,7 @@ COSMIC 技术拆分文档（功能点拆分表，从 cosmic-claude Tech 阶段�
 | 回执 | 生成、哈希、复验、staleness | 提供被快照的规则内容 |
 | 链式消费 | 上游六项校验、版本策略 | `manifest.consumes` 声明 |
 | 安全 | 路径包含、名称消毒、素材非空 | — |
+| 作用域 | `topic`/`force` 参数、workspace/topic 根解析、复用预检（绿回执+hash）、doc_chain_status 输出根推断 | `manifest.scope` / `manifest.reuse` 声明 |
 | 配置 | Config schema 与全部默认值 | — |
 | 领域概念（COSMIC、CFP） | **禁止进入插件** | 规则与 prompt 中自由使用 |
 | 能力发现 | `doc_packs` 工具、三处静态邀请文案、manifest.description 加载期校验 | `description` 的一句话内容 |

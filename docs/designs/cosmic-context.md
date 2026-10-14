@@ -1,6 +1,6 @@
 # 设计：cosmic-context 场景链头与领域模型显式化
 
-Status: PROPOSAL（待确认后实施）
+Status: IMPLEMENTED（2026-10-14，feat/cosmic-context 四 commit 合并）
 Date: 2026-10-14
 关联: docs/designs/scenario-chains.md（开放问题 3 由本设计定案）、docs/designs/docwright-mvp.md 第 4.x 节、TODOS.md
 
@@ -45,11 +45,12 @@ workspaceRoot/
     output/                ← topic 级产物
 ```
 
-- **topic 参数**：`doc_generate` / `doc_validate` 增加可选参数 `topic`（子目录名，confine 校验在 workspaceRoot 内）。给定后：产物根为 `<topic>/output/`、素材根为 `<topic>/references/`；缺省维持现状（workspaceRoot 根下的 `output/`、`references/`）——既有调用与测试零迁移。workspace scope 的 pack 忽略 topic（固定 workspace 级目录：素材 `references/`、产物 `context/`）。
+- **topic 参数**：`doc_generate` 增加可选参数 `topic`（单段目录名 `[A-Za-z0-9._-]`，confine 校验在 workspaceRoot 内）；`doc_validate` 不设该参数——复验全由产物路径驱动，素材/产物根不参与。给定后：产物根为 `<topic>/output/`、素材根为 `<topic>/references/`；缺省维持现状（workspaceRoot 根下的 `output/`、`references/`）——既有调用与测试零迁移。workspace scope 的 pack 忽略 topic（固定 workspace 级目录：素材 `references/`、产物 `context/`）。
 - **复用预检**（`scope: "workspace"` 且 `reuse: true`）：doc_generate 生成前扫 `context/`：存在同 pack 产物且 sidecar 回执 `isValid === true` 且**产物当前 hash 与回执记录一致**（复用 staleness 对账，不重跑 LLM 校验）→ 直接返回该产物（返回值带 `reused: true` 与原回执），除非调用方显式 `force: true`。回执缺失/红色/hash 不符 → 正常走生成闭环。人工 seal 修正后 hash 变化，预检自然不命中，语义自洽。
 - **doc_chain_status**：从 `plan` 参数的路径推断输出根（plan 所在目录即 output 根），topic 目录自然生效，不加参数。
 - 产物路径对下游照旧是 workspace-relative（如 `context/cosmic-context-….json`、`req-2026-001/output/plan.json`），`upstream` 传递与 confine 校验不变。
 - **upstream 是内容注入，不是引用**：doc_generate 把 upstream 产物全文渲染进该次调用的 prompt（`{{upstream}}` 槽）——LLM 自身无法读文件，"仅传路径"要么模型读不到、要么经额外工具读取后同样进上下文，无节省反多往返。成本量级：context 产物典型 1-2k token，每次 doc_generate 注入一份；修复循环内每轮 prompt 重建时都在，但**不跨调用累积**（会话持久负担只有回执，回执记录的是 upstream hash 而非全文）；promptTokenBudget 预检（既有）兜总量。req/func/tech 按需携带 context 的实际开销即此量级，不构成上下文灾难；若未来 context 产物膨胀，节流手段是按 pack 裁剪注入视图（如 req 只注入 roles/thirdPartySystems），留作观察项不预先实现。
+- **随行上游（rider）**：consumes 之外、已安装 pack 的绿回执产物（绿 + hash + 版本策略全量校验后）可作为随行上游进入 prompt 与函数规则 context——"按需携带 context"由此承载；链式 pack 的 upstream 至少须含一个 consumed 类型，缺失响亮报错（链契约不因 rider 松动）。
 
 ## 设计
 
@@ -100,7 +101,7 @@ req/plan/func/tech 产物**不需要特别的编号规则**：沿用既有 `arti
 
 plan 规划通过并落地后，把"本次 topic 修改/新增的模块"合并回项目 context，使项目知识随需求持续演化：
 
-- manifest：`name: "cosmic-context-sync"`、`scope: "workspace"`、`reuse: false`（同步是动作，不被复用预检拦截）、`consumes: []`、schema 与 cosmic-context 相同（产物是 `docType: "context"` 的新版本）、双语。
+- manifest：`name: "cosmic-context-sync"`、`scope: "workspace"`、`reuse: false`（同步是动作，不被复用预检拦截）、`consumes: ["cosmic-context", "cosmic-plan"]`（复用既有上游验证通道：upstream 缺失或非绿在工具层即时响亮拒绝，零 LLM 开销；`doc_chain_status` 的阶段游走跳过 workspace 级 pack，扇出矩阵不受影响）、schema 与 cosmic-context 相同（产物是 `docType: "context"` 的新版本）、双语。
 - 调用：`doc_generate(pack: "cosmic-context-sync", topic: "<topic>", upstream: [<context 路径>, <topic>/output/<plan 路径>])`——upstream 显式传旧 context 与该 topic 的绿 plan（模型可见 ⟺ 日志可重建；工具不做隐式扫描），upstream 缺失或非绿回执 fail loud。触发时机写进工具描述：plan 阶段绿后可用。
 - 生成：LLM 以旧 context + plan 为输入产出合并后的 context（新增模块插入对应层级并按 `moduleIdConventionForLevelN` 分配编号、修改模块更新职责描述），走标准闭环（生成 → 校验 → 修复循环）。
 - 规则（函数规则读 upstream，在 context 自身四条规则之外）：
@@ -123,9 +124,11 @@ plan 规划通过并落地后，把"本次 topic 修改/新增的模块"合并�
 
 | 增强点 | 内容 | 量级 |
 |---|---|---|
-| 1. manifest `scope` + `reuse` 字段 | loader 声明与校验（scope：`workspace`/`topic` 缺省后者；reuse 布尔缺省 true、仅 workspace 有意义） | 小 |
-| 2. `doc_generate`/`doc_validate` 的 `topic` 参数 | 产物根/素材根按 `<topic>/` 解析，confine 校验；workspace pack 忽略 topic；缺省行为不变 | 小 |
-| 3. workspace 复用预检 | doc_generate 对 `scope: "workspace" && reuse: true` 生成前扫 `context/`，绿回执 + hash 对账命中即复用（`reused: true`），`force: true` 例外 | 中 |
+| 1. manifest `scope` + `reuse` 字段 | loader 声明与校验（scope：`workspace`/`topic` 缺省后者；reuse 布尔按 scope 语义取默认、显式声明覆盖） | 小 |
+| 2. `doc_generate` 的 `topic` + `force` 参数 | 产物根/素材根按 `<topic>/` 解析（单段名 + confine 校验）；workspace pack 忽略 topic；缺省行为不变；`force` 绕过复用预检 | 小 |
+| 3. workspace 复用预检 | doc_generate 对 `reuse: true` 生成前扫产物根：同 pack + 绿回执 + 版本一致 + hash 对账命中即复用（`reused: true`，零 LLM） | 中 |
+| 4. 随行上游（rider） | consumes 之外已安装 pack 的绿产物放行注入；链式 pack 至少一个 consumed 类型 | 小 |
+| 5. doc_chain_status 输出根推断 + workspace 排除 | 输出根 = plan 所在目录；阶段游走跳过 workspace 级 pack | 小 |
 
 复用判定复用既有 hash 对账机制（staleness 语义），不新增校验逻辑。以下需求全部落在既有机制内：
 
