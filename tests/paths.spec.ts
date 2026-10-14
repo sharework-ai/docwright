@@ -107,8 +107,8 @@ describe('session-driven roots end to end (doc_generate via tool)', () => {
     const replies = [contextGolden, JSON.stringify(pack.goldenSample)]
     let calls = 0
     const sessionWs = await mkdtemp(join(tmpdir(), 'docwright-session-'))
-    await mkdir(join(sessionWs, 'references'), { recursive: true })
-    await writeFile(join(sessionWs, 'references', 'req.md'), '素材内容', 'utf8')
+    await mkdir(join(sessionWs, 'topic-a', 'references'), { recursive: true })
+    await writeFile(join(sessionWs, 'topic-a', 'references', 'req.md'), '素材内容', 'utf8')
     const configWs = await mkdtemp(join(tmpdir(), 'docwright-config-'))
     const tool = defineDocGenerateTool({
       packs,
@@ -130,10 +130,10 @@ describe('session-driven roots end to end (doc_generate via tool)', () => {
       { agent: { session: { cwd: sessionWs } }, signal } as never,
     )
     const out = await tool.execute(
-      { pack: 'cosmic-plan', materials: ['req.md'], artifactName: 'sess', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never,
+      { pack: 'cosmic-plan', topic: 'topic-a', materials: ['req.md'], artifactName: 'sess', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never,
       { agent: { session: { cwd: sessionWs } }, signal } as never,
     ) as unknown as { artifactPath: string }
-    expect(out.artifactPath).toBe(join(sessionWs, 'output', 'sess.json'))
+    expect(out.artifactPath).toBe(join(sessionWs, 'topic-a', 'output', 'sess.json'))
     expect(JSON.parse(await readFileUtf8(out.artifactPath)).docType).toBe('plan')
   })
 })

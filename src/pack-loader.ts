@@ -77,6 +77,9 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
   if (m.reuse !== undefined && typeof m.reuse !== 'boolean') {
     throw new Error(`pack ${dir}: manifest.reuse must be a boolean when present`)
   }
+  if (m.requiresTopic !== undefined && typeof m.requiresTopic !== 'boolean') {
+    throw new Error(`pack ${dir}: manifest.requiresTopic must be a boolean when present`)
+  }
   if (m.maxRounds !== undefined && (!Number.isInteger(m.maxRounds) || m.maxRounds < 1)) {
     throw new Error(`pack ${dir}: manifest.maxRounds must be a positive integer`)
   }
@@ -96,6 +99,9 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
   // workspace packs default reuse=true (project analysis happens once), topic
   // packs default false (a changed requirement is invisible in artifact hashes).
   const scope = m.scope ?? 'topic'
+  if (scope === 'workspace' && m.requiresTopic === true) {
+    throw new Error(`pack ${dir}: manifest.requiresTopic is meaningless on a workspace-scope pack (topic is ignored there); drop it or switch scope to "topic"`)
+  }
   return {
     name: m.name,
     version: m.version,
@@ -106,6 +112,7 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
     languages: m.languages,
     ...(m.maxRounds === undefined ? {} : { maxRounds: m.maxRounds }),
     ...(m.paramDriftPolicy === undefined ? {} : { paramDriftPolicy: m.paramDriftPolicy }),
+    ...(m.requiresTopic === undefined ? {} : { requiresTopic: m.requiresTopic }),
     ...(params === undefined ? {} : { params }),
   }
 }

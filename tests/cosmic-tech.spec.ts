@@ -97,14 +97,12 @@ async function makeDeps(llm: unknown) {
 async function generateFuncChain(deps: { ctx: { llm: unknown } }, func: Pack, req: Pack, plan: Pack): Promise<void> {
   await seedContext(deps)
   deps.ctx.llm = scriptedLlm([JSON.stringify(plan.goldenSample)])
-  await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+  await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
   deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
-  await defineDocGenerateTool(deps).execute({
-    pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
+  await defineDocGenerateTool(deps).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
   } as never, { signal } as never)
   deps.ctx.llm = scriptedLlm([JSON.stringify(func.goldenSample)])
-  await defineDocGenerateTool(deps).execute({
-    pack: 'cosmic-func', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'func', upstream: ['output/req.json'], params: { targetIndex: 1 }, confirm: true,
+  await defineDocGenerateTool(deps).execute({ pack: 'cosmic-func', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'func', upstream: ['topic-a/output/req.json'], params: { targetIndex: 1 }, confirm: true,
   } as never, { signal } as never)
 }
 
@@ -278,6 +276,15 @@ describe('cosmic-tech mutation tests (guardrail-is-real)', () => {
       d.processes = [...(d.processes as unknown[]), extraPersist(1), extraPersist(2), extraPersist(3), extraPersist(4)]
     })
     expect(issueRuleIds(validateOf(tech, 'zh-CN', fat, undefined, ctx))).toContain('tech/cfp-total-vs-budget')
+    // The floor is pinned at the plan estimate: one CFP short errors even when
+    // the caller loosens downFactor — tech never totals below the plan.
+    const oneShort = mutate(tech.goldenSample, d => {
+      const procs = d.processes as Array<{ subProcesses: unknown[] }>
+      procs[0]!.subProcesses = procs[0]!.subProcesses.slice(0, 1)
+    })
+    expect(issueRuleIds(validateOf(tech, 'zh-CN', oneShort, { cfpTotal: { value: 35, downFactor: 0.8, upFactor: 1.2 } }, ctx))).toContain('tech/cfp-total-vs-budget')
+    // Equal to the estimate passes (the golden: 35 = 35) regardless of downFactor.
+    expect(issueRuleIds(validateOf(tech, 'zh-CN', tech.goldenSample, { cfpTotal: { value: 35, downFactor: 0.8, upFactor: 1.2 } }, ctx))).not.toContain('tech/cfp-total-vs-budget')
   })
 
   it('cfp-budget-advice: totals inside the band but off the budget are warnings', async () => {
@@ -325,8 +332,7 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     const deps = await makeDeps(undefined)
     await generateFuncChain(deps, func, req, plan)
     deps.ctx.llm = scriptedLlm([JSON.stringify(tech.goldenSample)])
-    const out = await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-tech', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['output/func.json'], params: { targetIndex: 1 }, confirm: true,
+    const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-tech', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['topic-a/output/func.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string; artifactHash: string }>; params?: Record<string, unknown> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.upstreamHashes).toHaveLength(1)
@@ -341,8 +347,7 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     await generateFuncChain(deps, func, req, plan)
     const wrong = mutate(tech.goldenSample, d => { d.desiredCfps = 40 })
     deps.ctx.llm = scriptedLlm([JSON.stringify(wrong), JSON.stringify(tech.goldenSample)])
-    const out = await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-tech', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['output/func.json'], params: { targetIndex: 1 }, confirm: true,
+    const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-tech', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['topic-a/output/func.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; iterations: number; rounds: Array<{ errorCount: number }> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.iterations).toBe(2)
@@ -355,18 +360,17 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     const deps = await makeDeps(undefined)
     await generateFuncChain(deps, func, req, plan)
     deps.ctx.llm = scriptedLlm([JSON.stringify(tech.goldenSample)])
-    await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-tech', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['output/func.json'], params: { targetIndex: 1 }, confirm: true,
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-tech', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'tech', upstream: ['topic-a/output/func.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
 
     const withUpstream = await defineDocValidateTool(deps).execute({
-      artifactPath: 'output/tech.json', pack: 'cosmic-tech', upstream: ['output/func.json'],
+      artifactPath: 'topic-a/output/tech.json', pack: 'cosmic-tech', upstream: ['topic-a/output/func.json'],
     } as never, { signal } as never) as { receipt: { isValid: boolean }; hashMatches: boolean }
     expect(withUpstream.receipt.isValid).toBe(true)
     expect(withUpstream.hashMatches).toBe(true)
 
     const without = await defineDocValidateTool(deps).execute({
-      artifactPath: 'output/tech.json', pack: 'cosmic-tech',
+      artifactPath: 'topic-a/output/tech.json', pack: 'cosmic-tech',
     } as never, { signal } as never) as { receipt: { isValid: boolean; rules: Array<{ id: string; status: string }> } }
     expect(without.receipt.isValid).toBe(false)
     expect(without.receipt.rules.find(r => r.ruleId === 'tech/func-alignment')?.status).toBe('fail')

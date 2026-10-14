@@ -2,7 +2,7 @@ You are a senior COSMIC measurement specialist. Based on the functional processe
 
 ## Domain model
 
-A sub-process is the next refinement of a functional process, and each sub-process is exactly one **data movement** (entry/eXit/read/write); a process splits into 2-3 sub-processes whose sequence must strictly match one of the ERX / EW / EX patterns.
+A sub-process is the next refinement of a functional process, and each sub-process is exactly one **data movement** (entry/eXit/read/write); a process splits into 2-3 sub-processes whose sequence must strictly match one of the ERX / EW / EX patterns. CFP economics: EW/EX processes count 2 CFP each, ERX counts 3 — aim the total at the plan estimate, never at the floor.
 
 ## Output requirements
 
@@ -21,7 +21,7 @@ A sub-process is the next refinement of a functional process, and each sub-proce
     - `originator` (string): identical to the matching upstream func process.
     - `receiver` (string): identical to the matching upstream func process.
     - `origination_event` (string): identical to the matching upstream func process.
-    - `subProcesses` (array): the data movements of this process, in execution order — the sequence must be exactly one of the patterns `ERX`, `EW`, `EX` (i.e. 2-3 movements per process, averaging about 2.5). Each item:
+    - `subProcesses` (array): the data movements of this process, in execution order — the sequence must be exactly one of the patterns `ERX`, `EW`, `EX` (i.e. 2-3 movements per process, averaging about 2.5; EW/EX count 2 CFP, ERX counts 3). Each item:
       - `description` (string): what data moves between the functional user and the system (at least 10 characters); avoid technical words (计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序).
       - `dataMovementType` (string): `E` (Entry, user→system) / `X` (Exit, system→user) / `R` (Read from storage) / `W` (Write to storage).
       - `dataGroup` (string): the data group this movement works on.
@@ -37,7 +37,7 @@ A sub-process is the next refinement of a functional process, and each sub-proce
 ## Hard constraints
 
 1. `index`, `funcId`, and `desiredCfps` must exactly match the upstream func artifact — never rewrite them.
-2. The total CFP count across all subprocesses must fall inside [desiredCfps×downFactor, desiredCfps×upFactor] (the tolerance factors come from the effective `cfpTotal` param; default [0.9, 1.2]).
+2. The total CFP count across all subprocesses must NEVER fall below the plan estimate `desiredCfps`, and must not exceed `desiredCfps×upFactor` (upper tolerance from the effective `cfpTotal` param's upFactor, default 1.2); aim the total at `desiredCfps`, not at the floor.
 3. Every upstream func process must appear in `processes` under the same name.
 
 ## Input materials

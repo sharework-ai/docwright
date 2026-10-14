@@ -62,6 +62,7 @@ async function makeDeps(llm: unknown) {
 
 const PLAN_ARGS = {
   pack: 'cosmic-plan',
+  topic: 'topic-a',
   materials: ['#!inline\n素材'],
   language: 'zh-CN',
   upstream: ['context/context.json'],
@@ -105,6 +106,15 @@ describe('manifest scope/reuse declaration (pack-loader)', () => {
     expect(packs.get('ws-noreuse')!.manifest.reuse).toBe(false)
   })
 
+  it('fails loud on a non-boolean requiresTopic and on workspace-scope requiresTopic', async () => {
+    const badType = await mkdtemp(join(tmpdir(), 'docwright-badrt-'))
+    await writeFixturePack(badType, 'rt', { requiresTopic: 'yes' })
+    await expect(loadPacks(badType, {})).rejects.toThrow(/manifest\.requiresTopic must be a boolean/)
+    const badScope = await mkdtemp(join(tmpdir(), 'docwright-wsrt-'))
+    await writeFixturePack(badScope, 'ws-rt', { scope: 'workspace', requiresTopic: true })
+    await expect(loadPacks(badScope, {})).rejects.toThrow(/requiresTopic is meaningless on a workspace-scope pack/)
+  })
+
   it('fails loud on an out-of-domain scope and a non-boolean reuse', async () => {
     const badScope = await mkdtemp(join(tmpdir(), 'docwright-badscope-'))
     await writeFixturePack(badScope, 'galactic', { scope: 'galactic' })
@@ -112,6 +122,22 @@ describe('manifest scope/reuse declaration (pack-loader)', () => {
     const badReuse = await mkdtemp(join(tmpdir(), 'docwright-badreuse-'))
     await writeFixturePack(badReuse, 'yesreuse', { reuse: 'yes' })
     await expect(loadPacks(badReuse, {})).rejects.toThrow(/manifest\.reuse must be a boolean/)
+  })
+})
+
+describe('requiresTopic enforcement (doc_generate)', () => {
+  it('requirement-scoped packs refuse to generate without a topic', async () => {
+    const deps = await makeDeps({})
+    const args = { ...PLAN_ARGS }
+    delete (args as Record<string, unknown>).topic
+    await expect(defineDocGenerateTool(deps).execute(args as never, { signal } as never))
+      .rejects.toThrow(/scopes its artifacts to one requirement: pass topic/)
+  })
+
+  it('topic is a plain-segment name even when the pack requires it', async () => {
+    const deps = await makeDeps({})
+    await expect(defineDocGenerateTool(deps).execute({ ...PLAN_ARGS, topic: '../escape' } as never, { signal } as never))
+      .rejects.toThrow(/topic must be a plain path segment/)
   })
 })
 
@@ -249,8 +275,8 @@ describe('upstream riders (verifyUpstreamReceipts)', () => {
     const reqPack = packs.get('cosmic-req')!
     deps.ctx.llm = scriptedLlm([JSON.stringify(reqPack.goldenSample)]).llm
     const out = await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-req', materials: [], language: 'zh-CN', artifactName: 'req',
-      upstream: ['output/plan.json', 'context/ctx.json'], params: { targetIndex: 1 }, confirm: true,
+      pack: 'cosmic-req', topic: 'topic-a', materials: [], language: 'zh-CN', artifactName: 'req',
+      upstream: ['topic-a/output/plan.json', 'context/ctx.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string }> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.upstreamHashes.map(a => a.pack)).toEqual(['cosmic-plan', 'ws-pack'])
@@ -264,7 +290,7 @@ describe('upstream riders (verifyUpstreamReceipts)', () => {
     const deps = { packs, config: { provider: 'p', model: 'm', workspaceRoot: wsRoot } as never, ctx: { llm: scriptedLlm(['{"ok":true}']).llm } }
     await defineDocGenerateTool(deps).execute({ pack: 'ws-pack', materials: ['#!inline\nx'], language: 'zh-CN', artifactName: 'ctx' } as never, { signal } as never)
     await expect(defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-req', materials: [], language: 'zh-CN', artifactName: 'req',
+      pack: 'cosmic-req', topic: 'topic-a', materials: [], language: 'zh-CN', artifactName: 'req',
       upstream: ['context/ctx.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)).rejects.toThrow(/none of the upstream artifacts is of a consumed type/)
   })

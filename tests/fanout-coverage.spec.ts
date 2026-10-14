@@ -50,9 +50,8 @@ describe('fan-out contract: targetIndex selection', () => {
   it('fails loud with the plan candidates when targetIndex is missing', async () => {
     const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample)])
     await seedContext(deps as never)
-    await defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
-    await expect(defineDocGenerateTool(deps as never).execute({
-      pack: 'cosmic-req', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
+    await defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await expect(defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'req', upstream: ['topic-a/output/plan.json'],
     } as never, { signal } as never)).rejects.toThrow(/missing required pack params for "cosmic-req": targetIndex.*Candidates from the upstream plan: 1\. USR-FAV \(添加收藏\); 2\. USR-DEL \(删除收藏\)/)
   })
 
@@ -61,9 +60,8 @@ describe('fan-out contract: targetIndex selection', () => {
     const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample), JSON.stringify(req.goldenSample)])
     const gen = defineDocGenerateTool(deps as never)
     await seedContext(deps as never)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
-    const out = await gen.execute({
-      pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
+    await gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    const out = await gen.execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { artifactPath: string; coverage?: { covered: number; total: number; missing: string[] } }
     expect(out.artifactPath.endsWith('cosmic-req-USR-FAV.json')).toBe(true)
     expect(out.coverage).toEqual({ covered: 1, total: 2, missing: ['USR-DEL'] })
@@ -77,9 +75,8 @@ describe('fan-out contract: targetIndex selection', () => {
     const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample), JSON.stringify(second)])
     const gen = defineDocGenerateTool(deps as never)
     await seedContext(deps as never)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
-    const out = await gen.execute({
-      pack: 'cosmic-req', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['output/plan.json'], params: { targetIndex: 2 }, confirm: true,
+    await gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    const out = await gen.execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 2 }, confirm: true,
     } as never, { signal } as never) as { artifactPath: string; receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.artifactPath.endsWith('cosmic-req-USR-DEL.json')).toBe(true)
@@ -90,14 +87,13 @@ describe('fan-out contract: targetIndex selection', () => {
     const deps = await makeDeps(['{}'])
     const { mkdir, writeFile } = await import('node:fs/promises')
     const { artifactHashOf } = await import('../src/receipt.ts')
-    await mkdir(join(deps.ws, 'output'), { recursive: true })
-    await writeFile(join(deps.ws, 'output', 'plan.json'), JSON.stringify(plan.goldenSample), 'utf8')
+    await mkdir(join(deps.ws, 'topic-a', 'output'), { recursive: true })
+    await writeFile(join(deps.ws, 'topic-a', 'output', 'plan.json'), JSON.stringify(plan.goldenSample), 'utf8')
     // Green receipt WITHOUT recorded params: the confirm params are unsatisfied.
-    await writeFile(join(deps.ws, 'output', 'plan.receipt.json'), JSON.stringify({
-      pack: 'cosmic-plan', packVersion: '0.3.0', artifactHash: artifactHashOf(plan.goldenSample), isValid: true,
+    await writeFile(join(deps.ws, 'topic-a', 'output', 'plan.receipt.json'), JSON.stringify({
+      pack: 'cosmic-plan', packVersion: '0.4.0', artifactHash: artifactHashOf(plan.goldenSample), isValid: true,
     }), 'utf8')
-    const out = await defineDocGenerateTool(deps as never).execute({
-      pack: 'cosmic-req', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['output/plan.json'],
+    const out = await defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'],
     } as never, { signal } as never) as { pendingConfirmation: boolean; missingRequired: string[]; candidates?: Array<{ index: number; funcId: string }> }
     expect(out.pendingConfirmation).toBe(true)
     expect(out.missingRequired).toContain('targetIndex')
@@ -111,16 +107,15 @@ describe('doc_chain_status: coverage accounting', () => {
     const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample), JSON.stringify(req.goldenSample)])
     const gen = defineDocGenerateTool(deps as never)
     await seedContext(deps as never)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
-    await gen.execute({
-      pack: 'cosmic-req', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
+    await gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await gen.execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
     return deps
   }
 
   it('builds the coverage matrix over the consuming stages', async () => {
     const deps = await workspaceWithReq1()
-    const out = await defineDocChainStatusTool(deps as never).execute({ plan: 'output/plan.json' } as never, { signal } as never) as {
+    const out = await defineDocChainStatusTool(deps as never).execute({ plan: 'topic-a/output/plan.json' } as never, { signal } as never) as {
       stages: string[]
       functions: Array<{ index: number; funcId: string; l2Name?: string; coverage: Record<string, string | null> }>
       coverage: Record<string, { covered: number; total: number }>
@@ -142,11 +137,11 @@ describe('doc_chain_status: coverage accounting', () => {
     const deps = await workspaceWithReq1()
     const { artifactHashOf } = await import('../src/receipt.ts')
     const ghost = { docType: 'req', funcId: 'GHOST-01', language: 'zh-CN' }
-    await writeFile(join(deps.ws, 'output', 'ghost.json'), JSON.stringify(ghost), 'utf8')
-    await writeFile(join(deps.ws, 'output', 'ghost.receipt.json'), JSON.stringify({
+    await writeFile(join(deps.ws, 'topic-a', 'output', 'ghost.json'), JSON.stringify(ghost), 'utf8')
+    await writeFile(join(deps.ws, 'topic-a', 'output', 'ghost.receipt.json'), JSON.stringify({
       pack: 'cosmic-req', packVersion: '0.2.0', artifactHash: artifactHashOf(ghost), isValid: true,
     }), 'utf8')
-    const out = await defineDocChainStatusTool(deps as never).execute({ plan: 'output/plan.json' } as never, { signal } as never) as { orphaned?: Array<{ stage: string; file: string }> }
+    const out = await defineDocChainStatusTool(deps as never).execute({ plan: 'topic-a/output/plan.json' } as never, { signal } as never) as { orphaned?: Array<{ stage: string; file: string }> }
     expect(out.orphaned).toEqual([{ stage: 'cosmic-req', file: 'ghost.json (funcId GHOST-01 matches no plan function)' }])
   })
 
@@ -155,17 +150,17 @@ describe('doc_chain_status: coverage accounting', () => {
     const tool = defineDocChainStatusTool(deps as never)
     const { mkdir, writeFile } = await import('node:fs/promises')
     // A stray artifact without a sidecar receipt is skipped, not fatal.
-    await mkdir(join(deps.ws, 'output'), { recursive: true })
-    await writeFile(join(deps.ws, 'output', 'stray.json'), '{}', 'utf8')
-    const value = await tool.execute({ plan: 'output/plan.json' } as never, { signal } as never) as unknown
+    await mkdir(join(deps.ws, 'topic-a', 'output'), { recursive: true })
+    await writeFile(join(deps.ws, 'topic-a', 'output', 'stray.json'), '{}', 'utf8')
+    const value = await tool.execute({ plan: 'topic-a/output/plan.json' } as never, { signal } as never) as unknown
     const rendered = tool.output.render({}, value) as Array<{ type: string; text: string }>
     expect(rendered[0]!.type).toBe('text')
     expect(rendered[0]!.text).toContain('cosmic-req-USR-FAV')
-    const out = await tool.execute({ plan: 'output/plan.json' } as never, { signal } as never) as { functions: Array<{ coverage: Record<string, string | null> }> }
+    const out = await tool.execute({ plan: 'topic-a/output/plan.json' } as never, { signal } as never) as { functions: Array<{ coverage: Record<string, string | null> }> }
     expect(out.functions[0]!.coverage['cosmic-req']).toBe('cosmic-req-USR-FAV')
     // Unreadable JSON plan artifact fails loud.
-    await writeFile(join(deps.ws, 'output', 'broken.json'), 'not json', 'utf8')
-    await expect(tool.execute({ plan: 'output/broken.json' } as never, { signal } as never)).rejects.toThrow(/is not readable JSON/)
+    await writeFile(join(deps.ws, 'topic-a', 'output', 'broken.json'), 'not json', 'utf8')
+    await expect(tool.execute({ plan: 'topic-a/output/broken.json' } as never, { signal } as never)).rejects.toThrow(/is not readable JSON/)
   })
 
   it('handles an empty candidates list and a missing output root', async () => {
@@ -176,11 +171,10 @@ describe('doc_chain_status: coverage accounting', () => {
     // Shapeless plan upstream: candidates list is empty, the error still fires.
     await writeFile(join(deps.ws, 'output', 'shapeless.json'), '{}', 'utf8')
     await writeFile(join(deps.ws, 'output', 'shapeless.receipt.json'), JSON.stringify({
-      pack: 'cosmic-plan', packVersion: '0.3.0', artifactHash: artifactHashOf({}), isValid: true,
+      pack: 'cosmic-plan', packVersion: '0.4.0', artifactHash: artifactHashOf({}), isValid: true,
       params: { cfpTotal: { value: 1, downFactor: 1, upFactor: 1 }, cfpPerFunc: { value: 1, min: 1, max: 2 } },
     }), 'utf8')
-    await expect(defineDocGenerateTool(deps as never).execute({
-      pack: 'cosmic-req', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['output/shapeless.json'],
+    await expect(defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['output/shapeless.json'],
     } as never, { signal } as never)).rejects.toThrow(/missing required pack params for "cosmic-req": targetIndex/)
     // Chain status with no output directory at all: empty matrix, no crash.
     const ws2 = await mkdtemp(join(tmpdir(), 'docwright-fanout-noout-'))

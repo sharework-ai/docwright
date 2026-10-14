@@ -63,7 +63,7 @@ docwright 的差异化就在"内容合格性"这一层，由三件事组成：
 | `upstream` | string[]? | 上游产物路径（workspace 相对）。仅当 pack 声明了 `consumes` 时必填，见 3.5 |
 | `artifactName` | string? | 输出基础名，仅允许 `[A-Za-z0-9._-]` 的纯 basename（拒绝路径形状与 `..`）；缺省时：per-function 调用（targetIndex 可解析）为 `<pack>-<funcId>`（不同功能不冲突、重生成幂等），其余为 `<pack>-<时间戳>`；显式传名逐字生效 |
 | `maxRounds` | number? | 当次闭环轮数上限（用户意图经模型转述）；被 Config `maxRoundsCeiling` 硬钳制，任何层不可穿透 |
-| `topic` | string? | 话题目录名（`[A-Za-z0-9._-]` 单段，如需求编号）。给定后产物根为 `<topic>/output/`、素材根为 `<topic>/references/`；workspace 级 pack（见 3.9 作用域）忽略该参数 |
+| `topic` | string? | 话题目录名（`[A-Za-z0-9._-]` 单段，如需求编号）。给定后产物根为 `<topic>/output/`、素材根为 `<topic>/references/`；声明 `requiresTopic` 的 pack **必填**（cosmic 链四阶段 plan/req/func/tech——一个需求一个 topic），workspace 级 pack（见 3.9 作用域）忽略该参数 |
 | `force` | boolean? | 绕过复用预检，强制重建 |
 | `params` | object? | pack 声明参数（`manifest.params`，doc_packs 可见清单）的覆盖值；未知名称/类型/枚举/越界 fail loud 并列出可用参数 |
 
@@ -190,7 +190,7 @@ workspaceRoot/
 ```
 
 - workspace 级 pack（cosmic-context / cosmic-context-sync）忽略 `topic`：素材根固定 `<workspace>/references/`、产物根固定 `<workspace>/context/`；
-- topic 级 pack（缺省）：不传 `topic` 时用 Config 根（现状不变）；传 `topic` 后两个根移到 `<topic>/` 下（仍受 workspace 包含约束）；
+- topic 级 pack：声明 `requiresTopic: true` 的 pack（cosmic 链四阶段）**必须传 `topic`**（缺失即调用期响亮报错）——一个需求一个 topic 目录，链路径与覆盖扫描都以此为锚；未声明的 pack 不传 `topic` 时用 Config 根，传了则两个根移到 `<topic>/` 下（仍受 workspace 包含约束）；
 - `reuse` 与 scope 正交：scope 决定目录，reuse 决定 doc_generate 是否做"已有绿产物即复用"预检。默认按作用域语义区分（workspace true——项目分析只做一次；topic false——需求变更在产物 hash 里不可见，复用会拿旧需求产物冒充），pack 可显式覆盖（cosmic-context-sync 声明 `reuse: false`，同步是动作）；
 - `doc_chain_status` 的输出根从 plan 路径推断（plan 所在目录即输出根），topic 目录下的链编排无需额外参数。
 
@@ -238,21 +238,21 @@ packs/<name>/
 2. **golden.json 必须全绿**；每条规则族至少配一种"故意损坏"的变异测试，断言 checker 全部抓住——抓不住损坏样本的 checker 是摆设（内置 pack 由测试套件强制，外部 pack 为约定契约）。
 3. `version` 是破坏性变更的逃生门：改规则语义必须升版本，旧产物回执会被 `packVersionStale` / 链式校验识别为过期。
 
-### 4.5 现有 pack：cosmic-plan（v0.3.0，consumes cosmic-context）
+### 4.5 现有 pack：cosmic-plan（v0.4.0，consumes cosmic-context，requiresTopic）
 
 COSMIC 功能点估算的 Plan 阶段文档（从 cosmic-claude 迁移），`consumes: ["cosmic-context"]`——链头是项目上下文，plan 必须以绿 context 为 upstream，双语 zh-CN/en-US。schema 定义 `functions[]`（**changeKind**（added|modified，必填）/ funcId / l1-l3Name / funcDesc / estimatedCfps）+ totalCfps 等字段——模块变更语义显式化：每个被新增或修改的底层模块是一项 function。参数三块（docs/designs/params-and-chain-contract.md 的共享预算）：`cfpPerFunc`（object {value, min, max}，默认 {30, 10, 100}，confirm）、`cfpTotal`（object {value, downFactor, upFactor}，**required 无 default**——预算只从用户意图来，confirm）、`cfpPerSubProc`（number，默认 2.5，供下游阶段规模的引导）、`moduleLevels`（number 1-3，默认 2，与 cosmic-context 共享同名参数、沿回执继承——树层级深度是链级契约）。规则 9 条：声明式 6 条（funcDesc ≥80 字 [error] / ≤2000 字 [warning]、funcId 格式正则、三级功能名禁用"管理/处理/系统/manage/process/system"等泛化词）；函数规则 7 条（funcId 唯一、层级路径唯一、**context-alignment**——无绿 context 上游响亮报错；changeKind=modified 的叶子 code 必须已存在于 context 模块树，added 不得撞已有编号且须符合对应层级 `moduleIdConventionForLevelN`（v1 对账叶子 code，全链逐段对齐留 v2）、**name-hierarchy**——l2Name（levels≥2）/l3Name（levels=3）必填性与 funcId 分段数下限（≥moduleLevels）由参数驱动（schema 管结构、规则管策略），**cfp-per-func-band** estimatedCfps ∈ cfpPerFunc.[min,max] [error]、**cfp-total-band** totalCfps ∈ cfpTotal.value×[downFactor, upFactor] [error]、CFP 总和 20-1000 且 totalCfps 等于求和）。原「推荐 20-50」警示规则已由参数带规则取代——模板不再与用户预算竞争。
 
-### 4.6 现有 pack：cosmic-req（v0.3.0）
+### 4.6 现有 pack：cosmic-req（v0.4.0，requiresTopic）
 
 COSMIC 需求分析文档（从 cosmic-claude Req 阶段迁移），per-function 粒度：`index` 定位上游 plan `functions` 数组的 1-based 位置，`funcId`/`desiredCfps`（=estimatedCfps）从对应 function 复制。`consumes: ["cosmic-plan"]`，双语 zh-CN/en-US。参数七个：`targetIndex`（必填无默认，1-based 定位上游 plan functions 的目标功能；缺失即 fail loud 并列出候选）、`functionalUserRoles`（功能用户角色白名单，逗号分隔 string，默认 6 个样例角色）、`funcDescMaxLength`（功能描述上限，默认 500；schema 硬顶 2000），外加共享预算三参数 `cfpPerFunc`/`cfpTotal`/`cfpPerSubProc`（从上游回执继承并回录，链条传递用）。E302 文案与建议同步改用 `cfpsPerRule`。prompt 的领域模型：用户故事主体是**角色（来自 context.roles）或第三方系统（来自 context.thirdPartySystems）**，流程性故事可引入**顶层模块**；需要项目知识时由模型在 upstream 数组按需携带 context（rider）。`functionalUsers[].kind`（必填，四分类 person/organization/system/3rd-party，schema 层）标明功能用户类型；对 context.roles 的引用校验留 v2（upstream 不强制传 context 时无从对账）。规则 8 条：声明式 5 条（funcDesc ≥10 [error] / ≤参数上限 [warning]、funcId 格式、role 格式 `^[a-z][a-z0-9-]*$`、业务规则描述 ≥10 [error]）；函数规则 3 条（**E301** role ∈ 部署白名单、**E302** 规则数 ∈ [ceil(cfps/cfpsPerRule), floor(ceil×1.5)]、**E303 泛化** index/funcId/desiredCfps 与上游 plan 三点对齐——全部 error 阻断，与原系统"审计意见只降分不阻断"不同，差异与理由见 docs/designs/function-rule-context.md）。
 
-### 4.7 现有 pack：cosmic-func（v0.2.0，prompt 领域措辞对齐 2.1）
+### 4.7 现有 pack：cosmic-func（v0.3.0，requiresTopic）
 
 COSMIC 概要设计文档（功能过程设计，从 cosmic-claude Func 阶段迁移），per-function 粒度：`index`/`funcId`/`desiredCfps` 从上游 req 产物原样复制，`diagrams`（mermaid 源码）+ `processes[]`（name/description/originator/receiver/origination_event）。相对原 schema 的两处偏差：`metadata`（时间戳等文档元信息）删除——docwright 无手工编辑 UX，版本由回执承载。`consumes: ["cosmic-req"]`，双语，声明共享预算三参数（继承回录用）+ `targetIndex`（必填）。规则 9 条：声明式 5 条（**E002** 过程名禁用"进行/执行/异常处理/设计/校验/conduct/execute" [error，v1 审计器默认与 v2 关键字文件合并]、**A001** 过程名后缀"处理/过程/闭环/流程/管理/等等/待定/TBD/etc." [info，ADVICE→info，用 pattern+mustMatch:false 表达]、**W001** 过程名警示词"计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序" [warning]、**E003** originator/receiver 禁用存储设施字眼"数据库/文件存储" [error，功能用户是业务角色，存储设施是实现载体——单字段单规则故拆为 originator/receiver 两条]）；函数规则 4 条（**E001** originator≠receiver [error]、过程名文档内唯一、过程 index 从 1 连续、**req 三点对齐**——index/funcId/desiredCfps 与上游 req 一致，缺失/非 req 上游一律响亮报错）。原 Func 审计器的 expected_functions 外部计数检查未迁移（docwright 无对应外部输入，过程规模由 tech 阶段 CFP 预算约束兜底）。
 
-### 4.8 现有 pack：cosmic-tech（v0.2.0，prompt 领域措辞对齐 2.1）
+### 4.8 现有 pack：cosmic-tech（v0.3.0，requiresTopic，CFP 下限钉死计划估算）
 
-COSMIC 技术拆分文档（功能点拆分表，从 cosmic-claude Tech 阶段迁移），per-function 粒度：锚点同 func（index/funcId/desiredCfps 从上游 func 复制），`processes[].subProcesses[]` 为数据移动（description/dataMovementType E-X-R-W/dataGroup/dataProperties/cfp=1）。相对原 schema 的两处偏差：`metadata` 删除（同 4.7）；`revised`（人工复核标记）删除——docwright 无人工修订流。`consumes: ["cosmic-func"]`，双语。参数四个：共享预算 `cfpPerFunc`/`cfpTotal`/`cfpPerSubProc`（继承回录用，`cfpPerSubProc` 默认 2.5——即平均每个功能过程约 2.5 个数据移动）+ `targetIndex`（必填）；原 `cfpMinRatio`/`cfpMaxRatio` 参数删除，容差系数改读共享 `cfpTotal` 的 downFactor/upFactor（缺省回退 [0.9, 1.2]，比原 [0.9, 1.5] 收紧——用户预算的偏离带全链一致）。CFP 预算错误带（<down× / >up× [error]）；警示带简化为「带内偏离预算即提示 [warning]」（原 20% 分界随 1.5 上限一并取消）。规则 8 条：声明式 1 条（funcId 格式）；函数规则 7 条。数据移动序列收紧为三种评审安全模式 **`ERX`（查询）/`EW`（落库）/`EX`（转发交互）**——`tech/movement-pattern` 一条函数规则承载，回执给出实际序列与合法模式对比；该模式集蕴含原型的 E101（首移动必 E）、E102（收尾 W/X）、E103/E107/E109（移动计数 1/2/>6）、A101（5-6 个拆分建议）与 E105（E/W/X 不连相同类型）、E108（非首 E 前必 X），上述 7 条原型规则不再单独存在（多轮读写拆多个过程，各自满足模式）；golden 亦按 7×EW + 7×ERX 重排（14 过程 = 35 CFP，恰等预算，平均 2.5）。其余函数规则沿用：**W103** 同过程内移动三元组（类型+数据组+数据属性）不重复 [warning]（`tech/movement-duplicate`）、**W101** 子过程描述警示词 [warning]（`tech/subprocess-desc-keywords`）、**W102** 数据属性 ≥2 [warning]（`tech/data-properties-count`）、CFP 预算错误带与带内偏离提示（对应 W100/W200，分属 `tech/cfp-total-vs-budget` [error] / `tech/cfp-budget-advice` [warning]）、**func 对齐**——三点锚定加过程名覆盖（上游 func 每个过程必须出现在 tech.processes 中，同名，`tech/func-alignment`）。嵌套作用域（subProcesses）规则全部走函数规则——声明式 `given` 仅支持根与一层 `$.field[*]`，嵌套由函数规则的整产物视角覆盖，引擎无需扩展。
+COSMIC 技术拆分文档（功能点拆分表，从 cosmic-claude Tech 阶段迁移），per-function 粒度：锚点同 func（index/funcId/desiredCfps 从上游 func 复制），`processes[].subProcesses[]` 为数据移动（description/dataMovementType E-X-R-W/dataGroup/dataProperties/cfp=1）。相对原 schema 的两处偏差：`metadata` 删除（同 4.7）；`revised`（人工复核标记）删除——docwright 无人工修订流。`consumes: ["cosmic-func"]`，双语。参数四个：共享预算 `cfpPerFunc`/`cfpTotal`/`cfpPerSubProc`（继承回录用，`cfpPerSubProc` 默认 2.5——即平均每个功能过程约 2.5 个数据移动）+ `targetIndex`（必填）；原 `cfpMinRatio`/`cfpMaxRatio` 参数删除，容差系数改读共享 `cfpTotal` 的 downFactor/upFactor（缺省回退 [0.9, 1.2]，比原 [0.9, 1.5] 收紧——用户预算的偏离带全链一致）。CFP 预算错误带：**下限钉死计划估算**——总数不得低于 `desiredCfps`（真实会话复盘发现 0.9 带内系统性偏低 11-16%，downFactor 不再放宽 tech），上限 `desiredCfps×upFactor` [error]；警示带简化为「高于计划估算但带内即提示 [warning]」。规则 8 条：声明式 1 条（funcId 格式）；函数规则 7 条。数据移动序列收紧为三种评审安全模式 **`ERX`（查询）/`EW`（落库）/`EX`（转发交互）**——`tech/movement-pattern` 一条函数规则承载，回执给出实际序列与合法模式对比；该模式集蕴含原型的 E101（首移动必 E）、E102（收尾 W/X）、E103/E107/E109（移动计数 1/2/>6）、A101（5-6 个拆分建议）与 E105（E/W/X 不连相同类型）、E108（非首 E 前必 X），上述 7 条原型规则不再单独存在（多轮读写拆多个过程，各自满足模式）；golden 亦按 7×EW + 7×ERX 重排（14 过程 = 35 CFP，恰等预算，平均 2.5）。其余函数规则沿用：**W103** 同过程内移动三元组（类型+数据组+数据属性）不重复 [warning]（`tech/movement-duplicate`）、**W101** 子过程描述警示词 [warning]（`tech/subprocess-desc-keywords`）、**W102** 数据属性 ≥2 [warning]（`tech/data-properties-count`）、CFP 预算错误带与带内偏离提示（对应 W100/W200，分属 `tech/cfp-total-vs-budget` [error] / `tech/cfp-budget-advice` [warning]）、**func 对齐**——三点锚定加过程名覆盖（上游 func 每个过程必须出现在 tech.processes 中，同名，`tech/func-alignment`）。嵌套作用域（subProcesses）规则全部走函数规则——声明式 `given` 仅支持根与一层 `$.field[*]`，嵌套由函数规则的整产物视角覆盖，引擎无需扩展。
 
 ### 4.9 现有 pack：cosmic-context（v0.1.0，链头）
 

@@ -38,25 +38,25 @@ describe('seal: doc_validate re-issues the sidecar receipt on green', () => {
     const deps = await makeDeps()
     const gen = defineDocGenerateTool(deps as never)
     await seedContext(deps as never)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'a' } as never, { signal } as never)
+    await gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'a' } as never, { signal } as never)
     const root = (deps.config as { workspaceRoot: string }).workspaceRoot
     // External edit: a hand-crafted valid plan (green under the same budget).
-    const edited = JSON.parse(await readFile(join(root, 'output', 'a.json'), 'utf8')) as { functions: Array<{ funcId: string; funcDesc: string }> }
+    const edited = JSON.parse(await readFile(join(root, 'topic-a', 'output', 'a.json'), 'utf8')) as { functions: Array<{ funcId: string; funcDesc: string }> }
     edited.functions[0]!.funcDesc = edited.functions[0]!.funcDesc + '（人工复核后补充审计说明，保持长度达标与内容一致。）'
-    await writeFile(join(root, 'output', 'a.json'), JSON.stringify(edited, null, 2), 'utf8')
+    await writeFile(join(root, 'topic-a', 'output', 'a.json'), JSON.stringify(edited, null, 2), 'utf8')
     void edited
 
     const tool = defineDocValidateTool(deps as never)
-    const first = await tool.execute({ artifactPath: 'output/a.json', pack: 'cosmic-plan', language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET } } as never, { signal } as never) as { sealed?: boolean; hashMatches: boolean | null; receipt: { isValid: boolean; artifactHash: string } }
+    const first = await tool.execute({ artifactPath: 'topic-a/output/a.json', pack: 'cosmic-plan', language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET } } as never, { signal } as never) as { sealed?: boolean; hashMatches: boolean | null; receipt: { isValid: boolean; artifactHash: string } }
     expect(first.receipt.isValid).toBe(true)
     expect(first.sealed).toBe(true)
     // hashMatches still reports the pre-seal tamper evidence…
     expect(first.hashMatches).toBe(false)
     // …and the sidecar now certifies the current content.
-    const onDisk = JSON.parse(await readFile(join(root, 'output', 'a.receipt.json'), 'utf8')) as { artifactHash: string; isValid: boolean }
+    const onDisk = JSON.parse(await readFile(join(root, 'topic-a', 'output', 'a.receipt.json'), 'utf8')) as { artifactHash: string; isValid: boolean }
     expect(onDisk.isValid).toBe(true)
     expect(onDisk.artifactHash).toBe(first.receipt.artifactHash)
-    const second = await tool.execute({ artifactPath: 'output/a.json', pack: 'cosmic-plan', language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET } } as never, { signal } as never) as { hashMatches: boolean | null; sealed?: boolean }
+    const second = await tool.execute({ artifactPath: 'topic-a/output/a.json', pack: 'cosmic-plan', language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET } } as never, { signal } as never) as { hashMatches: boolean | null; sealed?: boolean }
     expect(second.hashMatches).toBe(true)
     expect(second.sealed).toBe(true)
   })
@@ -65,17 +65,17 @@ describe('seal: doc_validate re-issues the sidecar receipt on green', () => {
     const deps = await makeDeps()
     const gen = defineDocGenerateTool(deps as never)
     await seedContext(deps as never)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'b' } as never, { signal } as never)
+    await gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'b' } as never, { signal } as never)
     const root = (deps.config as { workspaceRoot: string }).workspaceRoot
-    const before = await readFile(join(root, 'output', 'b.receipt.json'), 'utf8')
-    const tampered = JSON.parse(await readFile(join(root, 'output', 'b.json'), 'utf8')) as { totalCfps: number }
+    const before = await readFile(join(root, 'topic-a', 'output', 'b.receipt.json'), 'utf8')
+    const tampered = JSON.parse(await readFile(join(root, 'topic-a', 'output', 'b.json'), 'utf8')) as { totalCfps: number }
     tampered.totalCfps = 999
-    await writeFile(join(root, 'output', 'b.json'), JSON.stringify(tampered, null, 2), 'utf8')
+    await writeFile(join(root, 'topic-a', 'output', 'b.json'), JSON.stringify(tampered, null, 2), 'utf8')
     const tool = defineDocValidateTool(deps as never)
-    const out = await tool.execute({ artifactPath: 'output/b.json', pack: 'cosmic-plan', language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET } } as never, { signal } as never) as { sealed?: boolean; receipt: { isValid: boolean } }
+    const out = await tool.execute({ artifactPath: 'topic-a/output/b.json', pack: 'cosmic-plan', language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET } } as never, { signal } as never) as { sealed?: boolean; receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(false)
     expect(out.sealed).toBeUndefined()
-    expect(await readFile(join(root, 'output', 'b.receipt.json'), 'utf8')).toBe(before)
+    expect(await readFile(join(root, 'topic-a', 'output', 'b.receipt.json'), 'utf8')).toBe(before)
   })
 
   it('sealing a receiptless sample creates the sidecar', async () => {
@@ -98,7 +98,7 @@ describe('API conveniences: optional materials and artifact summary', () => {
     const deps = await makeDeps()
     const gen = defineDocGenerateTool(deps as never)
     await seedContext(deps as never)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     deps.ctx.llm.stream = async function* () {
       const req = deps.packs.get('cosmic-req')!
       const reply = JSON.stringify(req.goldenSample)
@@ -107,8 +107,7 @@ describe('API conveniences: optional materials and artifact summary', () => {
       yield { type: 'block-end', index: 0, block: { type: 'text', text: reply } }
       yield { type: 'finish', reason: 'stop' }
     }
-    const out = await gen.execute({
-      pack: 'cosmic-req', language: 'zh-CN', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true, artifactName: 'req',
+    const out = await gen.execute({ pack: 'cosmic-req', topic: 'topic-a', language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true, artifactName: 'req',
     } as never, { signal } as never) as { receipt: { isValid: boolean }; summary: { functions?: number; totalCfps?: number } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.summary).toEqual({})
@@ -124,11 +123,11 @@ describe('API conveniences: optional materials and artifact summary', () => {
     const deps = await makeDeps()
     const gen = defineDocGenerateTool(deps as never)
     await seedContext(deps as never)
-    const out = await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 's' } as never, { signal } as never) as { summary: { functions?: number; totalCfps?: number; processes?: number } }
+    const out = await gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 's' } as never, { signal } as never) as { summary: { functions?: number; totalCfps?: number; processes?: number } }
     expect(out.summary.functions).toBe(2)
     expect(out.summary.totalCfps).toBe(70)
     expect(out.summary.processes).toBeUndefined()
-    const val = await defineDocValidateTool(deps as never).execute({ artifactPath: 'output/s.json', pack: 'cosmic-plan', language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET } } as never, { signal } as never) as { summary: { functions?: number } }
+    const val = await defineDocValidateTool(deps as never).execute({ artifactPath: 'topic-a/output/s.json', pack: 'cosmic-plan', language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET } } as never, { signal } as never) as { summary: { functions?: number } }
     expect(val.summary.functions).toBe(2)
   })
 })
