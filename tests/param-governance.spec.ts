@@ -444,9 +444,11 @@ describe('doc_generate: chain inheritance and param drift', () => {
 describe('cosmic-plan: shared-budget band rules', () => {
   it('golden stays green inside the declared bands', async () => {
     const pack = await packOf('cosmic-plan')
+    const all = await loadPacks(packsRoot, {})
+    const context = { upstream: [all.get('cosmic-context')!.goldenSample] }
     const service = getDocService(pack, 'zh-CN')
     const params = resolveEffectiveParams(pack, { cfpTotal: BUDGET })
-    const issues = service.validate(pack.goldenSample, params)
+    const issues = service.validate(pack.goldenSample, params, context)
     expect(issues.filter(i => i.severity === 'error')).toEqual([])
     expect(issues.map(i => i.ruleId)).not.toContain('plan/func-cfps-recommended-range')
   })

@@ -18,21 +18,23 @@ async function loadCosmic() {
 describe('pack loader', () => {
   it('loads the builtin cosmic-plan pack with both languages', async () => {
     const pack = await loadCosmic()
-    expect(pack.manifest.version).toBe('0.2.0')
-    expect(pack.manifest.consumes).toEqual([])
+    expect(pack.manifest.version).toBe('0.3.0')
+    expect(pack.manifest.consumes).toEqual(['cosmic-context'])
     for (const lang of ['zh-CN', 'en-US']) {
       expect(pack.prompts.get(lang)).toContain('{{materials}}')
       expect(pack.templates.get(lang)).toBeTruthy()
       expect((pack.rules.get(lang) ?? []).length).toBeGreaterThan(0)
     }
-    expect(pack.functionRules.length).toBe(5)
+    expect(pack.functionRules.length).toBe(7)
   })
 
   it('golden sample passes all-green in both languages', async () => {
     const pack = await loadCosmic()
+    const all = await loadPacks(packsRoot, {})
+    const context = { upstream: [all.get('cosmic-context')!.goldenSample] }
     for (const lang of pack.manifest.languages) {
       const service = new DocService(pack, lang)
-      const errors = service.validate(pack.goldenSample, { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }).filter(i => i.severity === 'error')
+      const errors = service.validate(pack.goldenSample, { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 }, moduleLevels: 2 }, context).filter(i => i.severity === 'error')
       expect(errors, `${lang}: ${JSON.stringify(errors)}`).toEqual([])
     }
   })

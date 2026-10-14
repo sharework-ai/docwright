@@ -8,6 +8,7 @@ import type { Issue } from '../src/issue.ts'
 import type { Pack, RuleContext } from '../src/pack.ts'
 import { resolveEffectiveParams } from '../src/params.ts'
 import { loadPacks } from '../src/pack-loader.ts'
+import { seedContext } from './support.ts'
 import { defineDocGenerateTool, defineDocValidateTool } from '../src/tools.ts'
 
 const packsRoot = fileURLToPath(new URL('../packs', import.meta.url))
@@ -190,6 +191,20 @@ describe('cosmic-req mutation tests (guardrail-is-real)', () => {
     expect(issueRuleIds(validateOf(req, 'zh-CN', req.goldenSample, undefined, notPlan))).toContain('req/plan-alignment')
   })
 
+  it('functionalUsers[].kind: values outside the four kinds are schema-rejected; prompts guide story actors', async () => {
+    const { req, plan } = await packs()
+    const badKind = mutate(req.goldenSample, d => { (d.functionalUsers as Array<{ kind: string }>)[0]!.kind = 'robot' })
+    expect(issueRuleIds(validateOf(req, 'zh-CN', badKind, undefined, planContext(plan))).has('schema/enum')).toBe(true)
+    // The golden's person kind stays green.
+    expect(issueRuleIds(validateOf(req, 'zh-CN', req.goldenSample, undefined, planContext(plan))).has('schema/enum')).toBe(false)
+    // The prompt invites roles/third-party systems and top-level modules as story actors.
+    for (const lang of req.manifest.languages) {
+      const prompt = req.prompts.get(lang) ?? ''
+      expect(prompt).toMatch(/第三方系统|third-party system/i)
+      expect(prompt).toMatch(/顶层模块|top-level module/i)
+    }
+  })
+
   it('every ERROR issue carries a suggestion across all mutations', async () => {
     const { req, plan } = await packs()
     const ctx = planContext(plan)
@@ -212,7 +227,8 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
   it('generates a green chained artifact and records the upstream anchor', async () => {
     const { req, plan } = await packs()
     const deps = await makeDeps(scriptedLlm([JSON.stringify(plan.goldenSample)]))
-    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await seedContext(deps)
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({
       pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
@@ -227,7 +243,8 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
   it('repairs a cross-artifact violation in a later round (plan-alignment feeds the loop)', async () => {
     const { req, plan } = await packs()
     const deps = await makeDeps(scriptedLlm([JSON.stringify(plan.goldenSample)]))
-    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await seedContext(deps)
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     const wrong = mutate(req.goldenSample, d => { d.funcId = 'USR-DEL' })
     deps.ctx.llm = scriptedLlm([JSON.stringify(wrong), JSON.stringify(req.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({
@@ -242,7 +259,8 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
   it('doc_validate replays with upstream; without upstream the chained rule fails loud', async () => {
     const { req, plan } = await packs()
     const deps = await makeDeps(scriptedLlm([JSON.stringify(plan.goldenSample)]))
-    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await seedContext(deps)
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
     await defineDocGenerateTool(deps).execute({
       pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,

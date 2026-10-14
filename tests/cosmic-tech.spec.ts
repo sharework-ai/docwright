@@ -8,6 +8,7 @@ import type { Issue } from '../src/issue.ts'
 import type { Pack, RuleContext } from '../src/pack.ts'
 import { resolveEffectiveParams } from '../src/params.ts'
 import { loadPacks } from '../src/pack-loader.ts'
+import { seedContext } from './support.ts'
 import { defineDocGenerateTool, defineDocValidateTool } from '../src/tools.ts'
 
 const packsRoot = fileURLToPath(new URL('../packs', import.meta.url))
@@ -94,8 +95,9 @@ async function makeDeps(llm: unknown) {
 
 /** Generates the plan→req→func chain so a tech doc_generate/validate call has a green upstream on disk. */
 async function generateFuncChain(deps: { ctx: { llm: unknown } }, func: Pack, req: Pack, plan: Pack): Promise<void> {
+  await seedContext(deps)
   deps.ctx.llm = scriptedLlm([JSON.stringify(plan.goldenSample)])
-  await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+  await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
   deps.ctx.llm = scriptedLlm([JSON.stringify(req.goldenSample)])
   await defineDocGenerateTool(deps).execute({
     pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,

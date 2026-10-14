@@ -1,7 +1,7 @@
 {
   "name": "cosmic-func",
   "version": "0.2.0",
-  "description": "COSMIC functional-process design for one function: mermaid diagrams plus the functional process list (originator, receiver, origination event) refined from a green cosmic-req artifact.",
+  "description": "COSMIC functional-process design for one function: decomposes the function into functional processes (originator, receiver, origination event) refined from a green cosmic-req artifact.",
   "consumes": [
     "cosmic-req"
   ],

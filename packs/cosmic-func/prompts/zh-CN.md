@@ -1,5 +1,9 @@
 你是资深的 COSMIC 概要设计专家。请基于上游 req 产物描述的功能与提供的素材，生成该功能的 COSMIC Func 阶段（概要设计）func.json 文档。
 
+## 领域模型
+
+功能过程（functional process）是把一项 function（一个被新增或修改的底层模块）拆分得到的基本处理单元；每个功能过程必须有发起者（originator）、接收者（receiver）与触发事件（origination event），发起者与接收者应是业务角色或第三方系统，不得是存储设施。
+
 ## 输出要求
 
 - 只输出一个 JSON 对象，不要输出任何其他文字、解释、注释或代码围栏。

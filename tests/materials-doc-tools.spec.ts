@@ -72,10 +72,11 @@ describe('doc-service generateDocument', () => {
     const { readFile } = await import('node:fs/promises')
     const packs = await loadPacks(packsRoot(), { builtin: [] })
     const pack = packs.get('cosmic-plan')!
+    const contextGolden = JSON.stringify(packs.get('cosmic-context')!.goldenSample)
     const root = await mkdtemp(join(tmpdir(), 'docwright-gen-'))
     const llm = { async complete() { return JSON.stringify(pack.goldenSample) } }
     const out = await generateDocument({
-      pack, language: 'zh-CN', materials: ['#!inline\n素材'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, artifactName: 't1',
+      pack, language: 'zh-CN', materials: ['#!inline\n素材'], upstream: [contextGolden], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, artifactName: 't1',
       materialsRoot: root, workspaceRoot: root, outputRoot: join(root, 'output'),
       config: { maxIterations: 3, promptTokenBudget: 60_000, model: 'test' },
       llm,
@@ -90,7 +91,7 @@ describe('doc-service generateDocument', () => {
     // revalidate deterministic path (doc_validate core)
     const service = new DocService(pack, 'zh-CN')
     const artifact = JSON.parse(await readFile(out.artifactPath, 'utf8'))
-    expect(service.validate(artifact).filter(i => i.severity === 'error')).toEqual([])
+    expect(service.validate(artifact, undefined, { upstream: [JSON.parse(contextGolden)] }).filter(i => i.severity === 'error')).toEqual([])
     expect(artifactHashMatches(service, artifact, receiptOnDisk.artifactHash)).toBe(true)
   })
 
@@ -104,7 +105,7 @@ describe('doc-service generateDocument', () => {
     const customOut = join(root, '交付物')
     const llm = { async complete() { return JSON.stringify(pack.goldenSample) } }
     const out = await generateDocument({
-      pack, language: 'zh-CN', materials: ['#!inline\n素材'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, artifactName: 'custom',
+      pack, language: 'zh-CN', materials: ['#!inline\n素材'], upstream: [JSON.stringify(packs.get('cosmic-context')!.goldenSample)], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, artifactName: 'custom',
       materialsRoot: root, workspaceRoot: root, outputRoot: customOut,
       config: { maxIterations: 3, promptTokenBudget: 60_000, model: 'test' },
       llm,

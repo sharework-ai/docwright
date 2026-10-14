@@ -1,0 +1,64 @@
+# Project Context: {{projectName}}
+
+- Document type: context (project context, COSMIC chain head)
+
+## Business background
+
+{{background}}
+
+## System overview
+
+{{overview}}
+
+## Module tree
+
+{{#each modules}}
+### {{code}} {{name}}
+
+- Responsibility: {{responsibility}}{{#if path}}
+- Code location: {{path}}{{/if}}
+
+{{#if children}}
+| Code | Module | Responsibility |
+|------|--------|----------------|
+{{#each children}}
+| {{code}} | {{name}} | {{responsibility}} |
+{{/each}}
+{{/if}}
+{{/each}}
+
+## Roles
+
+| Role | Kind | Description |
+|------|------|-------------|
+{{#each roles}}
+| {{name}} | {{kind}} | {{description}} |
+{{/each}}
+
+## Third-party systems
+
+| System | What it is | How this system interacts |
+|--------|------------|---------------------------|
+{{#each thirdPartySystems}}
+| {{name}} | {{purpose}} | {{interaction}} |
+{{/each}}
+
+## Module ID conventions
+
+- Level 1: {{moduleIdConventionForLevel1}}{{#if moduleIdConventionForLevel2}}
+- Level 2: {{moduleIdConventionForLevel2}}{{/if}}{{#if moduleIdConventionForLevel3}}
+- Level 3: {{moduleIdConventionForLevel3}}{{/if}}
+
+## Design principles
+
+{{#each designPrinciples}}
+- {{this}}
+{{/each}}
+{{#if assumptions.length}}
+
+## Model assumptions (pending human review)
+
+{{#each assumptions}}
+- {{this}}
+{{/each}}
+{{/if}}

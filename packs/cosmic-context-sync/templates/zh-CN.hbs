@@ -1,0 +1,64 @@
+# 项目上下文：{{projectName}}
+
+- 文档类型：context（项目上下文，COSMIC 场景链头）
+
+## 业务背景
+
+{{background}}
+
+## 系统概述
+
+{{overview}}
+
+## 模块树
+
+{{#each modules}}
+### {{code}} {{name}}
+
+- 职责：{{responsibility}}{{#if path}}
+- 代码位置：{{path}}{{/if}}
+
+{{#if children}}
+| 编号 | 模块 | 职责 |
+|------|------|------|
+{{#each children}}
+| {{code}} | {{name}} | {{responsibility}} |
+{{/each}}
+{{/if}}
+{{/each}}
+
+## 角色
+
+| 角色 | 分类 | 说明 |
+|------|------|------|
+{{#each roles}}
+| {{name}} | {{kind}} | {{description}} |
+{{/each}}
+
+## 第三方系统
+
+| 系统 | 它是什么 | 本系统如何交互 |
+|------|----------|----------------|
+{{#each thirdPartySystems}}
+| {{name}} | {{purpose}} | {{interaction}} |
+{{/each}}
+
+## 模块编号规则
+
+- 一级：{{moduleIdConventionForLevel1}}{{#if moduleIdConventionForLevel2}}
+- 二级：{{moduleIdConventionForLevel2}}{{/if}}{{#if moduleIdConventionForLevel3}}
+- 三级：{{moduleIdConventionForLevel3}}{{/if}}
+
+## 设计原则
+
+{{#each designPrinciples}}
+- {{this}}
+{{/each}}
+{{#if assumptions.length}}
+
+## 模型假定（待人工审阅）
+
+{{#each assumptions}}
+- {{this}}
+{{/each}}
+{{/if}}

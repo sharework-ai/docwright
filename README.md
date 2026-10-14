@@ -33,15 +33,19 @@ Zero-arg discovery tool: lists installed packs as `[{ name, version, description
 | `pack` | string | e.g. `cosmic-plan`; unknown names list available packs |
 | `materials` | string[]? | paths relative to the materials root (default `<workspace>/references/`), or inline text starting with `#!inline`; optional for chained packs whose upstream carries the context |
 | `language` | string? | default: config `defaultLanguage`, else the pack's first language |
-| `upstream` | string[]? | workspace-relative paths to upstream artifacts; each must carry a green sidecar receipt (hash-verified, pack type matched against `consumes`, and recording the installed pack version — see `upstreamVersionPolicy`) |
+| `upstream` | string[]? | workspace-relative paths to upstream artifacts; each must carry a green sidecar receipt (hash-verified, pack type matched against `consumes`, and recording the installed pack version — see `upstreamVersionPolicy`). Extra green artifacts of installed packs may ride along as prompt context (e.g. the project context beside a plan); at least one consumed type is required |
 | `artifactName` | string? | output base name (default `<pack>-<timestamp>`) |
 | `maxRounds` | number? | round cap for this call (user intent via the model); clamped to config `maxRoundsCeiling` |
+| `topic` | string? | topic directory name (a plain `[A-Za-z0-9._-]` segment, e.g. a requirement id): relocates the output root to `<topic>/output/` and the materials root to `<topic>/references/`; workspace-scope packs ignore it |
+| `force` | boolean? | bypass the reuse pre-check and rebuild |
 | `params` | object? | overrides for pack-declared tunables (see `doc_packs`); unknown names, out-of-range values, and missing required (default-less) params fail loud; **passing params always triggers the confirmation gate** |
 | `confirm` | boolean? | execute after the `pendingConfirmation` param table was presented to and approved by the user |
 
 Per-function fan-out (`docs/designs/params-and-chain-contract.md`): chained packs declare a required `targetIndex` (1-based position in the upstream plan's `functions[]`); a missing one fails loud with the full candidate list (index, funcId, l2Name). Calls without an explicit `artifactName` default to `<pack>-<funcId>` so distinct functions never collide; results carry a `coverage` line (`{ covered, total, missing }`) showing how much of the reference function set this stage has already produced. `doc_chain_status` gives the whole-chain matrix.
 
-Returns `{ artifactPath, markdownPath, receipt }`. Artifacts, receipts, and markdown land in the output root (default `<workspace>/output/`). Exhausted loops throw AND keep the draft + red receipt on disk.
+Returns `{ artifactPath, markdownPath, receipt }`. Artifacts, receipts, and markdown land in the output root (default `<workspace>/output/`, or `<topic>/output/` with `topic`). Exhausted loops throw AND keep the draft + red receipt on disk.
+
+**Scopes & reuse** (`docs/designs/cosmic-context.md`): packs declare `scope` (`workspace` packs fix their homes — materials `references/`, artifacts `context/` — and ignore `topic`; `topic` scope is the default) and `reuse` (workspace packs default true, topic packs false). For `reuse` packs, a green, hash-intact artifact of the same pack and installed version is returned as-is (`reused: true`, zero LLM); `force: true` always rebuilds — a human-corrected artifact changes the hash and therefore regenerates, and `doc_validate`'s seal re-enters it into the chain.
 
 ### `doc_validate`
 
@@ -92,7 +96,7 @@ Per-function fan-out accounting — deterministic, no LLM. Pass `plan` (workspac
 
 Hybrid packs: declarative JSON rules for simple families, JS functions for cross-field rules.
 
-Four built-in packs cover the COSMIC flow, each consuming the previous stage's green artifact (`cosmic-plan` → `cosmic-req` → `cosmic-func` → `cosmic-tech`; every stage re-anchors `index`/`funcId`/`desiredCfps` to its parent): plan = function-point estimation, req = per-function requirements analysis (functional users, user stories, business rules), func = functional-process design (originator/receiver/origination event per process), tech = the data-movement breakdown whose sequences must follow the three audit-safe patterns `ERX`/`EW`/`EX` (≈2.5 movements per process) and whose total CFPs are validated against the budget.
+Six built-in packs cover the COSMIC flow (`cosmic-context` → `cosmic-plan` → `cosmic-req` → `cosmic-func` → `cosmic-tech`, plus `cosmic-context-sync`): context = the workspace-level project context (module tree with codes, roles, third-party systems, ID conventions, design principles; model assumptions explicitly registered), plan = module-change planning (every added-or-modified leaf module becomes one function; `changeKind` reconciled against the context tree), req = per-function requirements analysis (functional users with kind + user stories — the flow-analysis source — and business rules), func = functional-process design (originator/receiver/origination event per process), tech = the data-movement breakdown whose sequences must follow the three audit-safe patterns `ERX`/`EW`/`EX` (≈2.5 movements per process) and whose total CFPs are validated against the budget. Downstream stages re-anchor `index`/`funcId`/`desiredCfps` to their parent. `cosmic-context-sync` merges one topic's green plan back into the workspace context so project knowledge evolves with requirements (usable once the plan stage passes).
 
 ```
 packs/cosmic-plan/
