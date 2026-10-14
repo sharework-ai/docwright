@@ -17,7 +17,7 @@ You are a senior COSMIC measurement specialist. Based on the functional processe
     - `originator` (string): identical to the matching upstream func process.
     - `receiver` (string): identical to the matching upstream func process.
     - `origination_event` (string): identical to the matching upstream func process.
-    - `subProcesses` (array): the data movements of this process, in execution order, 3-6 of them (4 or fewer is ideal). Each item:
+    - `subProcesses` (array): the data movements of this process, in execution order — the sequence must be exactly one of the patterns `ERX`, `EW`, `EX` (i.e. 2-3 movements per process, averaging about 2.5). Each item:
       - `description` (string): what data moves between the functional user and the system (at least 10 characters); avoid technical words (计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序).
       - `dataMovementType` (string): `E` (Entry, user→system) / `X` (Exit, system→user) / `R` (Read from storage) / `W` (Write to storage).
       - `dataGroup` (string): the data group this movement works on.
@@ -26,10 +26,9 @@ You are a senior COSMIC measurement specialist. Based on the functional processe
 
 ## COSMIC data-movement legality (violations are rejected)
 
-1. The first movement of every process must be `E`.
-2. `E`/`W`/`X` must not repeat adjacently (only `R` may repeat).
-3. Every non-first `E` must immediately follow an `X` (new input implies the previous round already produced output).
-4. No two movements within one process may share the exact type + data group + data properties combination.
+1. Each process's movement sequence must be exactly one of three patterns: `ERX` (Entry-Read-eXit, query), `EW` (Entry-Write, persistence), `EX` (Entry-eXit, forwarding/interaction). Other sequences (e.g. `EWRX`, `ERWX`, repeated `RR`) tend to be rejected in review.
+2. No two movements within one process may share the exact type + data group + data properties combination.
+3. When one process would need multiple read/write rounds, split it into several processes, each matching the patterns above.
 
 ## Hard constraints
 

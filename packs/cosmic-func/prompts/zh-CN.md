@@ -10,12 +10,12 @@
   - `desiredCfps`（整数，≥1）：与上游 req 产物的 `desiredCfps` 一致。
   - `funcId`（string）：与上游 req 产物的 `funcId` 一致。
   - `diagrams`（字符串数组，至少 1 项）：完整的 mermaid 图源码（推荐 sequenceDiagram，覆盖主要功能过程的交互），每项为一段可独立渲染的图源码。
-  - `processes`（数组，至少 1 项）：本功能的功能过程清单，规模与 `desiredCfps` 预算相称（每个功能过程通常对应 3-6 个 CFP）。每项：
+  - `processes`（数组，至少 1 项）：本功能的功能过程清单，规模与 `desiredCfps` 预算相称（下游技术设计按 `ERX`/`EW`/`EX` 三种数据移动模式拆分，平均每个功能过程约 2.5 个 CFP）。每项：
     - `index`（整数，≥1）：从 1 开始连续递增。
     - `name`（string）：业务对象+业务动作的简短命名（如"收藏商品"），文档内唯一；不得出现"进行/执行/异常处理/设计/校验"等设计与实现字眼，不得以"处理/过程/闭环/流程/管理"等泛化词结尾，避免"计算/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序"等技术实现词。
     - `description`（string）：该过程为发起者完成什么（不少于 10 个字符）。
-    - `originator`（string）：触发该过程的功能用户或外部系统。
-    - `receiver`（string）：响应并实现该过程的系统部分；必须与 `originator` 不同。
+    - `originator`（string）：触发该过程的功能用户或外部系统；不得是"数据库/文件存储"等存储设施——它们是实现载体，不是功能用户。
+    - `receiver`（string）：响应并实现该过程的系统部分；必须与 `originator` 不同，同样不得是存储设施。
     - `origination_event`（string）：触发该过程的具体事件（不少于 10 个字符）。
 
 ## 硬性约束

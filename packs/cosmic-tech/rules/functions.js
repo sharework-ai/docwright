@@ -1,9 +1,13 @@
 // Function rules for the cosmic-tech pack: data-movement sequence checks
-// migrated from cosmic-claude auditors/tech_auditor.py (E107/E109/E103/A101
-// movement counts, E101 first entry, E105 no consecutive E/W/X, E108 entry
-// after exit, W103 duplicate movements, W101 subprocess description keywords,
-// W102 data property count) plus the CFP budget check (E101/W100/E200/W200
-// family, parametrized by the shared cfpTotal downFactor/upFactor factors) and the chain-alignment
+// migrated from cosmic-claude auditors/tech_auditor.py and tightened to the
+// three audit-safe movement patterns ERX / EW / EX (review boards reject other
+// shapes, e.g. EWRX/ERRX). One pattern rule subsumes the former E101 (first
+// movement E), E102 (ends with W/X), E103/E107/E109 (movement counts), E105
+// (no adjacent repeats) and E108 (entry after exit) — all implied by the
+// pattern set. Remaining checks migrated as-is: W103 duplicate movements,
+// W101 subprocess description keywords, W102 data property count, plus the CFP
+// budget check (E101/W100/E200/W200 family, parametrized by the shared
+// cfpTotal downFactor/upFactor factors) and the chain-alignment
 // pattern generalized from the req pack (E303): index/funcId/desiredCfps and
 // process-name coverage against the upstream func artifact.
 // Contract: export `rules`; each check(artifact, context) returns RuleIssue[]
@@ -93,141 +97,27 @@ export const rules = [
     },
   },
   {
-    // E107 (single movement) / E109 (<3) / E103 (>6) errors. The A101 advice
-    // band (5-6 movements) lives in tech/movement-split-advice below —
-    // FunctionRule carries one severity, so error and advice cannot share a rule.
-    id: 'tech/movement-count',
+    // The audit-safe movement patterns: ERX (query), EW (persist), EX
+    // (forward/interact). One check subsumes the former E101/E102/E103/E105/
+    // E107/E108/E109 and A101 rules — sequence legality implies all of them.
+    id: 'tech/movement-pattern',
     severity: 'error',
-    suggestion: '每个功能过程的数据移动数量须在 3-6 个之间（4 个以内最佳，5-6 个会收到拆分建议，超过 6 个直接拒绝）：过程太小（1-2 个）说明边界没切开，应并入相邻过程或从 func 阶段重新划分；太大则按读写阶段拆成多个过程。',
+    suggestion: '每个功能过程的数据移动序列必须是 ERX、EW、EX 三种模式之一（E 开头、W 或 X 收尾，平均每个过程约 2.5 个数据移动）：ERX=输入-读取-输出（查询类），EW=输入-写入（落库类），EX=输入-输出（转发交互类）；其他序列（如 EWRX、ERWX、连续 RR）评审时容易被核减，请按三种模式重新组织子过程。',
     check(artifact) {
+      const PATTERNS = ['ERX', 'EW', 'EX']
       const issues = []
       for (const [index, proc] of getProcesses(artifact).entries()) {
-        const count = getMovements(proc).length
-        const name = isObject(proc) ? String(proc.name) : `#${index + 1}`
-        if (count === 1) {
+        const seq = getMovements(proc)
+          .map(mv => (isObject(mv) && typeof mv.dataMovementType === 'string' ? mv.dataMovementType : '?'))
+          .join('')
+        if (!PATTERNS.includes(seq)) {
           issues.push({
             jsonPath: `$.processes[${index}].subProcesses`,
             message: say(artifact,
-              `功能过程 "${name}" 只包含 1 个数据移动：一个过程至少要有触发、处理、反馈的完整往返`,
-              `Process "${name}" has only 1 data movement: a process needs at least a trigger, handling, and a response`),
-            snapshot: `movements=${count}`,
+              `功能过程 "${String(isObject(proc) ? proc.name : index + 1)}" 的数据移动序列为 ${seq}，不在 ERX、EW、EX 三种合法模式内（ERX=查询，EW=写入，EX=转发交互）`,
+              `Process "${String(isObject(proc) ? proc.name : index + 1)}" has movement sequence ${seq}, which is none of the allowed patterns ERX, EW, EX (ERX=query, EW=write, EX=forward)`),
+            snapshot: `sequence=${seq}`,
           })
-        } else if (count === 2) {
-          issues.push({
-            jsonPath: `$.processes[${index}].subProcesses`,
-            message: say(artifact,
-              `功能过程 "${name}" 只有 2 个数据移动：至少需要 3 个`,
-              `Process "${name}" has only 2 data movements: at least 3 are required`),
-            snapshot: `movements=${count}`,
-          })
-        } else if (count > 6) {
-          issues.push({
-            jsonPath: `$.processes[${index}].subProcesses`,
-            message: say(artifact,
-              `功能过程 "${name}" 的数据移动达 ${count} 个（超过 6 个）：按读写阶段拆分为多个功能过程`,
-              `Process "${name}" has ${count} data movements (more than 6): split it by read/write phases into separate processes`),
-            snapshot: `movements=${count}`,
-          })
-        }
-      }
-      return issues
-    },
-  },
-  {
-    // A101 migrated: 5-6 movements trigger a split advice (non-blocking).
-    id: 'tech/movement-split-advice',
-    severity: 'info',
-    suggestion: '功能过程的数据移动有 5-6 个（建议拆分）：如果其中包含可独立的业务步骤（如先查询后维护），按读写阶段拆成两个功能过程；确属单一业务动作可保留。',
-    check(artifact) {
-      const issues = []
-      for (const [index, proc] of getProcesses(artifact).entries()) {
-        const count = getMovements(proc).length
-        if (count > 4 && count <= 6) {
-          issues.push({
-            jsonPath: `$.processes[${index}].subProcesses`,
-            message: say(artifact,
-              `功能过程 "${String(isObject(proc) ? proc.name : index + 1)}" 的数据移动有 ${count} 个（超过 4 个，建议拆分）`,
-              `Process "${String(isObject(proc) ? proc.name : index + 1)}" has ${count} data movements (more than 4; consider splitting)`),
-            snapshot: `movements=${count}`,
-          })
-        }
-      }
-      return issues
-    },
-  },
-  {
-    // E101 migrated: the first movement of every process must be an Entry.
-    id: 'tech/first-movement-entry',
-    severity: 'error',
-    suggestion: '功能过程的第一个数据移动必须是 E（Entry）：过程由外部事件触发，先有输入才有后续处理；把触发事件对应的输入子过程放到首位。',
-    check(artifact) {
-      const issues = []
-      for (const [index, proc] of getProcesses(artifact).entries()) {
-        const movements = getMovements(proc)
-        const first = movements[0]
-        const type = isObject(first) ? first.dataMovementType : undefined
-        if (type !== 'E') {
-          issues.push({
-            jsonPath: `$.processes[${index}].subProcesses[0].dataMovementType`,
-            message: say(artifact,
-              `功能过程 "${String(isObject(proc) ? proc.name : index + 1)}" 的第一个数据移动必须是 E，实际为 ${String(type)}`,
-              `The first data movement of process "${String(isObject(proc) ? proc.name : index + 1)}" must be E, got ${String(type)}`),
-            snapshot: `first=${String(type)}`,
-          })
-        }
-      }
-      return issues
-    },
-  },
-  {
-    // E105 migrated: E, W, X must not repeat adjacently (only R may repeat).
-    id: 'tech/no-consecutive-ewx',
-    severity: 'error',
-    suggestion: 'E/W/X 类型的数据移动不能连续出现相同类型（只有 R 可以连续）：连续的同类移动要么合并为一个子过程，要么在中间补上读取/处理步骤。',
-    check(artifact) {
-      const issues = []
-      for (const [index, proc] of getProcesses(artifact).entries()) {
-        const movements = getMovements(proc)
-        const name = isObject(proc) ? String(proc.name) : `#${index + 1}`
-        for (let i = 1; i < movements.length; i++) {
-          const type = isObject(movements[i]) ? movements[i].dataMovementType : undefined
-          const prev = isObject(movements[i - 1]) ? movements[i - 1].dataMovementType : undefined
-          if ((type === 'E' || type === 'W' || type === 'X') && type === prev) {
-            issues.push({
-              jsonPath: `$.processes[${index}].subProcesses[${i}].dataMovementType`,
-              message: say(artifact,
-                `功能过程 "${name}" 第 ${i + 1} 个数据移动与第 ${i} 个同为 ${String(type)}：E/W/X 不能连续重复`,
-                `Process "${name}" has the same type ${String(type)} at movements ${i} and ${i + 1}: E/W/X must not repeat adjacently`),
-              snapshot: `${String(prev)}${String(type)}`,
-            })
-          }
-        }
-      }
-      return issues
-    },
-  },
-  {
-    // E108 migrated: every non-first Entry must immediately follow an Exit.
-    id: 'tech/entry-after-exit',
-    severity: 'error',
-    suggestion: '功能过程中非首个的 E（Entry）之前必须是 X（Exit）：新一轮输入意味着上一轮交互已经给出输出，先补上输出的子过程。',
-    check(artifact) {
-      const issues = []
-      for (const [index, proc] of getProcesses(artifact).entries()) {
-        const movements = getMovements(proc)
-        const name = isObject(proc) ? String(proc.name) : `#${index + 1}`
-        for (let i = 1; i < movements.length; i++) {
-          const type = isObject(movements[i]) ? movements[i].dataMovementType : undefined
-          const prev = isObject(movements[i - 1]) ? movements[i - 1].dataMovementType : undefined
-          if (type === 'E' && prev !== 'X') {
-            issues.push({
-              jsonPath: `$.processes[${index}].subProcesses[${i}].dataMovementType`,
-              message: say(artifact,
-                `功能过程 "${name}" 第 ${i + 1} 个数据移动为 E，但其前一个移动是 ${String(prev)} 而非 X：非首个 E 之前必须是 X`,
-                `Process "${name}" has an E at movement ${i + 1} preceded by ${String(prev)}, not X: every non-first E must follow an Exit`),
-              snapshot: `${String(prev)}E`,
-            })
-          }
         }
       }
       return issues

@@ -92,7 +92,7 @@ Per-function fan-out accounting — deterministic, no LLM. Pass `plan` (workspac
 
 Hybrid packs: declarative JSON rules for simple families, JS functions for cross-field rules.
 
-Four built-in packs cover the COSMIC flow, each consuming the previous stage's green artifact (`cosmic-plan` → `cosmic-req` → `cosmic-func` → `cosmic-tech`; every stage re-anchors `index`/`funcId`/`desiredCfps` to its parent): plan = function-point estimation, req = per-function requirements analysis (functional users, user stories, business rules), func = functional-process design (originator/receiver/origination event per process), tech = the data-movement breakdown (E/X/R/W subprocesses) whose total CFPs are validated against the budget.
+Four built-in packs cover the COSMIC flow, each consuming the previous stage's green artifact (`cosmic-plan` → `cosmic-req` → `cosmic-func` → `cosmic-tech`; every stage re-anchors `index`/`funcId`/`desiredCfps` to its parent): plan = function-point estimation, req = per-function requirements analysis (functional users, user stories, business rules), func = functional-process design (originator/receiver/origination event per process), tech = the data-movement breakdown whose sequences must follow the three audit-safe patterns `ERX`/`EW`/`EX` (≈2.5 movements per process) and whose total CFPs are validated against the budget.
 
 ```
 packs/cosmic-plan/

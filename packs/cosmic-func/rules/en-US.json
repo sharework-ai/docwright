@@ -26,5 +26,23 @@
     "kind": "forbiddenKeywords",
     "keywords": ["计算", "转化", "转换", "拆分", "日志", "解析", "编码", "缓存", "临时", "筛选", "排序"],
     "suggestion": "Process names should avoid technical-implementation words (计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序): those belong to tech-stage subprocesses; keep process names at the business level."
+  },
+  {
+    "id": "func/originator-forbidden-keywords",
+    "severity": "error",
+    "given": "$.processes[*]",
+    "field": "originator",
+    "kind": "forbiddenKeywords",
+    "keywords": ["数据库", "文件存储"],
+    "suggestion": "The originator must not be a storage facility (数据库/文件存储): functional users are business roles (people, external systems, devices); storage is an implementation vehicle and cannot originate a process. Name the real business originator."
+  },
+  {
+    "id": "func/receiver-forbidden-keywords",
+    "severity": "error",
+    "given": "$.processes[*]",
+    "field": "receiver",
+    "kind": "forbiddenKeywords",
+    "keywords": ["数据库", "文件存储"],
+    "suggestion": "The receiver must not be a storage facility (数据库/文件存储): functional users are business roles (people, external systems, devices); storage is an implementation vehicle and cannot receive a process result. Name the real business receiver."
   }
 ]
