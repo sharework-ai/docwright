@@ -259,7 +259,7 @@ describe('plan/context-alignment (chain head reconciliation)', () => {
     const contextRef = await seedContext(deps as never)
     expect(contextRef).toBe('context/context.json')
     const out = await defineDocGenerateTool(deps as never).execute({
-      pack: 'cosmic-plan', materials: ['#!inline\n需求素材'], language: 'zh-CN', artifactName: 'plan', upstream: [contextRef], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true,
+      pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\n需求素材'], language: 'zh-CN', artifactName: 'plan', upstream: [contextRef], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string }>; params?: Record<string, unknown> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.upstreamHashes[0]!.pack).toBe('cosmic-context')

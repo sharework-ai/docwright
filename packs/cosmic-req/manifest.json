@@ -1,7 +1,7 @@
 {
   "name": "cosmic-req",
-  "version": "0.3.0",
-  "description": "COSMIC requirements analysis for one plan function: functional description, functional users (roles or third-party systems) with user stories — the primary source for later flow analysis (which role or module does what) — and business rules (consumes a green cosmic-plan artifact).",
+  "version": "0.4.0",
+  "description": "COSMIC requirements analysis for one plan function: functional description, functional users (roles or third-party systems) with user stories — the primary source for later flow analysis (which role or module does what) — and business rules (consumes a green cosmic-plan artifact; requires topic — one requirement per topic).",
   "consumes": [
     "cosmic-plan"
   ],
@@ -57,5 +57,6 @@
       "min": 1,
       "description": "1-based position of the target function in the upstream plan functions array; no default — pick from the candidates listed when missing"
     }
-  }
+  },
+  "requiresTopic": true
 }

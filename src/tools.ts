@@ -390,7 +390,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       + 'Returns artifactPath, markdownPath, and the validation receipt. '
       + 'Materials are paths relative to the materials root (default <workspace>/references/) or inline text starting with "#!inline"; '
       + 'if the workspace references/ folder holds project-context material (system architecture, module map, numbering conventions), include it. '
-      + 'Artifacts land under the output root (default <workspace>/output/), or under <topic>/output/ when topic is given; '
+      + 'Artifacts land under the output root — <topic>/output/ when topic is given (requirement-scoped packs REQUIRE topic: one requirement per topic, e.g. its id), <workspace>/output/ otherwise; '
       + 'workspace-scope packs ignore topic and write to <workspace>/context/ — when their existing green artifact is unchanged it is reused as-is (reused: true), unless force: true rebuilds it. '
       + 'Pack-declared tunables can be overridden via params; required params (no default) must be provided. '
       + 'Passing params — or generating a pack with confirm-flagged params whose values are not yet confirmed upstream — returns a pendingConfirmation param table first: present it to the user, then re-call with confirm: true. '
@@ -401,7 +401,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       language: { type: 'string', description: 'Output language (default: config defaultLanguage)' },
       upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn"). Extra green artifacts of installed packs may ride along as context (e.g. the project context), but at least one consumed-type artifact is required' },
       artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>)' },
-      topic: { type: 'string', description: 'Topic directory name (a plain [A-Za-z0-9._-] segment, e.g. a requirement id): relocates the output root to <topic>/output/ and the materials root to <topic>/references/; ignored by workspace-scope packs' },
+      topic: { type: 'string', description: 'Topic directory name (a plain [A-Za-z0-9._-] segment, e.g. the requirement id): relocates the output root to <topic>/output/ and the materials root to <topic>/references/; REQUIRED by packs declaring requiresTopic (the cosmic chain stages), ignored by workspace-scope packs' },
       maxRounds: { type: 'number', description: 'Round cap for this call (e.g. when the user asks to try more rounds); clamped to config maxRoundsCeiling' },
       force: { type: 'boolean', description: 'Rebuild even when a reusable green artifact of this pack already exists (bypasses the reuse pre-check)' },
       params: { type: 'object', additionalProperties: true, description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpTotal": {"value": 100, "downFactor": 0.9, "upFactor": 1.2}}; unknown names, out-of-range values, and missing required params fail loud; explicit params always trigger the confirmation gate' },
@@ -418,6 +418,12 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       const upstream = args.upstream as string[] | undefined
       const workspaceRoot = effectiveWorkspaceRoot(exec as SessionWorkspaceCarrier | undefined, deps.config.workspaceRoot)
       const { materialsRoot, outputRoot } = resolveScopedRoots(workspaceRoot, deps.config, pack, args.topic)
+      // Requirement-scoped packs refuse to generate without a topic
+      // (docs/designs/cosmic-context.md): one requirement, one topic
+      // directory, so chain paths and coverage scans key off it.
+      if (pack.manifest.requiresTopic === true && (args.topic === undefined || args.topic.length === 0)) {
+        throw new Error(`pack "${pack.manifest.name}" scopes its artifacts to one requirement: pass topic (a plain [A-Za-z0-9._-] segment, e.g. the requirement id) — artifacts land under <topic>/output/ and upstream/doc_chain_status paths key off it`)
+      }
       // Reuse pre-check (docs/designs/cosmic-context.md): before any param,
       // route, or input work — a green, hash-intact artifact of a reuse pack
       // is returned as-is; force: true always rebuilds.

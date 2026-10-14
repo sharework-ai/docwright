@@ -45,7 +45,7 @@ workspaceRoot/
     output/                ← topic 级产物
 ```
 
-- **topic 参数**：`doc_generate` 增加可选参数 `topic`（单段目录名 `[A-Za-z0-9._-]`，confine 校验在 workspaceRoot 内）；`doc_validate` 不设该参数——复验全由产物路径驱动，素材/产物根不参与。给定后：产物根为 `<topic>/output/`、素材根为 `<topic>/references/`；缺省维持现状（workspaceRoot 根下的 `output/`、`references/`）——既有调用与测试零迁移。workspace scope 的 pack 忽略 topic（固定 workspace 级目录：素材 `references/`、产物 `context/`）。
+- **topic 参数**：`doc_generate` 的 `topic`（单段目录名 `[A-Za-z0-9._-]`，confine 校验在 workspaceRoot 内）对声明 `requiresTopic: true` 的 pack **必填**（2026-10-14 真实会话复盘后收紧：cosmic 链四阶段 plan/req/func/tech 一个需求一个 topic，缺失调用期响亮报错；manifest 声明，引擎不做包名硬编码）；其余 pack 缺省行为不变；`doc_validate` 不设该参数——复验全由产物路径驱动。给定后：产物根为 `<topic>/output/`、素材根为 `<topic>/references/`；缺省维持现状（workspaceRoot 根下的 `output/`、`references/`）——既有调用与测试零迁移。workspace scope 的 pack 忽略 topic（固定 workspace 级目录：素材 `references/`、产物 `context/`）。
 - **复用预检**（`scope: "workspace"` 且 `reuse: true`）：doc_generate 生成前扫 `context/`：存在同 pack 产物且 sidecar 回执 `isValid === true` 且**产物当前 hash 与回执记录一致**（复用 staleness 对账，不重跑 LLM 校验）→ 直接返回该产物（返回值带 `reused: true` 与原回执），除非调用方显式 `force: true`。回执缺失/红色/hash 不符 → 正常走生成闭环。人工 seal 修正后 hash 变化，预检自然不命中，语义自洽。
 - **doc_chain_status**：从 `plan` 参数的路径推断输出根（plan 所在目录即 output 根），topic 目录自然生效，不加参数。
 - 产物路径对下游照旧是 workspace-relative（如 `context/cosmic-context-….json`、`req-2026-001/output/plan.json`），`upstream` 传递与 confine 校验不变。

@@ -39,11 +39,13 @@ const DESC_KEYWORDS = ['计算', '转化', '转换', '拆分', '日志', '解析
 
 
 /** Tolerance band around desiredCfps, from the shared cfpTotal {downFactor, upFactor}; defaults tighten the old [0.9, 1.5] to [0.9, 1.2]. */
+// The tech stage never totals below the planned estimate (2026-10-14 real-session
+// review): downFactor does NOT loosen tech — the floor is exactly desiredCfps,
+// and upFactor keeps the upper tolerance only.
 function budgetFactors(context) {
   const shared = context?.params?.cfpTotal
-  const down = typeof shared?.downFactor === 'number' ? shared.downFactor : 0.9
   const up = typeof shared?.upFactor === 'number' ? shared.upFactor : 1.2
-  return { down, up }
+  return { down: 1, up }
 }
 
 export const rules = [
@@ -206,12 +208,14 @@ export const rules = [
   },
   {
     // CFP budget error bounds migrated (E101/E200): total CFPs vs the
-    // desiredCfps budget, with the error ratios exposed as pack params. The
-    // W100/W200 warning bands live in tech/cfp-budget-advice below —
+    // desiredCfps budget. The floor is pinned at the planned estimate
+    // (budgetFactors: down=1 — a real session showed systematic -11%~-16%
+    // shortfalls inside the old 0.9 band); upFactor keeps the upper
+    // tolerance. The advisory band lives in tech/cfp-budget-advice below —
     // FunctionRule carries one severity, so error and warning cannot share a rule.
     id: 'tech/cfp-total-vs-budget',
     severity: 'error',
-    suggestion: '全部子过程的 CFP 总数须落在预算区间 [desiredCfps×downFactor, desiredCfps×upFactor] 内（容差系数见生效参数 cfpTotal）：不足说明拆分粒度太粗（继续从素材细化数据移动），超出说明拆分过细（合并同类子过程）。',
+    suggestion: '全部子过程的 CFP 总数不得低于计划估算 desiredCfps，且不超过 desiredCfps×upFactor（上限容差见生效参数 cfpTotal）：不足说明拆分粒度太粗（继续从素材细化数据移动，注意 EW/EX 各计 2 CFP、ERX 计 3 CFP），超出说明拆分过细（合并同类子过程）。',
     check(artifact, context) {
       if (!isObject(artifact)) return []
       const desired = artifact.desiredCfps
@@ -253,7 +257,7 @@ export const rules = [
     // than the tolerance bands fixed at [min, 1) and (1.2, max].
     id: 'tech/cfp-budget-advice',
     severity: 'warning',
-    suggestion: 'CFP 总数偏离预算但在容差区间内（容差系数见生效参数 cfpTotal）：低于预算对照素材补齐数据移动，高于预算检查是否拆分过细（合并同类子过程）。',
+    suggestion: 'CFP 总数高于计划估算但在容差上限内（上限系数见生效参数 cfpTotal.upFactor）：检查是否拆分过细，合并同类子过程。',
     check(artifact, context) {
       if (!isObject(artifact)) return []
       const desired = artifact.desiredCfps
@@ -265,13 +269,14 @@ export const rules = [
         }
       }
       const factors = budgetFactors(context)
-      if (total < desired * factors.down || total > desired * factors.up) return []
-      if (total === desired) return []
+      // Below desired is the error rule's job (floor pinned at desired);
+      // the advisory band covers in-tolerance overshoot only.
+      if (total <= desired || total > desired * factors.up) return []
       return [{
         jsonPath: '$.processes',
         message: say(artifact,
-          `CFP 总数偏离预算：实际 ${total}，期望 ${desired}（容差区间 [${factors.down}×${desired}, ${factors.up}×${desired}] 内，仅提示）`,
-          `Total CFPs deviate from the budget: got ${total}, expected ${desired} (within tolerance [${factors.down}×${desired}, ${factors.up}×${desired}]; advisory only)`),
+          `CFP 总数高于计划估算：实际 ${total}，期望 ${desired}（容差上限 ${factors.up}×${desired}，带内仅提示）`,
+          `Total CFPs exceed the plan estimate: got ${total}, expected ${desired} (tolerance ceiling ${factors.up}×${desired}; advisory only)`),
         snapshot: `totalCfps=${total}`,
       }]
     },

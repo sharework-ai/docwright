@@ -1,13 +1,22 @@
 {
   "name": "cosmic-plan",
-  "version": "0.3.0",
-  "description": "COSMIC function-point estimation plan: given one requirement and the green project context, plan which modules to add or modify — each changed leaf module becomes one function with hierarchical names and estimated CFPs (consumes a green cosmic-context artifact).",
-  "consumes": ["cosmic-context"],
-  "languages": ["zh-CN", "en-US"],
+  "version": "0.4.0",
+  "description": "COSMIC function-point estimation plan: given one requirement and the green project context, plan which modules to add or modify — each changed leaf module becomes one function with hierarchical names and estimated CFPs (consumes a green cosmic-context artifact; requires topic — one requirement per topic).",
+  "consumes": [
+    "cosmic-context"
+  ],
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
   "params": {
     "cfpPerFunc": {
       "type": "object",
-      "default": { "value": 30, "min": 10, "max": 100 },
+      "default": {
+        "value": 30,
+        "min": 10,
+        "max": 100
+      },
       "confirm": true,
       "description": "Per-function CFP budget {value, min, max}: every estimatedCfps must fall inside [min, max] (rule plan/cfp-per-func-band)"
     },
@@ -15,7 +24,7 @@
       "type": "object",
       "required": true,
       "confirm": true,
-      "description": "Total CFP budget {value, downFactor, upFactor}: totalCfps must fall inside [value*downFactor, value*upFactor] (rule plan/cfp-total-band); no default — state the budget via params, downstream stages inherit it"
+      "description": "Total CFP budget {value, downFactor, upFactor}: totalCfps must fall inside [value*downFactor, value*upFactor] (rule plan/cfp-total-band); the tech stage never totals below its planned estimate regardless of downFactor; no default — state the budget via params, downstream stages inherit it"
     },
     "cfpPerSubProc": {
       "type": "number",
@@ -31,5 +40,6 @@
       "max": 3,
       "description": "Depth of the module tree (1-3) as declared by the upstream cosmic-context artifact: drives l2Name/l3Name requiredness and the funcId segment-count floor (rule plan/name-hierarchy); inherited from the context receipt"
     }
-  }
+  },
+  "requiresTopic": true
 }

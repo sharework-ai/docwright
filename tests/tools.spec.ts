@@ -43,7 +43,7 @@ describe('doc_packs tool', () => {
     const packs = await tool.execute({} as never, { signal } as never) as Array<{ name: string; version: string; description: string; languages: string[]; consumes: string[] }>
     expect(packs).toHaveLength(6)
     const plan = packs.find(p => p.name === 'cosmic-plan')!
-    expect(plan).toMatchObject({ version: '0.3.0', languages: ['zh-CN', 'en-US'], consumes: ['cosmic-context'] })
+    expect(plan).toMatchObject({ version: '0.4.0', languages: ['zh-CN', 'en-US'], consumes: ['cosmic-context'] })
     expect(plan.description.length).toBeGreaterThan(0)
   })
 
@@ -63,7 +63,7 @@ describe('doc_generate tool', () => {
     const tool = defineDocGenerateTool(deps)
     await seedContext(deps)
     const out = await tool.execute(
-      { pack: 'cosmic-plan', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'tool1', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never,
+      { pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'tool1', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never,
       { signal } as never,
     ) as { artifactPath: string; markdownPath: string; receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(true)
@@ -79,7 +79,7 @@ describe('doc_generate tool', () => {
   it('fails loud on an unsupported language at call time', async () => {
     const deps = await makeDeps()
     const tool = defineDocGenerateTool(deps)
-    await expect(tool.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'fr-FR' } as never, { signal } as never)).rejects.toThrow(/does not support language/)
+    await expect(tool.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'fr-FR' } as never, { signal } as never)).rejects.toThrow(/does not support language/)
   })
 
   it('fails loud when the LLM route is unset', async () => {
@@ -87,7 +87,7 @@ describe('doc_generate tool', () => {
     const tool = defineDocGenerateTool(deps)
     const routed = { ...deps, config: { ...(deps.config as Record<string, unknown>), provider: 'p', model: 'm' } }
     await seedContext(routed)
-    await expect(tool.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never, { signal } as never)).rejects.toThrow(/provider and model/)
+    await expect(tool.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never, { signal } as never)).rejects.toThrow(/provider and model/)
   })
 })
 

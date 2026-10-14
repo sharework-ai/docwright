@@ -2,7 +2,7 @@
 
 ## 领域模型
 
-子过程（sub-process）是功能过程的下一步细分，每个子过程同时是一项**数据移动**（entry/eXit/read/write）；一个功能过程拆成 2-3 个子过程，序列必须严格匹配 ERX / EW / EX 三种模式之一。
+子过程（sub-process）是功能过程的下一步细分，每个子过程同时是一项**数据移动**（entry/eXit/read/write）；一个功能过程拆成 2-3 个子过程，序列必须严格匹配 ERX / EW / EX 三种模式之一。CFP 经济学：EW/EX 过程各计 2 CFP，ERX 过程计 3 CFP——拆分时以总量贴近计划估算为准，不要贴着下限。
 
 ## 输出要求
 
@@ -21,7 +21,7 @@
     - `originator`（string）：与上游 func 对应过程一致。
     - `receiver`（string）：与上游 func 对应过程一致。
     - `origination_event`（string）：与上游 func 对应过程一致。
-    - `subProcesses`（数组）：该过程的数据移动序列，按执行顺序排列，必须是 `ERX`、`EW`、`EX` 三种模式之一（即每个过程 2-3 个数据移动，平均约 2.5 个）。每项：
+    - `subProcesses`（数组）：该过程的数据移动序列，按执行顺序排列，必须是 `ERX`、`EW`、`EX` 三种模式之一（即每个过程 2-3 个数据移动，平均约 2.5 个；EW/EX 计 2 CFP、ERX 计 3 CFP）。每项：
       - `description`（string）：什么数据在功能用户与系统之间移动（不少于 10 个字符）；避免"计算/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序"等技术实现词。
       - `dataMovementType`（string）：`E`（输入，用户→系统）/ `X`（输出，系统→用户）/ `R`（读存储）/ `W`（写存储）。
       - `dataGroup`（string）：该移动操作的数据组名。
@@ -37,7 +37,7 @@
 ## 硬性约束
 
 1. `index`、`funcId`、`desiredCfps` 必须与上游 func 产物完全一致，不得改写。
-2. 全部子过程的 CFP 总数必须落在预算区间 [desiredCfps×downFactor, desiredCfps×upFactor] 内（容差系数取生效参数 `cfpTotal` 的 downFactor/upFactor；默认 [0.9, 1.2]）。
+2. 全部子过程的 CFP 总数**不得低于计划估算 `desiredCfps`**，且不超过 `desiredCfps×upFactor`（上限容差取生效参数 `cfpTotal` 的 upFactor，默认 1.2）；总量应贴近 `desiredCfps`，不要贴着下限凑数。
 3. 上游 func 的每个功能过程都必须出现在 `processes` 中，同名对应。
 
 ## 输入素材

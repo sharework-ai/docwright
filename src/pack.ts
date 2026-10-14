@@ -112,6 +112,13 @@ export interface PackManifest {
   readonly maxRounds?: number | undefined
   /** Behavior when call-time params drift from the upstream receipt's recorded params (docs/designs/params-and-chain-contract.md). */
   readonly paramDriftPolicy?: 'regenerate' | 'revalidate' | undefined
+  /**
+   * Require the call's `topic` parameter (docs/designs/cosmic-context.md):
+   * requirement-scoped packs refuse to generate without one, so every
+   * requirement's artifacts land under `<topic>/output/`. Meaningless on
+   * workspace-scope packs (topic is ignored there) and rejected at load time.
+   */
+  readonly requiresTopic?: boolean | undefined
   /** Declared tunables; declaration is the allowlist — undeclared names are rejected at call time. */
   readonly params?: Readonly<Record<string, ParamSpec>> | undefined
 }

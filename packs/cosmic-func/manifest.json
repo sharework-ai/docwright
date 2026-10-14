@@ -1,7 +1,7 @@
 {
   "name": "cosmic-func",
-  "version": "0.2.0",
-  "description": "COSMIC functional-process design for one function: decomposes the function into functional processes (originator, receiver, origination event) refined from a green cosmic-req artifact.",
+  "version": "0.3.0",
+  "description": "COSMIC functional-process design for one function: decomposes the function into functional processes (originator, receiver, origination event) refined from a green cosmic-req artifact (requires topic — one requirement per topic).",
   "consumes": [
     "cosmic-req"
   ],
@@ -38,5 +38,6 @@
       "min": 1,
       "description": "1-based position of the target function in the upstream plan functions array; no default — pick from the candidates listed when missing"
     }
-  }
+  },
+  "requiresTopic": true
 }
