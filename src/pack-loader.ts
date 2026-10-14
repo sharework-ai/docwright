@@ -71,6 +71,12 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
   if (!Array.isArray(m.languages) || m.languages.length === 0) throw new Error(`pack ${dir}: manifest.languages must be a non-empty array`)
   if (m.languages.some(l => typeof l !== 'string' || l.length === 0)) throw new Error(`pack ${dir}: manifest.languages entries must be non-empty strings`)
   if (m.consumes !== undefined && !Array.isArray(m.consumes)) throw new Error(`pack ${dir}: manifest.consumes must be an array when present`)
+  if (m.scope !== undefined && m.scope !== 'workspace' && m.scope !== 'topic') {
+    throw new Error(`pack ${dir}: manifest.scope must be "workspace" or "topic" (got ${JSON.stringify(m.scope)})`)
+  }
+  if (m.reuse !== undefined && typeof m.reuse !== 'boolean') {
+    throw new Error(`pack ${dir}: manifest.reuse must be a boolean when present`)
+  }
   if (m.maxRounds !== undefined && (!Number.isInteger(m.maxRounds) || m.maxRounds < 1)) {
     throw new Error(`pack ${dir}: manifest.maxRounds must be a positive integer`)
   }
@@ -86,7 +92,22 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
     for (const [name, spec] of Object.entries(m.params)) out[name] = assertParamSpec(spec, dir, name)
     params = out
   }
-  return { name: m.name, version: m.version, description: m.description, consumes: m.consumes ?? [], languages: m.languages, ...(m.maxRounds === undefined ? {} : { maxRounds: m.maxRounds }), ...(m.paramDriftPolicy === undefined ? {} : { paramDriftPolicy: m.paramDriftPolicy }), ...(params === undefined ? {} : { params }) }
+  // Scope/reuse defaults follow the scope semantics (docs/designs/cosmic-context.md):
+  // workspace packs default reuse=true (project analysis happens once), topic
+  // packs default false (a changed requirement is invisible in artifact hashes).
+  const scope = m.scope ?? 'topic'
+  return {
+    name: m.name,
+    version: m.version,
+    description: m.description,
+    consumes: m.consumes ?? [],
+    scope,
+    reuse: m.reuse ?? scope === 'workspace',
+    languages: m.languages,
+    ...(m.maxRounds === undefined ? {} : { maxRounds: m.maxRounds }),
+    ...(m.paramDriftPolicy === undefined ? {} : { paramDriftPolicy: m.paramDriftPolicy }),
+    ...(params === undefined ? {} : { params }),
+  }
 }
 
 /**

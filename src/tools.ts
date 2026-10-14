@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises'
-import { join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type UpstreamVersionPolicy } from './config.ts'
 import { generateDocument, getDocService, parseUpstreamArtifacts, summarizeArtifact, writeAtomic } from './doc-service.ts'
@@ -48,6 +48,48 @@ function confinePath(workspaceRoot: string, ref: string, what: string): string {
   return abs
 }
 
+/** Conventional workspace-level artifact directory for workspace-scope packs (docs/designs/cosmic-context.md). */
+const WORKSPACE_CONTEXT_DIR = 'context'
+
+/** Plain single-segment directory name for the topic parameter (same charset as artifactName). */
+function assertTopicName(topic: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(topic) || topic.includes('..')) {
+    throw new Error(`topic must be a plain path segment of [A-Za-z0-9._-] (no separators, no leading dot); got ${JSON.stringify(topic)}`)
+  }
+  return topic
+}
+
+/**
+ * Per-call material/output roots (docs/designs/cosmic-context.md, scopes):
+ * workspace-scope packs ignore the topic and fix their homes (materials
+ * `references/`, artifacts `context/`); a topic argument relocates both roots
+ * under `<workspace>/<topic>/`; otherwise the configured roots apply unchanged.
+ */
+function resolveScopedRoots(
+  workspaceRoot: string,
+  config: Config,
+  pack: Pack,
+  topic: string | undefined,
+): { materialsRoot: string; outputRoot: string } {
+  if (pack.manifest.scope === 'workspace') {
+    return {
+      materialsRoot: resolveRootWithin(workspaceRoot, config.materialsRoot, 'materialsRoot'),
+      outputRoot: resolveRootWithin(workspaceRoot, WORKSPACE_CONTEXT_DIR, 'outputRoot'),
+    }
+  }
+  if (topic !== undefined && topic.length > 0) {
+    const topicRoot = confinePath(workspaceRoot, assertTopicName(topic), 'topic')
+    return {
+      materialsRoot: resolveRootWithin(topicRoot, config.materialsRoot, 'materialsRoot'),
+      outputRoot: resolveRootWithin(topicRoot, config.outputRoot, 'outputRoot'),
+    }
+  }
+  return {
+    materialsRoot: resolveRootWithin(workspaceRoot, config.materialsRoot, 'materialsRoot'),
+    outputRoot: resolveRootWithin(workspaceRoot, config.outputRoot, 'outputRoot'),
+  }
+}
+
 function resolvePack(deps: ToolDeps, name: string): Pack {
   const pack = deps.packs.get(name)
   if (pack === undefined) {
@@ -83,6 +125,8 @@ export type GenerateToolResult = {
   readonly receipt: Receipt
   /** Best-effort artifact metrics (counts, totalCfps) — saves a file read. */
   readonly summary: ReturnType<typeof summarizeArtifact>
+  /** true: a green, hash-intact artifact of this pack was reused; no generation ran (docs/designs/cosmic-context.md). */
+  readonly reused?: boolean
   /** Present under upstreamVersionPolicy: "warn" when an upstream receipt records a different pack version. */
   readonly upstreamWarnings?: string[]
   /** Fan-out progress for per-function packs: this stage's green artifacts vs the reference function set. */
@@ -253,15 +297,52 @@ function planCandidates(records: readonly { artifact: unknown }[]): FunctionCand
   return []
 }
 
-/** Green sidecar-receipted artifacts of one pack in the output root: funcId → artifact basename. */
-async function scanStageArtifacts(outputRoot: string, packName: string): Promise<Map<string, string>> {
-  const out = new Map<string, string>()
+/**
+ * Reuse pre-check (docs/designs/cosmic-context.md): a pack declaring reuse
+ * skips generation when its output root already holds an artifact of the same
+ * pack whose sidecar receipt is green and whose canonical hash still matches
+ * the file (staleness reconciliation — no LLM re-validation). A receipt from
+ * another installed pack version certifies the OLD ruleset and never reuses;
+ * a red receipt or an edited artifact falls through to normal generation.
+ */
+async function findReusableArtifact(
+  outputRoot: string,
+  pack: Pack,
+): Promise<{ artifactPath: string; markdownPath: string; receipt: Receipt; summary: ReturnType<typeof summarizeArtifact> } | undefined> {
   let entries
   try {
     entries = await readdir(outputRoot, { withFileTypes: true })
   } catch {
-    return out
+    return undefined
   }
+  for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.endsWith('.receipt.json')) continue
+    const base = entry.name.slice(0, -'.json'.length)
+    try {
+      const receipt = JSON.parse(await readFile(join(outputRoot, `${base}.receipt.json`), 'utf8')) as Partial<Receipt>
+      if (receipt.pack !== pack.manifest.name || receipt.isValid !== true) continue
+      if ((receipt.packVersion ?? '') !== pack.manifest.version) continue
+      const artifact: unknown = JSON.parse(await readFile(join(outputRoot, entry.name), 'utf8'))
+      if (receipt.artifactHash !== artifactHashOf(artifact)) continue
+      return {
+        artifactPath: join(outputRoot, entry.name),
+        markdownPath: join(outputRoot, `${base}.md`),
+        receipt: receipt as Receipt,
+        summary: summarizeArtifact(artifact),
+      }
+    } catch {
+      continue
+    }
+  }
+  return undefined
+}
+
+/** Green sidecar-receipted artifacts of one pack in the output root: funcId → artifact basename. */
+async function scanStageArtifacts(outputRoot: string, packName: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  // The output root always exists here (it holds the plan or was just written
+  // by doc_generate); a vanished directory is a real anomaly and fails loud.
+  const entries = await readdir(outputRoot, { withFileTypes: true })
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.endsWith('.receipt.json')) continue
     const base = entry.name.slice(0, -'.json'.length)
@@ -309,7 +390,8 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       + 'Returns artifactPath, markdownPath, and the validation receipt. '
       + 'Materials are paths relative to the materials root (default <workspace>/references/) or inline text starting with "#!inline"; '
       + 'if the workspace references/ folder holds project-context material (system architecture, module map, numbering conventions), include it. '
-      + 'Artifacts land under the output root (default <workspace>/output/). '
+      + 'Artifacts land under the output root (default <workspace>/output/), or under <topic>/output/ when topic is given; '
+      + 'workspace-scope packs ignore topic and write to <workspace>/context/ — when their existing green artifact is unchanged it is reused as-is (reused: true), unless force: true rebuilds it. '
       + 'Pack-declared tunables can be overridden via params; required params (no default) must be provided. '
       + 'Passing params — or generating a pack with confirm-flagged params whose values are not yet confirmed upstream — returns a pendingConfirmation param table first: present it to the user, then re-call with confirm: true. '
       + 'maxRounds caps this call\'s loop rounds.',
@@ -317,9 +399,11 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       pack: { type: 'string', required: true, description: 'Pack name; discover installed packs with doc_packs (e.g. cosmic-plan)' },
       materials: { type: 'array', items: { type: 'string' }, description: 'Material references: paths relative to the materials root (default references/ under the workspace) or #!inline text. Optional for chained packs whose upstream artifacts carry the context' },
       language: { type: 'string', description: 'Output language (default: config defaultLanguage)' },
-      upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn")' },
+      upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn"). Extra green artifacts of installed packs may ride along as context (e.g. the project context), but at least one consumed-type artifact is required' },
       artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>)' },
+      topic: { type: 'string', description: 'Topic directory name (a plain [A-Za-z0-9._-] segment, e.g. a requirement id): relocates the output root to <topic>/output/ and the materials root to <topic>/references/; ignored by workspace-scope packs' },
       maxRounds: { type: 'number', description: 'Round cap for this call (e.g. when the user asks to try more rounds); clamped to config maxRoundsCeiling' },
+      force: { type: 'boolean', description: 'Rebuild even when a reusable green artifact of this pack already exists (bypasses the reuse pre-check)' },
       params: { type: 'object', additionalProperties: true, description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpTotal": {"value": 100, "downFactor": 0.9, "upFactor": 1.2}}; unknown names, out-of-range values, and missing required params fail loud; explicit params always trigger the confirmation gate' },
       confirm: { type: 'boolean', description: 'Execute after the pendingConfirmation param table was presented to and approved by the user' },
     },
@@ -327,14 +411,20 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       schema: { type: 'json' },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args: { pack: string; materials?: unknown[]; language?: string; upstream?: unknown[]; artifactName?: string; maxRounds?: number; params?: unknown; confirm?: boolean }, exec) {
+    async execute(args: { pack: string; materials?: unknown[]; language?: string; upstream?: unknown[]; artifactName?: string; topic?: string; maxRounds?: number; force?: boolean; params?: unknown; confirm?: boolean }, exec) {
       const pack = resolvePack(deps, args.pack)
       const language = resolveLanguage(deps, pack, args.language)
       const materials = (args.materials as string[] | undefined) ?? []
       const upstream = args.upstream as string[] | undefined
       const workspaceRoot = effectiveWorkspaceRoot(exec as SessionWorkspaceCarrier | undefined, deps.config.workspaceRoot)
-      const materialsRoot = resolveRootWithin(workspaceRoot, deps.config.materialsRoot, 'materialsRoot')
-      const outputRoot = resolveRootWithin(workspaceRoot, deps.config.outputRoot, 'outputRoot')
+      const { materialsRoot, outputRoot } = resolveScopedRoots(workspaceRoot, deps.config, pack, args.topic)
+      // Reuse pre-check (docs/designs/cosmic-context.md): before any param,
+      // route, or input work — a green, hash-intact artifact of a reuse pack
+      // is returned as-is; force: true always rebuilds.
+      if (pack.manifest.reuse === true && args.force !== true) {
+        const reused = await findReusableArtifact(outputRoot, pack)
+        if (reused !== undefined) return { ...reused, reused: true } as unknown as DocGenerateResult
+      }
       let upstreamTexts: string[] | undefined
       let upstreamAnchors: UpstreamAnchor[] | undefined
       let upstreamWarnings: readonly string[] | undefined
@@ -566,7 +656,7 @@ export function defineDocChainStatusTool(deps: ToolDeps) {
     name: 'doc_chain_status',
     description: 'Report per-function chain coverage for a fan-out chain: which functions of a plan artifact have green artifacts at each downstream stage (e.g. cosmic-req/cosmic-func/cosmic-tech), plus counts and any artifacts whose funcId matches no plan function. Deterministic, no LLM. Run this before presenting a per-function chain as complete.',
     parameters: {
-      plan: { type: 'string', required: true, description: 'Workspace-relative path to the plan artifact JSON (must carry a green sidecar receipt)' },
+      plan: { type: 'string', required: true, description: 'Workspace-relative path to the plan artifact JSON (must carry a green sidecar receipt); the directory holding it is the output root, so plan paths inside a topic directory scope the coverage scan to that topic' },
     },
     output: {
       schema: { type: 'json' },
@@ -575,7 +665,10 @@ export function defineDocChainStatusTool(deps: ToolDeps) {
     async execute(args: { plan: string }, exec) {
       const workspaceRoot = effectiveWorkspaceRoot(exec as SessionWorkspaceCarrier | undefined, deps.config.workspaceRoot)
       const planPath = confinePath(workspaceRoot, args.plan, 'plan')
-      const outputRoot = resolveRootWithin(workspaceRoot, deps.config.outputRoot, 'outputRoot')
+      // The plan's own directory is the output root (docs/designs/cosmic-context.md):
+      // a plan generated under <topic>/output/ scopes the coverage scan to
+      // that topic without an extra parameter.
+      const outputRoot = dirname(planPath)
       let planArtifact: { functions?: unknown }
       let planPackName: string
       try {
@@ -595,12 +688,15 @@ export function defineDocChainStatusTool(deps: ToolDeps) {
         throw new Error(`plan artifact ${args.plan} declares no functions[]; coverage is defined over plan functions`)
       }
       const planFuncIds = new Set(planArtifact.functions.map(fn => (fn as { funcId?: unknown } | null)?.funcId).filter((id): id is string => typeof id === 'string'))
-      // Stage order: the plan pack, then every pack consuming the frontier.
+      // Stage order: the plan pack, then every topic-scope pack consuming the
+      // frontier. Workspace-scope packs (project-level artifacts like context
+      // or its sync) never enter the fan-out: coverage is defined over plan
+      // functions, not project-level single artifacts.
       const stages: string[] = [planPackName]
       let frontier = [planPackName]
       while (frontier.length > 0) {
         const next = [...deps.packs.values()]
-          .filter(p => p.manifest.consumes.some(c => frontier.includes(c)) && !stages.includes(p.manifest.name))
+          .filter(p => p.manifest.scope !== 'workspace' && p.manifest.consumes.some(c => frontier.includes(c)) && !stages.includes(p.manifest.name))
           .map(p => p.manifest.name)
         stages.push(...next)
         frontier = next
@@ -709,8 +805,8 @@ export async function verifyUpstreamReceipts(
     if (stored.artifactHash !== artifactHashOf(artifact)) {
       throw new Error(`upstream artifact ${ref} was modified after generation (hash mismatch vs receipt); regenerate it before consuming`)
     }
-    if (stored.pack === undefined || !pack.manifest.consumes.includes(stored.pack)) {
-      throw new Error(`upstream artifact ${ref} is of pack "${stored.pack ?? 'unknown'}" but "${pack.manifest.name}" consumes [${pack.manifest.consumes.join(', ')}]`)
+    if (stored.pack === undefined) {
+      throw new Error(`upstream artifact ${ref} records no pack in its receipt; regenerate it with doc_generate`)
     }
     // Version staleness is judged against the INSTALLED version of the
     // upstream pack (version lines are independent per pack): a receipt from
@@ -719,6 +815,11 @@ export async function verifyUpstreamReceipts(
     if (upstreamPack === undefined) {
       throw new Error(`upstream artifact ${ref} is of pack "${stored.pack}" but no such pack is installed (fix: install the pack or correct the consumer's consumes list)`)
     }
+    // A consumed type is a chain edge; any other installed-pack artifact is a
+    // rider — still green/hash/version-verified above, and allowed to ride
+    // along as prompt context (e.g. the project context beside a plan,
+    // docs/designs/cosmic-context.md). The chain contract itself is enforced
+    // after the loop: at least one record must match `consumes`.
     const upstreamVersion = stored.packVersion ?? 'unknown'
     if (upstreamVersion !== upstreamPack.manifest.version) {
       const detail = `upstream artifact ${ref} was generated by "${stored.pack}" v${upstreamVersion} but the installed pack is v${upstreamPack.manifest.version}; its green receipt does not certify the current pack rules`
@@ -737,6 +838,9 @@ export async function verifyUpstreamReceipts(
       params: typeof stored.params === 'object' && stored.params !== null ? stored.params as Record<string, unknown> : undefined,
       artifact,
     })
+  }
+  if (pack.manifest.consumes.length > 0 && !records.some(r => pack.manifest.consumes.includes(r.pack))) {
+    throw new Error(`pack "${pack.manifest.name}" consumes [${pack.manifest.consumes.join(', ')}] but none of the upstream artifacts is of a consumed type; pass at least one of them (extra artifacts may ride along as context)`)
   }
   return { texts, anchors, warnings, records }
 }

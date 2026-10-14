@@ -91,6 +91,21 @@ export interface PackManifest {
   readonly description: string
   /** Artifact type names this pack consumes (chained generation); root packs use []. */
   readonly consumes: readonly string[]
+  /**
+   * Artifact home scope (docs/designs/cosmic-context.md): "workspace" packs
+   * share project-level directories (materials `references/`, artifacts
+   * `context/`) and ignore the call's topic; "topic" packs (the default)
+   * work inside one topic's directories.
+   */
+  readonly scope: 'workspace' | 'topic'
+  /**
+   * Whether doc_generate may reuse an existing green, hash-intact artifact of
+   * this pack without regenerating. Defaults differ by scope semantics
+   * (workspace packs true — project analysis happens once; topic packs false
+   * — a changed requirement is invisible in the artifact hash); a manifest
+   * declaration overrides the default.
+   */
+  readonly reuse: boolean
   /** IETF-ish language tags the pack provides prompts/templates/keyword rules for. */
   readonly languages: readonly string[]
   /** Optional per-pack round-count default for the repair loop (clamped by config maxRoundsCeiling). */
