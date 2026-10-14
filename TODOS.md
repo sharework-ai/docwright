@@ -4,6 +4,7 @@ Source: functional spec at docs/designs/docwright-mvp.md. 本文件记录真正�
 
 ## Open
 
+- [ ] **cosmic-context（设计定稿，待实施）** — 场景链头 + 领域模型显式化，设计全文 `docs/designs/cosmic-context.md`（领域模型、workspace/topic 作用域、schema/规则/链接入、sync pack、引擎增强三处、实施切分 S0-S3、验收标准 10 条）。要点：①**S0 引擎**——manifest `scope`(workspace|topic)/`reuse` 字段、`doc_generate`/`doc_validate` 的 `topic` 参数、workspace 复用预检（绿回执+hash 命中 `reused: true`，`force` 绕过）、doc_chain_status 从 plan 路径推断输出根；②**S1**——cosmic-context pack（modules 树 1-3 级 code/path、roles 三分类、thirdPartySystems、moduleIdConventionForLevel1/2/3、assumptions；4 条规则）+ plan 接链（consumes、context-alignment 引用对账、changeKind、name-hierarchy、moduleLevels 共享参数）；③**S2**——cosmic-context-sync（workspace 级、reuse:false、coverage/preserve 规则）；④**S3**——六 pack description + req kind/用户故事主体 + prompt 领域措辞 + 说明书 + scenario-chains 开放问题 3 定案。约束：引擎改动仅限 pack-loader 与 tools/doc-service。
 - [ ] **scenario-chains（PROPOSAL，挂起至触发）** — 场景链两级能力发现：manifest 增必填 `scenario` 标签 + `doc_packs` 恒定分组返回，多场景共存时模型按任务域聚焦。**触发条件：第二个真实场景包立项（或内置 pack 总数越过 ~15）**，实施切分 S1/S2 见 docs/designs/scenario-chains.md。前置已落地：同 root 重名 pack 加载期 fail loud（跨 root 覆盖为 packsDir 既定语义）。
 - [ ] **E2E-real-llm** — 真实 LLM 闭环端到端。**已观测（2026-10-12）**：多轮修复路径实证（60→100 轨迹，权重 10/error 精确对账，两轮 promptHash 各异，跨 dsh 版本回执复验 hashMatches=true）；但 glm-5.3-flash 下三种违规素材均一轮全绿（模型把 pack 规则置于素材之上，护栏按设计工作），stagnation/decline 阈值（K=D=3）在真实 LLM 下不可触达，仍由确定性单测覆盖（runbook Calibration 节）。**剩余**：换更弱模型或"规则无法满足"的 pack 观测真实停滞——价值有限，可长期挂起（原脚本已被 tmp 清理，按此描述重写）
 
