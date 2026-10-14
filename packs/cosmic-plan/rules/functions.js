@@ -2,7 +2,9 @@
 // cosmic-claude cosmic_core/auditors/plan_auditor.py (E204 funcId unique,
 // E205 path unique, E200 family) plus the shared-budget band rules
 // plan/cfp-per-func-band and plan/cfp-total-band
-// (docs/designs/params-and-chain-contract.md).
+// (docs/designs/params-and-chain-contract.md), the upstream-context
+// reconciliation rule plan/context-alignment and the moduleLevels-driven
+// plan/name-hierarchy (docs/designs/cosmic-context.md).
 // Contract: export `rules`; each check(artifact) returns RuleIssue[]
 // ({ jsonPath, message, snapshot? }); an empty array means pass.
 
@@ -13,6 +15,35 @@ function getFunctions(artifact) {
 
 function str(value) {
   return typeof value === 'string' ? value : ''
+}
+
+function isObject(value) {
+  return value !== null && typeof value === 'object'
+}
+
+/** Message selector: en-US only when the artifact itself says so. */
+function say(artifact, zh, en) {
+  return isObject(artifact) && artifact.language === 'en-US' ? en : zh
+}
+
+/** All module codes of the upstream context tree (up to three levels). */
+function contextModuleCodes(contextArtifact) {
+  const codes = new Set()
+  const walk = (nodes, level) => {
+    if (!Array.isArray(nodes) || level > 3) return
+    for (const node of nodes) {
+      if (!isObject(node)) continue
+      if (typeof node.code === 'string' && node.code !== '') codes.add(node.code)
+      walk(node.children, level + 1)
+    }
+  }
+  walk(contextArtifact?.modules, 1)
+  return codes
+}
+
+/** funcId segments (hyphen-separated, non-empty). */
+function funcIdSegments(funcId) {
+  return str(funcId).split('-').filter(segment => segment.length > 0)
 }
 
 export const rules = [
@@ -149,6 +180,129 @@ export const rules = [
           snapshot: String(doc.totalCfps),
         })
       }
+      return issues
+    },
+  }
+,
+  {
+    // Module-change reconciliation against the upstream context
+    // (docs/designs/cosmic-context.md): modified functions must reference a
+    // module code that already exists in the context tree; added functions
+    // must NOT collide with an existing code and must follow the ID
+    // convention of their level. v1 reconciles the leaf code (the last
+    // funcId segment) against the whole-tree code set; per-segment alignment
+    // of the full code chain is a v2 item.
+    id: 'plan/context-alignment',
+    severity: 'error',
+    suggestion: '以绿回执的 cosmic-context 产物为 upstream 重新生成：修改类功能的模块编号（funcId 末段）必须已存在于 context 模块树；新增类功能不得与已有编号冲突，且须符合对应层级的 moduleIdConventionForLevelN；doc_validate 复验需传入相同 upstream 路径。',
+    check(artifact, context) {
+      if (!isObject(artifact)) return []
+      const upstream = Array.isArray(context?.upstream) ? context.upstream : []
+      const project = upstream.find(item => isObject(item) && item.docType === 'context')
+      if (project === undefined) {
+        return [{
+          jsonPath: '$',
+          message: say(artifact,
+            '找不到上游 context 产物（docType="context"）：生成时必须以绿回执的 cosmic-context 产物为 upstream；doc_validate 复验需传入相同 upstream 路径',
+            'Upstream context artifact not found (docType="context"): generate with a green cosmic-context artifact as upstream; pass the same upstream paths when revalidating with doc_validate'),
+        }]
+      }
+      const codes = contextModuleCodes(project)
+      const levels = typeof context?.params?.moduleLevels === 'number' ? context.params.moduleLevels : undefined
+      const issues = []
+      getFunctions(artifact).forEach((fn, index) => {
+        const changeKind = fn?.changeKind
+        if (changeKind !== 'added' && changeKind !== 'modified') return // schema rejects other values
+        const segments = funcIdSegments(fn?.funcId)
+        const leafCode = segments[segments.length - 1] ?? ''
+        if (leafCode === '') return
+        if (changeKind === 'modified') {
+          if (!codes.has(leafCode)) {
+            issues.push({
+              jsonPath: `$.functions[${index}].funcId`,
+              message: say(artifact,
+                `修改类功能的模块编号 "${leafCode}" 不存在于 context 模块树（修改必须指向已有模块）`,
+                `The modified function's module code "${leafCode}" does not exist in the context module tree (a modification must target an existing module)`),
+              snapshot: leafCode,
+            })
+          }
+          return
+        }
+        if (codes.has(leafCode)) {
+          issues.push({
+            jsonPath: `$.functions[${index}].funcId`,
+            message: say(artifact,
+              `新增类功能的模块编号 "${leafCode}" 与 context 已有模块冲突（新增不得复用已有编号）`,
+              `The added function's module code "${leafCode}" collides with an existing context module code (new modules must not reuse existing codes)`),
+            snapshot: leafCode,
+          })
+          return
+        }
+        if (levels === undefined) return
+        const level = Math.min(segments.length, levels)
+        const convention = project[`moduleIdConventionForLevel${level}`]
+        if (convention === 'numeric' && !/^[0-9]+$/.test(leafCode)) {
+          issues.push({
+            jsonPath: `$.functions[${index}].funcId`,
+            message: say(artifact,
+              `新增模块编号 "${leafCode}" 不符合第 ${level} 级编号规则 numeric（纯数字序号）`,
+              `The added module code "${leafCode}" violates the level-${level} ID convention numeric (digits only)`),
+            snapshot: leafCode,
+          })
+        } else if (convention === 'alphabetic' && !/^[A-Za-z]+$/.test(leafCode)) {
+          issues.push({
+            jsonPath: `$.functions[${index}].funcId`,
+            message: say(artifact,
+              `新增模块编号 "${leafCode}" 不符合第 ${level} 级编号规则 alphabetic（纯字母缩写）`,
+              `The added module code "${leafCode}" violates the level-${level} ID convention alphabetic (letters only)`),
+            snapshot: leafCode,
+          })
+        }
+      })
+      return issues
+    },
+  },
+  {
+    // moduleLevels parameter coupling (docs/designs/cosmic-context.md): the
+    // schema keeps l2Name/l3Name optional (static structure); the effective
+    // depth policy is enforced here — l2Name required from level 2, l3Name
+    // from level 3, and the funcId segment count floors at moduleLevels.
+    id: 'plan/name-hierarchy',
+    severity: 'error',
+    suggestion: '按生效参数 moduleLevels 补齐层级命名：levels≥2 时 l2Name 必填、levels=3 时 l3Name 必填；funcId 分段数不得少于 moduleLevels。',
+    check(artifact, context) {
+      if (!isObject(artifact)) return []
+      const levels = context?.params?.moduleLevels
+      if (typeof levels !== 'number') return []
+      const issues = []
+      getFunctions(artifact).forEach((fn, index) => {
+        const segments = funcIdSegments(fn?.funcId)
+        if (segments.length > 0 && segments.length < levels) {
+          issues.push({
+            jsonPath: `$.functions[${index}].funcId`,
+            message: say(artifact,
+              `funcId 分段数 ${segments.length} 少于生效参数 moduleLevels=${levels}（段即模块编号链）`,
+              `funcId has ${segments.length} segment(s), fewer than the effective param moduleLevels=${levels} (segments are the module code chain)`),
+            snapshot: str(fn?.funcId),
+          })
+        }
+        if (levels >= 2 && str(fn?.l2Name) === '') {
+          issues.push({
+            jsonPath: `$.functions[${index}].l2Name`,
+            message: say(artifact,
+              `moduleLevels=${levels} 时 l2Name 必填`,
+              `l2Name is required when moduleLevels=${levels}`),
+          })
+        }
+        if (levels >= 3 && str(fn?.l3Name) === '') {
+          issues.push({
+            jsonPath: `$.functions[${index}].l3Name`,
+            message: say(artifact,
+              `moduleLevels=${levels} 时 l3Name 必填`,
+              `l3Name is required when moduleLevels=${levels}`),
+          })
+        }
+      })
       return issues
     },
   },

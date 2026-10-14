@@ -103,6 +103,9 @@ describe('session-driven roots end to end (doc_generate via tool)', () => {
   it('reads materials from <session-ws>/references and writes to <session-ws>/output', async () => {
     const packs = await loadPacks(packsRoot, {})
     const pack = packs.get('cosmic-plan')!
+    const contextGolden = JSON.stringify(packs.get('cosmic-context')!.goldenSample)
+    const replies = [contextGolden, JSON.stringify(pack.goldenSample)]
+    let calls = 0
     const sessionWs = await mkdtemp(join(tmpdir(), 'docwright-session-'))
     await mkdir(join(sessionWs, 'references'), { recursive: true })
     await writeFile(join(sessionWs, 'references', 'req.md'), '素材内容', 'utf8')
@@ -113,16 +116,21 @@ describe('session-driven roots end to end (doc_generate via tool)', () => {
       ctx: {
         llm: {
           stream: async function* () {
+            const text = replies[Math.min(calls++, replies.length - 1)]!
             yield { type: 'block-start', index: 0, blockType: 'text' }
-            yield { type: 'text-delta', index: 0, text: JSON.stringify(pack.goldenSample) }
-            yield { type: 'block-end', index: 0, block: { type: 'text', text: JSON.stringify(pack.goldenSample) } }
+            yield { type: 'text-delta', index: 0, text }
+            yield { type: 'block-end', index: 0, block: { type: 'text', text } }
             yield { type: 'finish', reason: 'stop' }
           },
         },
       },
     })
+    await tool.execute(
+      { pack: 'cosmic-context', materials: ['#!inline\n项目背景素材'], language: 'zh-CN', artifactName: 'context' } as never,
+      { agent: { session: { cwd: sessionWs } }, signal } as never,
+    )
     const out = await tool.execute(
-      { pack: 'cosmic-plan', materials: ['req.md'], artifactName: 'sess', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never,
+      { pack: 'cosmic-plan', materials: ['req.md'], artifactName: 'sess', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never,
       { agent: { session: { cwd: sessionWs } }, signal } as never,
     ) as unknown as { artifactPath: string }
     expect(out.artifactPath).toBe(join(sessionWs, 'output', 'sess.json'))

@@ -27,12 +27,13 @@
           "funcId",
           "l1Name",
           "funcDesc",
-          "estimatedCfps"
+          "estimatedCfps",
+          "changeKind"
         ],
         "properties": {
           "funcId": {
             "type": "string",
-            "description": "Function ID: segments separated by hyphens, each segment 1-8 chars (A-Z, 0-9), at least 2 segments",
+            "description": "Function ID: segments separated by hyphens, each segment 1-8 chars (A-Z, 0-9), at least as many segments as the effective param moduleLevels; the segments are the module code chain of the changed module",
             "examples": [
               "A-A-01",
               "USR-MGT-01",
@@ -45,11 +46,11 @@
           },
           "l2Name": {
             "type": "string",
-            "description": "Level 2 function name (optional)"
+            "description": "Level 2 function name (required when the effective param moduleLevels >= 2; enforced by rule plan/name-hierarchy)"
           },
           "l3Name": {
             "type": "string",
-            "description": "Level 3 function name (optional)"
+            "description": "Level 3 function name (required when the effective param moduleLevels = 3; enforced by rule plan/name-hierarchy)"
           },
           "funcDesc": {
             "type": "string",
@@ -60,6 +61,13 @@
             "description": "Estimated CFP count for this function (hard bounds 10-100, recommended 20-50)",
             "minimum": 10,
             "maximum": 100
+          },
+          "changeKind": {
+            "enum": [
+              "added",
+              "modified"
+            ],
+            "description": "Whether this function adds a new module or modifies an existing one; every added-or-modified leaf module is exactly one function (rule plan/context-alignment reconciles the module code against the upstream context)"
           }
         }
       }

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { defineDocGenerateTool, defineDocPacksTool, defineDocValidateTool } from '../src/tools.ts'
 import { loadPacks } from '../src/pack-loader.ts'
+import { seedContext } from './support.ts'
 import { fileURLToPath } from 'node:url'
 
 const packsRoot = fileURLToPath(new URL('../packs', import.meta.url))
@@ -40,9 +41,9 @@ describe('doc_packs tool', () => {
     const deps = await makeDeps()
     const tool = defineDocPacksTool(deps)
     const packs = await tool.execute({} as never, { signal } as never) as Array<{ name: string; version: string; description: string; languages: string[]; consumes: string[] }>
-    expect(packs).toHaveLength(4)
+    expect(packs).toHaveLength(5)
     const plan = packs.find(p => p.name === 'cosmic-plan')!
-    expect(plan).toMatchObject({ version: '0.2.0', languages: ['zh-CN', 'en-US'], consumes: [] })
+    expect(plan).toMatchObject({ version: '0.3.0', languages: ['zh-CN', 'en-US'], consumes: ['cosmic-context'] })
     expect(plan.description.length).toBeGreaterThan(0)
   })
 
@@ -60,8 +61,9 @@ describe('doc_generate tool', () => {
   it('walks the loop and returns artifact + receipt inline', async () => {
     const deps = await makeDeps()
     const tool = defineDocGenerateTool(deps)
+    await seedContext(deps)
     const out = await tool.execute(
-      { pack: 'cosmic-plan', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'tool1', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never,
+      { pack: 'cosmic-plan', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'tool1', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never,
       { signal } as never,
     ) as { artifactPath: string; markdownPath: string; receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(true)
@@ -71,7 +73,7 @@ describe('doc_generate tool', () => {
   it('fails loud on an unknown pack with the discovery hint and available list', async () => {
     const deps = await makeDeps()
     const tool = defineDocGenerateTool(deps)
-    await expect(tool.execute({ pack: 'nope', materials: ['#!inline\nx'] } as never, { signal } as never)).rejects.toThrow(/unknown pack "nope"; discover installed packs via doc_packs \(available: cosmic-func, cosmic-plan, cosmic-req, cosmic-tech\)/)
+    await expect(tool.execute({ pack: 'nope', materials: ['#!inline\nx'] } as never, { signal } as never)).rejects.toThrow(/unknown pack "nope"; discover installed packs via doc_packs \(available: cosmic-context, cosmic-func, cosmic-plan, cosmic-req, cosmic-tech\)/)
   })
 
   it('fails loud on an unsupported language at call time', async () => {
@@ -83,7 +85,9 @@ describe('doc_generate tool', () => {
   it('fails loud when the LLM route is unset', async () => {
     const deps = await makeDeps({ provider: undefined, model: undefined })
     const tool = defineDocGenerateTool(deps)
-    await expect(tool.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never, { signal } as never)).rejects.toThrow(/provider and model/)
+    const routed = { ...deps, config: { ...(deps.config as Record<string, unknown>), provider: 'p', model: 'm' } }
+    await seedContext(routed)
+    await expect(tool.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never, { signal } as never)).rejects.toThrow(/provider and model/)
   })
 })
 
@@ -95,8 +99,9 @@ describe('doc_validate tool', () => {
     const { writeFile, mkdir } = await import('node:fs/promises')
     await mkdir(join(root, 'output'), { recursive: true })
     await writeFile(join(root, 'output', 'a.json'), JSON.stringify(pack.goldenSample), 'utf8')
+    await seedContext(deps)
     const tool = defineDocValidateTool(deps)
-    const out = await tool.execute({ artifactPath: 'output/a.json', pack: 'cosmic-plan', language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } } } as never, { signal } as never) as { receipt: { isValid: boolean } }
+    const out = await tool.execute({ artifactPath: 'output/a.json', pack: 'cosmic-plan', language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } } } as never, { signal } as never) as { receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(true)
   })
 
@@ -109,8 +114,9 @@ describe('doc_validate tool', () => {
     tampered.functions[0].funcDesc = '短'
     await mkdir(join(root, 'output'), { recursive: true })
     await writeFile(join(root, 'output', 'b.json'), JSON.stringify(tampered), 'utf8')
+    await seedContext(deps)
     const tool = defineDocValidateTool(deps)
-    const out = await tool.execute({ artifactPath: 'output/b.json', pack: 'cosmic-plan', language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } } } as never, { signal } as never) as { receipt: { isValid: boolean } }
+    const out = await tool.execute({ artifactPath: 'output/b.json', pack: 'cosmic-plan', language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } } } as never, { signal } as never) as { receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(false)
   })
 

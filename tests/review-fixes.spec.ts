@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { defineDocGenerateTool, defineDocValidateTool } from '../src/tools.ts'
 import { loadPacks } from '../src/pack-loader.ts'
+import { seedContext } from './support.ts'
+import { seedContext } from './support.ts'
+import { seedContext } from './support.ts'
 import { runRepairLoop, INTERNAL_LLM_ERROR } from '../src/loop.ts'
 import { assembleGeneratorPrompt, estimateTokens, extractJson } from '../src/prompt.ts'
 import { readMaterials } from '../src/materials.ts'
@@ -43,14 +46,15 @@ describe('review fix: doc_validate tamper evidence (hashMatches)', () => {
     const deps = await makeDeps()
     const root = (deps.config as { workspaceRoot: string }).workspaceRoot
     const gen = defineDocGenerateTool(deps)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'h1' } as never, { signal } as never)
+    await seedContext(deps)
+    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], upstream: ['context/context.json'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'h1' } as never, { signal } as never)
     const { readFile, writeFile } = await import('node:fs/promises')
     const path = join(root, 'output', 'h1.json')
     const artifact = JSON.parse(await readFile(path, 'utf8'))
     artifact.injectedField = 'tampered' // schema allows additionalProperties; rules stay green
     await writeFile(path, JSON.stringify(artifact), 'utf8')
     const tool = defineDocValidateTool(deps)
-    const out = await tool.execute({ artifactPath: 'output/h1.json', pack: 'cosmic-plan' } as never, { signal } as never) as { receipt: { isValid: boolean }; hashMatches: boolean | null }
+    const out = await tool.execute({ artifactPath: 'output/h1.json', pack: 'cosmic-plan', upstream: ['context/context.json'] } as never, { signal } as never) as { receipt: { isValid: boolean }; hashMatches: boolean | null }
     expect(out.receipt.isValid).toBe(true)
     expect(out.hashMatches).toBe(false)
   })
@@ -67,8 +71,9 @@ describe('review fix: doc_validate tamper evidence (hashMatches)', () => {
   it('hashMatches=true for an untouched generated artifact; language derives from the receipt', async () => {
     const deps = await makeDeps()
     const root = (deps.config as { workspaceRoot: string }).workspaceRoot
-    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'en-US', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'h2' } as never, { signal } as never)
-    const out = await defineDocValidateTool(deps).execute({ artifactPath: 'output/h2.json', pack: 'cosmic-plan' } as never, { signal } as never) as { receipt: { language: string }; hashMatches: boolean | null }
+    await seedContext(deps)
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], upstream: ['context/context.json'], language: 'en-US', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'h2' } as never, { signal } as never)
+    const out = await defineDocValidateTool(deps).execute({ artifactPath: 'output/h2.json', pack: 'cosmic-plan', upstream: ['context/context.json'] } as never, { signal } as never) as { receipt: { language: string }; hashMatches: boolean | null }
     expect(out.hashMatches).toBe(true)
     expect(out.receipt.language).toBe('en-US')
   })
@@ -76,7 +81,8 @@ describe('review fix: doc_validate tamper evidence (hashMatches)', () => {
   it('rejects a language param that contradicts the receipt-recorded language', async () => {
     const deps = await makeDeps()
     const root = (deps.config as { workspaceRoot: string }).workspaceRoot
-    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'h3' } as never, { signal } as never)
+    await seedContext(deps)
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], upstream: ['context/context.json'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'h3' } as never, { signal } as never)
     await expect(defineDocValidateTool(deps).execute({ artifactPath: 'output/h3.json', pack: 'cosmic-plan', language: 'en-US' } as never, { signal } as never)).rejects.toThrow(/does not match the receipt-recorded/)
   })
 
@@ -340,7 +346,8 @@ describe('review fix: green-receipt upstream verification + receipt anchoring', 
     const { deps, root } = await makeChainDeps()
     // Green upstream: generate via cosmic-plan
     const gen = defineDocGenerateTool(deps)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'up1' } as never, { signal } as never)
+    await seedContext(deps)
+    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], upstream: ['context/context.json'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'up1' } as never, { signal } as never)
     const out = await gen.execute({ pack: 'chain3', materials: ['#!inline\nx'], upstream: ['output/up1.json'], artifactName: 'down1' } as never, { signal } as never) as { receipt: { upstreamHashes: Array<{ pack: string }> } }
     expect(out.receipt.upstreamHashes).toHaveLength(1)
     expect(out.receipt.upstreamHashes[0]!.pack).toBe('cosmic-plan')
@@ -350,7 +357,8 @@ describe('review fix: green-receipt upstream verification + receipt anchoring', 
   it('rejects a tampered (hash-mismatch) upstream', async () => {
     const { deps, root } = await makeChainDeps()
     const gen = defineDocGenerateTool(deps)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'up2' } as never, { signal } as never)
+    await seedContext(deps)
+    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], upstream: ['context/context.json'], language: 'zh-CN', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'up2' } as never, { signal } as never)
     const { readFile, writeFile } = await import('node:fs/promises')
     const p2 = join(root, 'output', 'up2.json')
     const art = JSON.parse(await readFile(p2, 'utf8'))

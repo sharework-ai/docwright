@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { loadPacks } from '../src/pack-loader.ts'
 import { artifactHashOf } from '../src/receipt.ts'
 import { defineDocChainStatusTool, defineDocGenerateTool, defineDocValidateTool } from '../src/tools.ts'
+import { seedContext } from './support.ts'
 
 const packsRoot = fileURLToPath(new URL('../packs', import.meta.url))
 const signal = new AbortController().signal
@@ -63,12 +64,14 @@ const PLAN_ARGS = {
   pack: 'cosmic-plan',
   materials: ['#!inline\n素材'],
   language: 'zh-CN',
+  upstream: ['context/context.json'],
   artifactName: 'plan',
   params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
   confirm: true,
 }
 
 async function generatePlan(deps: Awaited<ReturnType<typeof makeDeps>>, reply: unknown, extra: Record<string, unknown> = {}) {
+  await seedContext(deps)
   const { llm } = scriptedLlm([JSON.stringify(reply)])
   deps.ctx.llm = llm
   return defineDocGenerateTool(deps).execute({ ...PLAN_ARGS, ...extra } as never, { signal } as never) as Promise<Record<string, unknown>>
@@ -79,9 +82,11 @@ describe('manifest scope/reuse declaration (pack-loader)', () => {
     const packs = await loadPacks(packsRoot, {})
     expect(packs.size).toBeGreaterThan(0)
     for (const pack of packs.values()) {
-      expect(pack.manifest.scope, pack.manifest.name).toBe('topic')
-      expect(pack.manifest.reuse, pack.manifest.name).toBe(false)
+      // reuse defaults track the scope semantics; builtin workspace packs (cosmic-context) are legitimate
+      expect(pack.manifest.reuse, pack.manifest.name).toBe(pack.manifest.scope === 'workspace')
     }
+    expect(packs.get('cosmic-context')!.manifest.scope).toBe('workspace')
+    expect(packs.get('cosmic-plan')!.manifest.scope).toBe('topic')
   })
 
   it('a workspace-scope pack defaults reuse to true', async () => {
@@ -115,6 +120,7 @@ describe('topic parameter (doc_generate roots)', () => {
     const root = (deps.config as { workspaceRoot: string }).workspaceRoot
     await mkdir(join(root, 'req-a', 'references'), { recursive: true })
     await writeFile(join(root, 'req-a', 'references', 'mat.txt'), '话题素材', 'utf8')
+    await seedContext(deps)
     deps.ctx.llm = scriptedLlm([JSON.stringify((await loadPacks(packsRoot, {})).get('cosmic-plan')!.goldenSample)]).llm
     const out = await defineDocGenerateTool(deps).execute({ ...PLAN_ARGS, materials: ['mat.txt'], topic: 'req-a' } as never, { signal } as never) as { artifactPath: string }
     expect(out.artifactPath).toBe(join(root, 'req-a', 'output', 'plan.json'))
@@ -302,7 +308,7 @@ describe('doc_chain_status output-root inference', () => {
     const wsRoot = await mkdtemp(join(tmpdir(), 'docwright-topicval-'))
     const deps = { packs, config: { provider: 'p', model: 'm', workspaceRoot: wsRoot } as never, ctx: { llm: {} } }
     await generatePlan(deps, packs.get('cosmic-plan')!.goldenSample, { topic: 'req-a' })
-    const checked = await defineDocValidateTool(deps).execute({ artifactPath: 'req-a/output/plan.json', pack: 'cosmic-plan' } as never, { signal } as never) as { hashMatches: boolean; receipt: { isValid: boolean } }
+    const checked = await defineDocValidateTool(deps).execute({ artifactPath: 'req-a/output/plan.json', pack: 'cosmic-plan', upstream: ['context/context.json'] } as never, { signal } as never) as { hashMatches: boolean; receipt: { isValid: boolean } }
     expect(checked.hashMatches).toBe(true)
     expect(checked.receipt.isValid).toBe(true)
   })

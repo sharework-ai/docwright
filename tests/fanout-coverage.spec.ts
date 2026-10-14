@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { loadPacks } from '../src/pack-loader.ts'
 import type { Pack } from '../src/pack.ts'
 import { defineDocChainStatusTool, defineDocGenerateTool } from '../src/tools.ts'
+import { seedContext } from './support.ts'
 import type { LlmPort } from '../src/llm-port.ts'
 
 const packsRoot = fileURLToPath(new URL('../packs', import.meta.url))
@@ -48,7 +49,8 @@ async function makeDeps(replies: string[]) {
 describe('fan-out contract: targetIndex selection', () => {
   it('fails loud with the plan candidates when targetIndex is missing', async () => {
     const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample)])
-    await defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await seedContext(deps as never)
+    await defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     await expect(defineDocGenerateTool(deps as never).execute({
       pack: 'cosmic-req', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'req', upstream: ['output/plan.json'],
     } as never, { signal } as never)).rejects.toThrow(/missing required pack params for "cosmic-req": targetIndex.*Candidates from the upstream plan: 1\. USR-FAV \(添加收藏\); 2\. USR-DEL \(删除收藏\)/)
@@ -58,7 +60,8 @@ describe('fan-out contract: targetIndex selection', () => {
     const { req } = await packs()
     const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample), JSON.stringify(req.goldenSample)])
     const gen = defineDocGenerateTool(deps as never)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await seedContext(deps as never)
+    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     const out = await gen.execute({
       pack: 'cosmic-req', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { artifactPath: string; coverage?: { covered: number; total: number; missing: string[] } }
@@ -73,7 +76,8 @@ describe('fan-out contract: targetIndex selection', () => {
     second.funcId = 'USR-DEL'
     const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample), JSON.stringify(second)])
     const gen = defineDocGenerateTool(deps as never)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await seedContext(deps as never)
+    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     const out = await gen.execute({
       pack: 'cosmic-req', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['output/plan.json'], params: { targetIndex: 2 }, confirm: true,
     } as never, { signal } as never) as { artifactPath: string; receipt: { isValid: boolean } }
@@ -90,7 +94,7 @@ describe('fan-out contract: targetIndex selection', () => {
     await writeFile(join(deps.ws, 'output', 'plan.json'), JSON.stringify(plan.goldenSample), 'utf8')
     // Green receipt WITHOUT recorded params: the confirm params are unsatisfied.
     await writeFile(join(deps.ws, 'output', 'plan.receipt.json'), JSON.stringify({
-      pack: 'cosmic-plan', packVersion: '0.2.0', artifactHash: artifactHashOf(plan.goldenSample), isValid: true,
+      pack: 'cosmic-plan', packVersion: '0.3.0', artifactHash: artifactHashOf(plan.goldenSample), isValid: true,
     }), 'utf8')
     const out = await defineDocGenerateTool(deps as never).execute({
       pack: 'cosmic-req', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['output/plan.json'],
@@ -106,7 +110,8 @@ describe('doc_chain_status: coverage accounting', () => {
     const { req } = await packs()
     const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample), JSON.stringify(req.goldenSample)])
     const gen = defineDocGenerateTool(deps as never)
-    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await seedContext(deps as never)
+    await gen.execute({ pack: 'cosmic-plan', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     await gen.execute({
       pack: 'cosmic-req', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
@@ -171,7 +176,7 @@ describe('doc_chain_status: coverage accounting', () => {
     // Shapeless plan upstream: candidates list is empty, the error still fires.
     await writeFile(join(deps.ws, 'output', 'shapeless.json'), '{}', 'utf8')
     await writeFile(join(deps.ws, 'output', 'shapeless.receipt.json'), JSON.stringify({
-      pack: 'cosmic-plan', packVersion: '0.2.0', artifactHash: artifactHashOf({}), isValid: true,
+      pack: 'cosmic-plan', packVersion: '0.3.0', artifactHash: artifactHashOf({}), isValid: true,
       params: { cfpTotal: { value: 1, downFactor: 1, upFactor: 1 }, cfpPerFunc: { value: 1, min: 1, max: 2 } },
     }), 'utf8')
     await expect(defineDocGenerateTool(deps as never).execute({
