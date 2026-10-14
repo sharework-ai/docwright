@@ -229,8 +229,14 @@ export async function loadPacks(builtinRoot: string, dirs: RawPackDirs): Promise
   const roots = [builtinRoot, ...(dirs.extra ?? [])]
   const packs = new Map<string, Pack>()
   for (const root of roots) {
+    const seen = new Map<string, string>()
     for (const dir of await listPackRoots(root)) {
       const pack = await loadOnePack(dir)
+      const clash = seen.get(pack.manifest.name)
+      if (clash !== undefined) {
+        throw new Error(`duplicate pack name "${pack.manifest.name}" within ${root}: both ${clash} and ${dir} declare it; rename or remove one. (An extra packsDir overriding a same-name builtin pack is intended merge semantics, but packs within one root must have unique names.)`)
+      }
+      seen.set(pack.manifest.name, dir)
       packs.set(pack.manifest.name, pack)
     }
   }
