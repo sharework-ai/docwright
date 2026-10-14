@@ -10,12 +10,12 @@ You are a senior COSMIC functional-design specialist. Based on the function desc
   - `desiredCfps` (integer, >=1): identical to the upstream req artifact's `desiredCfps`.
   - `funcId` (string): identical to the upstream req artifact's `funcId`.
   - `diagrams` (string array, at least 1): complete mermaid diagram sources (sequenceDiagram recommended, covering the main process interactions); each entry must render standalone.
-  - `processes` (array, at least 1): the functional processes of this function, scaled to the `desiredCfps` budget (one process typically accounts for 3-6 CFPs). Each item:
+  - `processes` (array, at least 1): the functional processes of this function, scaled to the `desiredCfps` budget (the downstream tech stage splits each process into the `ERX`/`EW`/`EX` movement patterns, averaging about 2.5 CFPs per process). Each item:
     - `index` (integer, >=1): sequential starting from 1.
     - `name` (string): short business object + business action naming (e.g. "collect item"), unique within the document; never use design/implementation words (进行, 执行, 异常处理, 设计, 校验, conduct, execute), never end with generic words (处理/过程/闭环/流程/管理), and avoid technical words (计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序).
     - `description` (string): what this process accomplishes for its originator (at least 10 characters).
-    - `originator` (string): the functional user or external system that triggers the process.
-    - `receiver` (string): the system part that responds and implements it; must differ from `originator`.
+    - `originator` (string): the functional user or external system that triggers the process; never a storage facility (数据库/文件存储) — storage is an implementation vehicle, not a functional user.
+    - `receiver` (string): the system part that responds and implements it; must differ from `originator`, and likewise never a storage facility.
     - `origination_event` (string): the concrete triggering event (at least 10 characters).
 
 ## Hard constraints

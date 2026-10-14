@@ -44,9 +44,22 @@ function mutate(artifact: unknown, change: (draft: Record<string, unknown>) => v
 
 type Movement = { description: string; dataMovementType: string; dataGroup: string; dataProperties: string[]; cfp: number }
 
-/** A legal read movement that can be appended after any sequence (R may repeat and follow anything). */
-function extraRead(n: number): Movement {
-  return { description: `系统读取补充校对所需的数据组 ${n}`, dataMovementType: 'R', dataGroup: `补充数据组${n}`, dataProperties: ['字段甲', '字段乙'], cfp: 1 }
+type ProcessDraft = { index: number; name: string; description: string; originator: string; receiver: string; origination_event: string; subProcesses: Movement[] }
+
+/** A legal EW process (2 CFPs) that can be appended to grow the CFP total without tripping tech/movement-pattern. */
+function extraPersist(n: number): ProcessDraft {
+  return {
+    index: 100 + n,
+    name: `补充登记${n}`,
+    description: `补充登记业务条目 ${n}`,
+    originator: '注册用户',
+    receiver: '收藏服务',
+    origination_event: `用户提交补充登记 ${n}`,
+    subProcesses: [
+      { description: `用户提交条目 ${n} 的登记请求`, dataMovementType: 'E', dataGroup: `登记请求${n}`, dataProperties: ['用户ID', '条目ID'], cfp: 1 },
+      { description: `系统将条目 ${n} 写入登记记录`, dataMovementType: 'W', dataGroup: `登记记录${n}`, dataProperties: ['条目ID', '登记时间'], cfp: 1 },
+    ],
+  }
 }
 
 /** Scripted LLM port that replies with the given texts in order (stays on the last one). */
@@ -94,18 +107,14 @@ async function generateFuncChain(deps: { ctx: { llm: unknown } }, func: Pack, re
 }
 
 describe('cosmic-tech pack shape', () => {
-  it('declares the chain, the two budget params, and the ten function rules', async () => {
+  it('declares the chain, the two budget params, and the seven function rules', async () => {
     const { tech } = await packs()
     expect(tech.manifest.consumes).toEqual(['cosmic-func'])
     expect(tech.manifest.languages).toEqual(['zh-CN', 'en-US'])
     expect(Object.keys(tech.manifest.params ?? {}).sort()).toEqual(['cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'targetIndex'])
     expect(tech.functionRules.map(r => r.id)).toEqual([
       'tech/func-alignment',
-      'tech/movement-count',
-      'tech/movement-split-advice',
-      'tech/first-movement-entry',
-      'tech/no-consecutive-ewx',
-      'tech/entry-after-exit',
+      'tech/movement-pattern',
       'tech/movement-duplicate',
       'tech/subprocess-desc-keywords',
       'tech/data-properties-count',
@@ -167,76 +176,67 @@ describe('cosmic-tech mutation tests (guardrail-is-real)', () => {
     expect(issueRuleIds(validateOf(tech, 'zh-CN', tech.goldenSample, undefined, notFunc))).toContain('tech/func-alignment')
   })
 
-  it('movement-count: 1, 2, and 7 movements are all rejected', async () => {
+  it('movement-pattern: sequences outside ERX/EW/EX are rejected', async () => {
     const { tech, func } = await packs()
     const ctx = funcContext(func)
+    // EWRX: appending R and X to the golden EW process leaves the pattern set.
+    const ewrx = mutate(tech.goldenSample, d => {
+      const movements = (d.processes as Array<{ subProcesses: Movement[] }>)[0]!.subProcesses
+      movements.push({ description: '系统读取补充数据', dataMovementType: 'R', dataGroup: '补充数据组', dataProperties: ['字段甲', '字段乙'], cfp: 1 }, { description: '系统返回补充数据', dataMovementType: 'X', dataGroup: '补充结果', dataProperties: ['字段丙', '字段丁'], cfp: 1 })
+    })
+    const ewrxIssues = validateOf(tech, 'zh-CN', ewrx, undefined, ctx)
+    expect(issueRuleIds(ewrxIssues)).toContain('tech/movement-pattern')
+    expect(ewrxIssues.find(i => i.ruleId === 'tech/movement-pattern')?.severity).toBe('error')
+    // ERRX: a second read inside the golden ERX process is not ERX any more.
+    const errx = mutate(tech.goldenSample, d => {
+      const movements = (d.processes as Array<{ subProcesses: Movement[] }>)[2]!.subProcesses
+      movements.splice(2, 0, { description: '系统再次读取补充数据', dataMovementType: 'R', dataGroup: '补充数据组', dataProperties: ['字段甲', '字段乙'], cfp: 1 })
+    })
+    expect(issueRuleIds(validateOf(tech, 'zh-CN', errx, undefined, ctx))).toContain('tech/movement-pattern')
+    // Single movement: E alone matches nothing.
     const single = mutate(tech.goldenSample, d => {
-      const procs = d.processes as Array<{ subProcesses: Movement[] }>
-      procs[0]!.subProcesses = procs[0]!.subProcesses.slice(0, 1)
+      (d.processes as Array<{ subProcesses: Movement[] }>)[0]!.subProcesses = (d.processes as Array<{ subProcesses: Movement[] }>)[0]!.subProcesses.slice(0, 1)
     })
-    expect(issueRuleIds(validateOf(tech, 'zh-CN', single, undefined, ctx))).toContain('tech/movement-count')
-    const pair = mutate(tech.goldenSample, d => {
-      const procs = d.processes as Array<{ subProcesses: Movement[] }>
-      procs[0]!.subProcesses = procs[0]!.subProcesses.slice(0, 2)
+    expect(issueRuleIds(validateOf(tech, 'zh-CN', single, undefined, ctx))).toContain('tech/movement-pattern')
+    // Not opened by E and not closed by W/X: both pattern violations.
+    const openWrong = mutate(tech.goldenSample, d => {
+      (d.processes as Array<{ subProcesses: Movement[] }>)[2]!.subProcesses[0]!.dataMovementType = 'R'
     })
-    expect(issueRuleIds(validateOf(tech, 'zh-CN', pair, undefined, ctx))).toContain('tech/movement-count')
-    const seven = mutate(tech.goldenSample, d => {
-      const procs = d.processes as Array<{ subProcesses: Movement[] }>
-      procs[0]!.subProcesses = [...procs[0]!.subProcesses, extraRead(1), extraRead(2), extraRead(3)]
+    expect(issueRuleIds(validateOf(tech, 'zh-CN', openWrong, undefined, ctx))).toContain('tech/movement-pattern')
+    const unclosed = mutate(tech.goldenSample, d => {
+      const movements = (d.processes as Array<{ subProcesses: Movement[] }>)[2]!.subProcesses
+      movements.pop()
     })
-    expect(issueRuleIds(validateOf(tech, 'zh-CN', seven, undefined, ctx))).toContain('tech/movement-count')
+    expect(issueRuleIds(validateOf(tech, 'zh-CN', unclosed, undefined, ctx))).toContain('tech/movement-pattern')
   })
 
-  it('movement-split-advice: 5 movements earn an info advice, not an error', async () => {
+  it('movement-pattern: all three legal patterns pass — ERX, EW, and EX', async () => {
     const { tech, func } = await packs()
-    const five = mutate(tech.goldenSample, d => {
-      (d.processes as Array<{ subProcesses: Movement[] }>)[0]!.subProcesses = [
-        ...(d.processes as Array<{ subProcesses: Movement[] }>)[0]!.subProcesses,
-        extraRead(1),
-      ]
+    const ctx = funcContext(func)
+    // The golden carries ERX and EW processes; turning one ERX into EX must stay green.
+    const ex = mutate(tech.goldenSample, d => {
+      const movements = (d.processes as Array<{ subProcesses: Movement[] }>)[2]!.subProcesses
+      movements[1]!.dataMovementType = 'X'
+      movements.pop()
+      movements[1]!.description = '系统向用户返回收藏列表与总数'
     })
-    const issues = validateOf(tech, 'zh-CN', five, undefined, funcContext(func))
-    const advice = issues.find(i => i.ruleId === 'tech/movement-split-advice')
-    expect(advice?.severity).toBe('info')
-    expect(issueRuleIds(issues)).not.toContain('tech/movement-count')
-  })
-
-  it('first-movement-entry: a process not opened by E is caught', async () => {
-    const { tech, func } = await packs()
-    const draft = mutate(tech.goldenSample, d => {
-      (d.processes as Array<{ subProcesses: Movement[] }>)[0]!.subProcesses[0]!.dataMovementType = 'R'
-    })
-    expect(issueRuleIds(validateOf(tech, 'zh-CN', draft, undefined, funcContext(func)))).toContain('tech/first-movement-entry')
-  })
-
-  it('no-consecutive-ewx: adjacent W W is caught', async () => {
-    const { tech, func } = await packs()
-    // Golden process 1 opens E,W,R,X; flipping the third movement to W yields E,W,W,X.
-    const draft = mutate(tech.goldenSample, d => {
-      const movements = (d.processes as Array<{ subProcesses: Movement[] }>)[0]!.subProcesses
-      movements[2]!.dataMovementType = 'W'
-    })
-    expect(issueRuleIds(validateOf(tech, 'zh-CN', draft, undefined, funcContext(func)))).toContain('tech/no-consecutive-ewx')
-  })
-
-  it('entry-after-exit: a non-first E preceded by R is caught', async () => {
-    const { tech, func } = await packs()
-    const draft = mutate(tech.goldenSample, d => {
-      const movements = (d.processes as Array<{ subProcesses: Movement[] }>)[0]!.subProcesses
-      movements[2]!.dataMovementType = 'E'
-    })
-    expect(issueRuleIds(validateOf(tech, 'zh-CN', draft, undefined, funcContext(func)))).toContain('tech/entry-after-exit')
+    expect(issueRuleIds(validateOf(tech, 'zh-CN', ex, undefined, ctx))).not.toContain('tech/movement-pattern')
+    // Sequences seen in the golden itself.
+    const seqs = (tech.goldenSample as { processes: Array<{ subProcesses: Array<{ dataMovementType: string }> }> }).processes
+      .map(p => p.subProcesses.map(m => m.dataMovementType).join(''))
+    expect(seqs.filter(s => s === 'ERX')).toHaveLength(7)
+    expect(seqs.filter(s => s === 'EW')).toHaveLength(7)
   })
 
   it('movement-duplicate: an identical repeated movement is flagged as warning', async () => {
     const { tech, func } = await packs()
-    // Golden process 1 is E,W,R,X; cloning the R movement's identity onto the
-    // final X yields E,W,R,R with two identical R|商品档案 movements.
+    // Golden process 3 is E,R,X; cloning the R movement's identity onto the
+    // final X yields E,R,R with two identical R|收藏记录 movements.
     const draft = mutate(tech.goldenSample, d => {
-      const movements = (d.processes as Array<{ subProcesses: Movement[] }>)[0]!.subProcesses
-      movements[3]!.dataMovementType = 'R'
-      movements[3]!.dataGroup = movements[2]!.dataGroup
-      movements[3]!.dataProperties = [...movements[2]!.dataProperties]
+      const movements = (d.processes as Array<{ subProcesses: Movement[] }>)[2]!.subProcesses
+      movements[2]!.dataMovementType = 'R'
+      movements[2]!.dataGroup = movements[1]!.dataGroup
+      movements[2]!.dataProperties = [...movements[1]!.dataProperties]
     })
     const issues = validateOf(tech, 'zh-CN', draft, undefined, funcContext(func))
     expect(issueRuleIds(issues)).toContain('tech/movement-duplicate')
@@ -266,19 +266,14 @@ describe('cosmic-tech mutation tests (guardrail-is-real)', () => {
   it('cfp-total-vs-budget: totals outside the ratio band are errors and the params shift the band', async () => {
     const { tech, func } = await packs()
     const ctx = funcContext(func)
-    // Golden total is 36; cfpTotal.upFactor 0.9 collapses the ceiling to 32.4 → error.
-    expect(issueRuleIds(validateOf(tech, 'zh-CN', tech.goldenSample, { cfpTotal: { value: 36, downFactor: 0.9, upFactor: 0.9 } }, ctx))).toContain('tech/cfp-total-vs-budget')
-    // Below the floor: three processes of 4 movements = 12 CFPs < 31.5.
+    // Golden total is 35; cfpTotal.upFactor 0.9 collapses the ceiling to 31.5 → error.
+    expect(issueRuleIds(validateOf(tech, 'zh-CN', tech.goldenSample, { cfpTotal: { value: 35, downFactor: 0.9, upFactor: 0.9 } }, ctx))).toContain('tech/cfp-total-vs-budget')
+    // Below the floor: the first three processes total 2+2+3 = 7 CFPs < 31.5.
     const skinny = mutate(tech.goldenSample, d => { d.processes = (d.processes as unknown[]).slice(0, 3) })
     expect(issueRuleIds(validateOf(tech, 'zh-CN', skinny, undefined, ctx))).toContain('tech/cfp-total-vs-budget')
-    // Above the ceiling: pad movements up to 52 CFPs, staying ≤6 per process.
+    // Above the ceiling: four extra EW processes push 35 to 43 CFPs > 42.
     const fat = mutate(tech.goldenSample, d => {
-      const procs = d.processes as Array<{ subProcesses: Movement[] }>
-      procs[0]!.subProcesses = [...procs[0]!.subProcesses, extraRead(1), extraRead(2)]
-      procs[1]!.subProcesses = [...procs[1]!.subProcesses, extraRead(3), extraRead(4)]
-      procs[2]!.subProcesses = [...procs[2]!.subProcesses, extraRead(5), extraRead(6)]
-      procs[3]!.subProcesses = [...procs[3]!.subProcesses, extraRead(7), extraRead(8)]
-      d.processes = [...(d.processes as unknown[]), ...Array.from({ length: 4 }, (_, i) => ({ ...procs[4], index: 10 + i, name: `补充核对${i}`, subProcesses: [extraRead(10 + i), extraRead(20 + i), extraRead(30 + i), extraRead(40 + i)] }))]
+      d.processes = [...(d.processes as unknown[]), extraPersist(1), extraPersist(2), extraPersist(3), extraPersist(4)]
     })
     expect(issueRuleIds(validateOf(tech, 'zh-CN', fat, undefined, ctx))).toContain('tech/cfp-total-vs-budget')
   })
@@ -288,18 +283,13 @@ describe('cosmic-tech mutation tests (guardrail-is-real)', () => {
     const ctx = funcContext(func)
     // 45 CFPs: inside [0.9, 1.5]×35 but above the 1.2 warning threshold (42).
     const over = mutate(tech.goldenSample, d => {
-      const procs = d.processes as Array<{ subProcesses: Movement[] }>
-      procs[0]!.subProcesses = [...procs[0]!.subProcesses, extraRead(1), extraRead(2)]
-      procs[1]!.subProcesses = [...procs[1]!.subProcesses, extraRead(3), extraRead(4)]
-      procs[2]!.subProcesses = [...procs[2]!.subProcesses, extraRead(5), extraRead(6)]
-      procs[3]!.subProcesses = [...procs[3]!.subProcesses, extraRead(7), extraRead(8)]
-      procs[4]!.subProcesses = [...procs[4]!.subProcesses, extraRead(9)]
+      d.processes = [...(d.processes as unknown[]), extraPersist(1), extraPersist(2), extraPersist(3), extraPersist(4), extraPersist(5)]
     })
-    const issues = validateOf(tech, 'zh-CN', over, { cfpTotal: { value: 36, downFactor: 0.9, upFactor: 1.5 } }, ctx)
+    const issues = validateOf(tech, 'zh-CN', over, { cfpTotal: { value: 35, downFactor: 0.9, upFactor: 1.5 } }, ctx)
     expect(issueRuleIds(issues)).toContain('tech/cfp-budget-advice')
     expect(issues.find(i => i.ruleId === 'tech/cfp-budget-advice')?.severity).toBe('warning')
     expect(issueRuleIds(issues)).not.toContain('tech/cfp-total-vs-budget')
-    // The golden (36) sits in the clean [35, 42] band: no advice.
+    // The golden (35) equals the budget exactly: no advice.
     expect(issueRuleIds(validateOf(tech, 'zh-CN', tech.goldenSample, undefined, ctx))).not.toContain('tech/cfp-budget-advice')
   })
 
@@ -316,7 +306,8 @@ describe('cosmic-tech mutation tests (guardrail-is-real)', () => {
         procs[0]!.subProcesses = procs[0]!.subProcesses.slice(0, 1)
       }),
       mutate(tech.goldenSample, d => {
-        (d.processes as Array<{ subProcesses: Movement[] }>)[0]!.subProcesses[0]!.dataMovementType = 'R'
+        const movements = (d.processes as Array<{ subProcesses: Movement[] }>)[2]!.subProcesses
+        movements.splice(2, 0, { description: '系统再次读取补充数据', dataMovementType: 'R', dataGroup: '补充数据组', dataProperties: ['字段甲', '字段乙'], cfp: 1 })
       }),
     ]
     const all = drafts.flatMap(draft => [...validateOf(tech, 'zh-CN', draft, undefined, ctx), ...validateOf(tech, 'en-US', draft, undefined, ctx)])

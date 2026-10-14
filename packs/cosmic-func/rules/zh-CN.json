@@ -26,5 +26,23 @@
     "kind": "forbiddenKeywords",
     "keywords": ["计算", "转化", "转换", "拆分", "日志", "解析", "编码", "缓存", "临时", "筛选", "排序"],
     "suggestion": "功能过程名称含技术实现字眼（计算/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序）：这些属于技术设计（tech 阶段子过程），过程名保持业务视角。"
+  },
+  {
+    "id": "func/originator-forbidden-keywords",
+    "severity": "error",
+    "given": "$.processes[*]",
+    "field": "originator",
+    "kind": "forbiddenKeywords",
+    "keywords": ["数据库", "文件存储"],
+    "suggestion": "发起者（originator）含存储设施字眼（数据库/文件存储）：功能用户是人、外部系统或设备等业务角色，存储设施是实现载体，不能发起功能过程；改写为真实的业务发起者。"
+  },
+  {
+    "id": "func/receiver-forbidden-keywords",
+    "severity": "error",
+    "given": "$.processes[*]",
+    "field": "receiver",
+    "kind": "forbiddenKeywords",
+    "keywords": ["数据库", "文件存储"],
+    "suggestion": "接收者（receiver）含存储设施字眼（数据库/文件存储）：功能用户是人、外部系统或设备等业务角色，存储设施是实现载体，不能接收功能过程的结果；改写为真实的业务接收者。"
   }
 ]

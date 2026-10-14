@@ -144,6 +144,18 @@ describe('cosmic-func mutation tests (guardrail-is-real)', () => {
     expect(issueRuleIds(validateOf(func, 'zh-CN', draft, reqContext(req)))).toContain('func/originator-receiver-distinct')
   })
 
+  it('originator/receiver-forbidden-keywords: storage facilities cannot be functional users', async () => {
+    const { func, req } = await packs()
+    const originator = mutate(func.goldenSample, d => { (d.processes as Array<{ originator: string }>)[0]!.originator = '收藏数据库' })
+    const originatorIssues = validateOf(func, 'zh-CN', originator, reqContext(req))
+    expect(issueRuleIds(originatorIssues)).toContain('func/originator-forbidden-keywords')
+    expect(originatorIssues.find(i => i.ruleId === 'func/originator-forbidden-keywords')?.severity).toBe('error')
+    const receiver = mutate(func.goldenSample, d => { (d.processes as Array<{ receiver: string }>)[0]!.receiver = '文件存储服务' })
+    const receiverIssues = validateOf(func, 'zh-CN', receiver, reqContext(req))
+    expect(issueRuleIds(receiverIssues)).toContain('func/receiver-forbidden-keywords')
+    expect(receiverIssues.find(i => i.ruleId === 'func/receiver-forbidden-keywords')?.severity).toBe('error')
+  })
+
   it('process-name-unique: a duplicated process name is caught', async () => {
     const { func, req } = await packs()
     const draft = mutate(func.goldenSample, d => { (d.processes as Array<{ name: string }>)[1]!.name = '收藏商品' })

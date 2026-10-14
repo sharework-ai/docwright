@@ -5,13 +5,14 @@
   "desiredCfps": 35,
   "funcId": "USR-FAV",
   "diagrams": [
-    "sequenceDiagram\n    autonumber\n    actor u as 注册用户\n    participant fav as 收藏服务\n    participant db as 收藏库\n    participant prod as 商品服务\n    u->>fav: E 收藏请求\n    fav->>db: W 收藏记录\n    fav->>prod: R 商品档案\n    fav-->>u: X 收藏结果"
+    "sequenceDiagram\n    autonumber\n    actor u as 注册用户\n    participant fav as 收藏服务\n    participant db as 收藏库\n    u->>fav: E 收藏请求\n    fav->>db: W 收藏记录",
+    "sequenceDiagram\n    autonumber\n    actor u as 注册用户\n    participant fav as 收藏服务\n    participant db as 收藏库\n    u->>fav: E 列表请求\n    fav->>db: R 收藏记录\n    fav-->>u: X 收藏列表"
   ],
   "processes": [
     {
       "index": 1,
       "name": "收藏商品",
-      "description": "将用户提交的收藏请求落为收藏记录，核对商品有效性后反馈结果。",
+      "description": "将用户提交的收藏请求落为收藏记录，登记收藏来源。",
       "originator": "注册用户",
       "receiver": "收藏服务",
       "origination_event": "用户在商品详情页点击“收藏”按钮",
@@ -27,7 +28,7 @@
           "cfp": 1
         },
         {
-          "description": "系统将本次收藏写入收藏记录，登记收藏时间",
+          "description": "系统将本次收藏写入收藏记录，登记收藏时间与来源渠道",
           "dataMovementType": "W",
           "dataGroup": "收藏记录",
           "dataProperties": [
@@ -36,33 +37,13 @@
             "收藏时间"
           ],
           "cfp": 1
-        },
-        {
-          "description": "系统读取商品档案核对商品在售状态",
-          "dataMovementType": "R",
-          "dataGroup": "商品档案",
-          "dataProperties": [
-            "商品ID",
-            "商品状态"
-          ],
-          "cfp": 1
-        },
-        {
-          "description": "系统向用户反馈收藏结果与最新收藏状态",
-          "dataMovementType": "X",
-          "dataGroup": "收藏结果",
-          "dataProperties": [
-            "收藏状态",
-            "提示信息"
-          ],
-          "cfp": 1
         }
       ]
     },
     {
       "index": 2,
       "name": "取消收藏",
-      "description": "根据用户的取消请求更新对应收藏记录并反馈结果。",
+      "description": "根据用户的取消请求更新对应收藏记录。",
       "originator": "注册用户",
       "receiver": "收藏服务",
       "origination_event": "用户在收藏列表中点击“取消收藏”",
@@ -78,32 +59,12 @@
           "cfp": 1
         },
         {
-          "description": "系统读取对应收藏记录确认其存在与当前状态",
-          "dataMovementType": "R",
-          "dataGroup": "收藏记录",
-          "dataProperties": [
-            "收藏ID",
-            "记录状态"
-          ],
-          "cfp": 1
-        },
-        {
-          "description": "系统更新收藏记录状态并登记取消时间",
+          "description": "系统更新收藏记录状态为已取消并登记取消时间",
           "dataMovementType": "W",
           "dataGroup": "收藏记录",
           "dataProperties": [
             "记录状态",
             "取消时间"
-          ],
-          "cfp": 1
-        },
-        {
-          "description": "系统向用户反馈取消结果",
-          "dataMovementType": "X",
-          "dataGroup": "取消结果",
-          "dataProperties": [
-            "取消状态",
-            "提示信息"
           ],
           "cfp": 1
         }
@@ -112,7 +73,7 @@
     {
       "index": 3,
       "name": "查询收藏列表",
-      "description": "分页返回用户收藏的商品清单及各商品最新信息。",
+      "description": "分页返回用户收藏的商品清单。",
       "originator": "注册用户",
       "receiver": "收藏服务",
       "origination_event": "用户进入个人中心的收藏页",
@@ -153,7 +114,7 @@
     {
       "index": 4,
       "name": "查看收藏商品详情",
-      "description": "从收藏列表进入商品详情展示，并标注收藏状态。",
+      "description": "从收藏列表进入商品详情展示。",
       "originator": "注册用户",
       "receiver": "商品服务",
       "origination_event": "用户在收藏列表中点击某个商品",
@@ -169,16 +130,6 @@
           "cfp": 1
         },
         {
-          "description": "系统读取该商品的收藏状态与变更时间",
-          "dataMovementType": "R",
-          "dataGroup": "收藏记录",
-          "dataProperties": [
-            "收藏状态",
-            "变更时间"
-          ],
-          "cfp": 1
-        },
-        {
           "description": "系统读取商品档案中的名称、价格与图文详情",
           "dataMovementType": "R",
           "dataGroup": "商品档案",
@@ -190,12 +141,12 @@
           "cfp": 1
         },
         {
-          "description": "系统向用户展示商品详情并标注收藏标记",
+          "description": "系统向用户展示商品详情页数据",
           "dataMovementType": "X",
           "dataGroup": "商品详情",
           "dataProperties": [
             "详情页数据",
-            "收藏标记"
+            "商品名称"
           ],
           "cfp": 1
         }
@@ -220,32 +171,12 @@
           "cfp": 1
         },
         {
-          "description": "系统读取失效条目的状态与失效原因",
-          "dataMovementType": "R",
-          "dataGroup": "收藏记录",
-          "dataProperties": [
-            "条目状态",
-            "失效原因"
-          ],
-          "cfp": 1
-        },
-        {
           "description": "系统更新失效条目的清理状态并登记时间",
           "dataMovementType": "W",
           "dataGroup": "收藏记录",
           "dataProperties": [
             "条目状态",
             "清理时间"
-          ],
-          "cfp": 1
-        },
-        {
-          "description": "系统向用户反馈本次清理的条目数量",
-          "dataMovementType": "X",
-          "dataGroup": "清理结果",
-          "dataProperties": [
-            "清理数量",
-            "提示信息"
           ],
           "cfp": 1
         }
@@ -260,9 +191,9 @@
       "origination_event": "用户查看个人中心的收藏总数角标",
       "subProcesses": [
         {
-          "description": "用户查看收藏角标时发起数量统计请求",
+          "description": "用户查看收藏角标时发起数量汇总请求",
           "dataMovementType": "E",
-          "dataGroup": "统计请求",
+          "dataGroup": "汇总请求",
           "dataProperties": [
             "用户ID",
             "统计周期"
@@ -270,22 +201,12 @@
           "cfp": 1
         },
         {
-          "description": "系统汇总有效条目与失效条目的数量",
+          "description": "系统读取有效条目与失效条目的数量记录",
           "dataMovementType": "R",
           "dataGroup": "收藏记录",
           "dataProperties": [
             "条目总数",
             "失效条目数"
-          ],
-          "cfp": 1
-        },
-        {
-          "description": "系统读取商品在售标记以区分有效收藏",
-          "dataMovementType": "R",
-          "dataGroup": "商品档案",
-          "dataProperties": [
-            "商品ID",
-            "在售标记"
           ],
           "cfp": 1
         },
@@ -330,16 +251,6 @@
           "cfp": 1
         },
         {
-          "description": "系统读取商品档案核对商品当前状态",
-          "dataMovementType": "R",
-          "dataGroup": "商品档案",
-          "dataProperties": [
-            "商品ID",
-            "商品状态"
-          ],
-          "cfp": 1
-        },
-        {
           "description": "系统返回是否重复的结论与友好提示",
           "dataMovementType": "X",
           "dataGroup": "重复提示",
@@ -376,16 +287,6 @@
           "dataProperties": [
             "用户ID列表",
             "收藏时间"
-          ],
-          "cfp": 1
-        },
-        {
-          "description": "系统生成提醒任务并登记计划发送时间",
-          "dataMovementType": "W",
-          "dataGroup": "提醒任务",
-          "dataProperties": [
-            "任务ID",
-            "发送时间"
           ],
           "cfp": 1
         },
@@ -430,22 +331,172 @@
           "cfp": 1
         },
         {
-          "description": "系统读取商品档案补充名称与价格信息",
-          "dataMovementType": "R",
-          "dataGroup": "商品档案",
-          "dataProperties": [
-            "商品名称",
-            "价格"
-          ],
-          "cfp": 1
-        },
-        {
           "description": "系统向用户返回生成的导出文件",
           "dataMovementType": "X",
           "dataGroup": "导出文件",
           "dataProperties": [
             "文件内容",
             "导出时间"
+          ],
+          "cfp": 1
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "name": "新建收藏分组",
+      "description": "用户在收藏页创建自定义分组，把收藏条目按主题归类。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在收藏页点击“新建分组”",
+      "subProcesses": [
+        {
+          "description": "用户提交新建分组请求，携带分组名称",
+          "dataMovementType": "E",
+          "dataGroup": "分组请求",
+          "dataProperties": [
+            "用户ID",
+            "分组名称"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统将新分组写入收藏分组记录，登记创建时间",
+          "dataMovementType": "W",
+          "dataGroup": "收藏分组",
+          "dataProperties": [
+            "分组ID",
+            "创建时间"
+          ],
+          "cfp": 1
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "name": "导入外部收藏",
+      "description": "用户将其他渠道的收藏条目导入本应用，按来源渠道登记。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在收藏页选择“导入收藏”",
+      "subProcesses": [
+        {
+          "description": "用户选择导入来源并提交导入请求",
+          "dataMovementType": "E",
+          "dataGroup": "导入请求",
+          "dataProperties": [
+            "用户ID",
+            "来源渠道"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统将导入的收藏条目写入收藏记录，登记来源",
+          "dataMovementType": "W",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "商品ID",
+            "来源渠道"
+          ],
+          "cfp": 1
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "name": "恢复已取消收藏",
+      "description": "用户在收藏回收站中恢复误取消的收藏条目。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在收藏回收站点击“恢复”",
+      "subProcesses": [
+        {
+          "description": "用户在回收站选择已取消条目提交恢复请求",
+          "dataMovementType": "E",
+          "dataGroup": "恢复请求",
+          "dataProperties": [
+            "用户ID",
+            "收藏ID"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统将对应条目状态恢复为有效，登记恢复时间",
+          "dataMovementType": "W",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "记录状态",
+            "恢复时间"
+          ],
+          "cfp": 1
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "name": "移动商品至分组",
+      "description": "用户将收藏条目移动到指定分组，按新分组归类展示。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在收藏列表中选择商品并点击“移动到分组”",
+      "subProcesses": [
+        {
+          "description": "用户选择商品与目标分组提交移动请求",
+          "dataMovementType": "E",
+          "dataGroup": "移动请求",
+          "dataProperties": [
+            "商品ID",
+            "分组ID"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统更新商品条目所属分组，登记变更时间",
+          "dataMovementType": "W",
+          "dataGroup": "收藏记录",
+          "dataProperties": [
+            "分组ID",
+            "变更时间"
+          ],
+          "cfp": 1
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "name": "查询收藏分组清单",
+      "description": "用户查看自己创建的全部分组及各分组的条目数量。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户进入收藏分组管理页",
+      "subProcesses": [
+        {
+          "description": "用户进入分组管理页发起分组查询，携带分页参数",
+          "dataMovementType": "E",
+          "dataGroup": "分组查询",
+          "dataProperties": [
+            "用户ID",
+            "分页参数"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统读取用户的收藏分组清单",
+          "dataMovementType": "R",
+          "dataGroup": "收藏分组",
+          "dataProperties": [
+            "分组ID",
+            "分组名称"
+          ],
+          "cfp": 1
+        },
+        {
+          "description": "系统向用户返回分组列表与各分组条目数",
+          "dataMovementType": "X",
+          "dataGroup": "分组列表",
+          "dataProperties": [
+            "分组列表",
+            "条目数量"
           ],
           "cfp": 1
         }

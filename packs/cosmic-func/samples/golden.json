@@ -79,6 +79,46 @@
       "originator": "注册用户",
       "receiver": "收藏服务",
       "origination_event": "用户在收藏页点击“导出收藏”按钮"
+    },
+    {
+      "index": 10,
+      "name": "新建收藏分组",
+      "description": "注册用户在收藏页创建自定义分组，把收藏条目按主题归类，创建成功后立即可向分组内添加条目。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在收藏页点击“新建分组”"
+    },
+    {
+      "index": 11,
+      "name": "导入外部收藏",
+      "description": "注册用户将其他渠道的收藏条目导入本应用，导入成功后按来源渠道登记，便于后续追溯。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在收藏页选择“导入收藏”"
+    },
+    {
+      "index": 12,
+      "name": "恢复已取消收藏",
+      "description": "注册用户在收藏回收站中恢复误取消的收藏条目，恢复后条目重新生效并回到原分组。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在收藏回收站点击“恢复”"
+    },
+    {
+      "index": 13,
+      "name": "移动商品至分组",
+      "description": "注册用户将收藏条目移动到指定分组，移动成功后条目按新分组归类展示。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户在收藏列表中选择商品并点击“移动到分组”"
+    },
+    {
+      "index": 14,
+      "name": "查询收藏分组清单",
+      "description": "注册用户查看自己创建的全部分组及各分组的条目数量，便于在分组之间切换浏览。",
+      "originator": "注册用户",
+      "receiver": "收藏服务",
+      "origination_event": "用户进入收藏分组管理页"
     }
   ]
 }
