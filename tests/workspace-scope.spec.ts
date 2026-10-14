@@ -82,11 +82,12 @@ describe('manifest scope/reuse declaration (pack-loader)', () => {
     const packs = await loadPacks(packsRoot, {})
     expect(packs.size).toBeGreaterThan(0)
     for (const pack of packs.values()) {
-      // reuse defaults track the scope semantics; builtin workspace packs (cosmic-context) are legitimate
-      expect(pack.manifest.reuse, pack.manifest.name).toBe(pack.manifest.scope === 'workspace')
+      expect(['workspace', 'topic']).toContain(pack.manifest.scope)
     }
-    expect(packs.get('cosmic-context')!.manifest.scope).toBe('workspace')
-    expect(packs.get('cosmic-plan')!.manifest.scope).toBe('topic')
+    expect(packs.get('cosmic-context')!.manifest).toMatchObject({ scope: 'workspace', reuse: true })
+    // The sync pack is the deliberate workspace-without-reuse exception (sync is an action).
+    expect(packs.get('cosmic-context-sync')!.manifest).toMatchObject({ scope: 'workspace', reuse: false })
+    expect(packs.get('cosmic-plan')!.manifest).toMatchObject({ scope: 'topic', reuse: false })
   })
 
   it('a workspace-scope pack defaults reuse to true', async () => {

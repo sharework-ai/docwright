@@ -1,0 +1,85 @@
+{
+  "docType": "context",
+  "projectName": "示例电商平台",
+  "language": "zh-CN",
+  "background": "传统零售业务向线上转型，需要一套覆盖用户、商品与交易全流程的电商平台支撑日常运营，并保持与既有仓储、物流等周边系统的协同。",
+  "overview": "示例电商平台提供用户注册登录、商品浏览与检索、购物车与下单、收藏与推荐等核心能力，按用户中心、商品中心等一级模块划分并协同运作。",
+  "modules": [
+    {
+      "name": "用户中心",
+      "code": "USR",
+      "responsibility": "负责用户账户、认证授权与个人偏好相关能力",
+      "children": [
+        {
+          "name": "用户管理",
+          "code": "MGT",
+          "responsibility": "用户注册、资料维护与账户状态管理"
+        },
+        {
+          "name": "认证授权",
+          "code": "AUTH",
+          "responsibility": "登录认证、会话管理与访问权限控制"
+        },
+        {
+          "name": "添加收藏",
+          "code": "FAV",
+          "responsibility": "用户收藏与取消收藏商品的记录维护，含收藏去重与列表统计"
+        },
+        {
+          "name": "删除收藏",
+          "code": "DEL",
+          "responsibility": "用户批量或单个移除收藏记录，并同步更新收藏统计与日志"
+        }
+      ]
+    },
+    {
+      "name": "商品中心",
+      "code": "PRD",
+      "responsibility": "负责商品信息、类目与库存相关能力",
+      "children": [
+        {
+          "name": "商品管理",
+          "code": "ITM",
+          "responsibility": "商品上架、信息修改与上下架控制"
+        },
+        {
+          "name": "类目管理",
+          "code": "CAT",
+          "responsibility": "商品类目树维护与类目属性配置"
+        }
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "name": "注册用户",
+      "kind": "person",
+      "description": "浏览、购买与收藏商品的终端用户"
+    },
+    {
+      "name": "运营人员",
+      "kind": "person",
+      "description": "维护商品、类目与营销内容的平台运营者"
+    },
+    {
+      "name": "风控系统",
+      "kind": "system",
+      "description": "对可疑交易与异常行为进行识别和拦截的内部系统"
+    }
+  ],
+  "thirdPartySystems": [
+    {
+      "name": "短信网关",
+      "purpose": "向用户手机号发送验证码与通知短信的运营商网关服务",
+      "interaction": "认证授权模块在注册与登录场景调用其 HTTP 接口下发验证码"
+    }
+  ],
+  "moduleIdConventionForLevel1": "alphabetic",
+  "moduleIdConventionForLevel2": "alphabetic",
+  "designPrinciples": [
+    "模块按业务能力垂直划分，模块间通过明确定义的接口协作，禁止跨层直接访问数据表",
+    "所有对外接口统一鉴权，用户敏感操作必须记录审计日志",
+    "第三方系统调用必须设置超时与降级策略，第三方故障不得阻塞主流程"
+  ],
+  "assumptions": []
+}
