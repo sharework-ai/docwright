@@ -1,6 +1,6 @@
 {
   "name": "cosmic-tech",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "COSMIC technical breakdown: decomposes each functional process into 2-3 subprocesses — data movements (E/X/R/W) — with exact CFP counts checked against the plan estimate (never below it), refined from a green cosmic-func artifact (requires topic — one requirement per topic).",
   "consumes": [
     "cosmic-func"
@@ -14,8 +14,8 @@
       "type": "object",
       "default": {
         "value": 30,
-        "min": 10,
-        "max": 100
+        "min": 15,
+        "max": 45
       },
       "confirm": true,
       "description": "Per-function CFP budget {value, min, max}; inherited from the upstream receipt and re-recorded for the chain"

@@ -338,7 +338,7 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     expect(out.receipt.upstreamHashes).toHaveLength(1)
     expect(out.receipt.upstreamHashes[0]!.pack).toBe('cosmic-func')
     // As-run params (defaults) are recorded for replay.
-    expect(out.receipt.params).toMatchObject({ cfpPerFunc: { value: 30, min: 10, max: 100 }, cfpPerSubProc: 2.5 })
+    expect(out.receipt.params).toMatchObject({ cfpPerFunc: { value: 30, min: 15, max: 45 }, cfpPerSubProc: 2.5 })
   })
 
   it('repairs a cross-artifact violation in a later round (func-alignment feeds the loop)', async () => {
