@@ -18,6 +18,10 @@ export const DEFAULT_MAX_ROUNDS_CEILING = 10
 export type UpstreamVersionPolicy = 'strict' | 'warn'
 export const DEFAULT_UPSTREAM_VERSION_POLICY: UpstreamVersionPolicy = 'strict'
 
+/** Confirmation-gate policy: 'none' never gates (headless/CI), 'standard' gates on param changes or unconfirmed confirm-params, 'strict' gates every call with a param table to show (docs/designs/params-and-chain-contract.md). */
+export type ConfirmPolicy = 'none' | 'standard' | 'strict'
+export const DEFAULT_CONFIRM_POLICY: ConfirmPolicy = 'standard'
+
 /** Convergence/oscillation tuning; every field optional, defaults above. */
 export interface OscillationConfig {
   /** 'auto' (default): pack score if exported else built-in default score; 'score' forces the pack score; 'fingerprint' uses the loose fallback only. */
@@ -52,6 +56,8 @@ export interface Config {
   promptTokenBudget?: number
   /** Chained upstream pack-version mismatch: 'strict' rejects stale upstreams, 'warn' proceeds and surfaces upstreamWarnings (default strict). */
   upstreamVersionPolicy?: UpstreamVersionPolicy
+  /** Confirmation-gate policy: 'none' never gates (headless/CI; required params still fail loud), 'standard' gates on param changes or unconfirmed confirm-params (default), 'strict' gates every call that has a param table to show. Per-call tool arg overrides this. */
+  confirmPolicy?: ConfirmPolicy
   /** Repair-loop convergence tuning (termination is early-exit only; green stays 0 errors). */
   oscillation?: OscillationConfig
   /** Absolute round cap for doc_generate; tool args and pack defaults clamp to it (hard ceiling, host-operator owned). */
@@ -70,6 +76,7 @@ export const Config: z<Config> = z.object({
   maxIterations: z.number().default(DEFAULT_MAX_ITERATIONS),
   promptTokenBudget: z.number().default(DEFAULT_PROMPT_TOKEN_BUDGET),
   upstreamVersionPolicy: z.union(['strict', 'warn']).default(DEFAULT_UPSTREAM_VERSION_POLICY),
+  confirmPolicy: z.union(['none', 'standard', 'strict']).default(DEFAULT_CONFIRM_POLICY),
   oscillation: z.object({
     mode: z.union(['auto', 'score', 'fingerprint']).default('auto'),
     stagnantRounds: z.number().default(DEFAULT_STAGNANT_ROUNDS),

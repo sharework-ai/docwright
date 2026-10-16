@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type UpstreamVersionPolicy } from './config.ts'
+import { DEFAULT_CONFIRM_POLICY, DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type ConfirmPolicy, type UpstreamVersionPolicy } from './config.ts'
 import { generateDocument, getDocService, parseUpstreamArtifacts, summarizeArtifact, writeAtomic } from './doc-service.ts'
 import { createLlmPort } from './llm-port.ts'
 import { previewParams, resolveEffectiveParams, type ParamDrift, type ParamRow } from './params.ts'
@@ -382,6 +382,25 @@ async function coverageProgress(
   return { covered: total.length - missing.length, total: total.length, missing }
 }
 
+/** Stable JSON text: key order must not distinguish "changed" from "re-passed". */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+/** Per-call override of the config-level confirmation-gate policy; unknown values fail loud. */
+function resolveConfirmPolicy(override: unknown, configValue: ConfirmPolicy | undefined): ConfirmPolicy {
+  const value = override ?? configValue ?? DEFAULT_CONFIRM_POLICY
+  if (value !== 'none' && value !== 'standard' && value !== 'strict') {
+    throw new Error(`confirmPolicy must be "none", "standard" or "strict" (got ${JSON.stringify(value)})`)
+  }
+  return value
+}
+
 export function defineDocGenerateTool(deps: ToolDeps) {
   return defineTool({
     name: 'doc_generate',
@@ -393,7 +412,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       + 'Artifacts land under the output root — <topic>/output/ when topic is given (requirement-scoped packs REQUIRE topic: one requirement per topic, e.g. its id), <workspace>/output/ otherwise; '
       + 'workspace-scope packs ignore topic and write to <workspace>/context/ — when their existing green artifact is unchanged it is reused as-is (reused: true), unless force: true rebuilds it. '
       + 'Pack-declared tunables can be overridden via params; required params (no default) must be provided. '
-      + 'Passing params — or generating a pack with confirm-flagged params whose values are not yet confirmed upstream — returns a pendingConfirmation param table first: present it to the user, then re-call with confirm: true. '
+      + 'Passing params that change the upstream-recorded values — or generating a pack with confirm-flagged params whose values are not yet confirmed upstream — returns a pendingConfirmation param table first: present it to the user for approval, then re-call with confirm: true (do not self-confirm a gate the user has not seen; re-passing values identical to the upstream receipt counts as inheritance and does not gate). '
       + 'maxRounds caps this call\'s loop rounds.',
     parameters: {
       pack: { type: 'string', required: true, description: 'Pack name; discover installed packs with doc_packs (e.g. cosmic-plan)' },
@@ -406,12 +425,13 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       force: { type: 'boolean', description: 'Rebuild even when a reusable green artifact of this pack already exists (bypasses the reuse pre-check)' },
       params: { type: 'object', additionalProperties: true, description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpTotal": {"value": 100, "downFactor": 0.9, "upFactor": 1.2}}; unknown names, out-of-range values, and missing required params fail loud; explicit params always trigger the confirmation gate' },
       confirm: { type: 'boolean', description: 'Execute after the pendingConfirmation param table was presented to and approved by the user' },
+      confirmPolicy: { type: 'string', description: 'Per-call confirmation-gate policy overriding config confirmPolicy: "none" never gates (headless/CI; required params still fail loud), "standard" gates on param changes or unconfirmed confirm-params (default), "strict" gates every call that has a param table to show' },
     },
     output: {
       schema: { type: 'json' },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args: { pack: string; materials?: unknown[]; language?: string; upstream?: unknown[]; artifactName?: string; topic?: string; maxRounds?: number; force?: boolean; params?: unknown; confirm?: boolean }, exec) {
+    async execute(args: { pack: string; materials?: unknown[]; language?: string; upstream?: unknown[]; artifactName?: string; topic?: string; maxRounds?: number; force?: boolean; params?: unknown; confirm?: boolean; confirmPolicy?: unknown }, exec) {
       const pack = resolvePack(deps, args.pack)
       const language = resolveLanguage(deps, pack, args.language)
       const materials = (args.materials as string[] | undefined) ?? []
@@ -461,7 +481,16 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       const preview = previewParams(pack, overrides, paramsBase)
       const confirmNames = Object.entries(pack.manifest.params ?? {}).filter(([, spec]) => spec.confirm === true).map(([name]) => name)
       const satisfiedUpstream = confirmNames.length > 0 && paramsBase !== undefined && confirmNames.every(name => paramsBase[name] !== undefined)
-      if ((paramsProvided || (confirmNames.length > 0 && !satisfiedUpstream)) && args.confirm !== true) {
+      // Gate policy: the policy decides WHETHER the gate stands; discharging
+      // it (presenting the table to the user) stays the caller's duty.
+      // Explicit params that equal the upstream-recorded values are
+      // inheritance, not a change (docs/designs/params-and-chain-contract.md).
+      const policy = resolveConfirmPolicy(args.confirmPolicy, deps.config.confirmPolicy)
+      const changedOverrides = paramsProvided && (paramsBase === undefined || Object.entries(overrides!).some(([name, value]) => stableStringify(paramsBase[name]) !== stableStringify(value)))
+      const gateHit = policy === 'strict'
+        ? preview.rows.length > 0
+        : policy === 'standard' && (changedOverrides || (confirmNames.length > 0 && !satisfiedUpstream))
+      if (gateHit && args.confirm !== true) {
         let driftImpact: string | undefined
         if (preview.drift.length > 0) {
           const policy = pack.manifest.paramDriftPolicy ?? 'regenerate'

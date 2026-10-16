@@ -77,6 +77,7 @@ Per-function fan-out accounting — deterministic, no LLM. Pass `plan` (workspac
     maxRoundsCeiling: 10    # absolute round cap no override can pierce (host-operator owned)
     promptTokenBudget: 60000
     upstreamVersionPolicy: "strict"  # chained upstream pack-version mismatch: "strict" rejects, "warn" proceeds with upstreamWarnings
+    confirmPolicy: "standard"  # confirmation gate: "none" never gates (headless/CI), "standard" gates on param changes, "strict" gates every call
     oscillation:            # repair-loop early-exit policy (docs/designs/convergence-detection.md)
       mode: auto            # auto | score | fingerprint
       stagnantRounds: 3     # consecutive rounds without beating the best score

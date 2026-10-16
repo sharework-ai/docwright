@@ -325,6 +325,37 @@ describe('doc_generate: confirmation gate', () => {
     expect(out.receipt.params).toEqual({ budget: { v: 1 }, limit: 10 })
   })
 
+  it('confirmPolicy "none" executes gated calls without the human gate (headless)', async () => {
+    const deps = await gateDeps({ confirmPolicy: 'none' })
+    const tool = defineDocGenerateTool(deps as never)
+    const out = await tool.execute({ pack: 'gate-pack', materials: ['#!inline\nm'], artifactName: 'h', params: { budget: { v: 1 }, limit: 10 } } as never, { signal } as never) as { pendingConfirmation?: boolean; receipt: { isValid: boolean; params?: Record<string, unknown> } }
+    expect(out.pendingConfirmation).toBeUndefined()
+    expect(out.receipt.isValid).toBe(true)
+    expect(out.receipt.params).toEqual({ budget: { v: 1 }, limit: 10 })
+  })
+
+  it('per-call confirmPolicy "none" overrides a gating config', async () => {
+    const deps = await gateDeps({ confirmPolicy: 'strict' })
+    const tool = defineDocGenerateTool(deps as never)
+    const out = await tool.execute({ pack: 'gate-pack', materials: ['#!inline\nm'], artifactName: 'h2', params: { budget: { v: 1 }, limit: 10 }, confirmPolicy: 'none' } as never, { signal } as never) as { pendingConfirmation?: boolean }
+    expect(out.pendingConfirmation).toBeUndefined()
+  })
+
+  it('rejects an unknown confirmPolicy value loud', async () => {
+    const deps = await gateDeps()
+    const tool = defineDocGenerateTool(deps as never)
+    await expect(tool.execute({ pack: 'gate-pack', materials: ['#!inline\nm'], confirmPolicy: 'auto' } as never, { signal } as never)).rejects.toThrow(/confirmPolicy must be/)
+  })
+
+  it('confirmPolicy "strict" gates every call that has a param table, even without explicit params', async () => {
+    const deps = await gateDeps({ confirmPolicy: 'strict' })
+    const tool = defineDocGenerateTool(deps as never)
+    const gated = await tool.execute({ pack: 'gate-pack', materials: ['#!inline\nm'] } as never, { signal } as never) as { pendingConfirmation: boolean }
+    expect(gated.pendingConfirmation).toBe(true)
+    const out = await tool.execute({ pack: 'gate-pack', materials: ['#!inline\nm'], artifactName: 's', params: { budget: { v: 1 }, limit: 10 }, confirm: true } as never, { signal } as never) as { receipt: { isValid: boolean } }
+    expect(out.receipt.isValid).toBe(true)
+  })
+
   it('throws for missing required params once the gate is confirmed', async () => {
     const deps = await gateDeps()
     const tool = defineDocGenerateTool(deps as never)
@@ -347,6 +378,21 @@ describe('doc_generate: chain inheritance and param drift', () => {
     expect(out.pendingConfirmation).toBeUndefined()
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.params).toMatchObject({ budget: { value: 70 } })
+  })
+
+  it('re-passing upstream-identical params downstream is inheritance, not a gate', async () => {
+    const deps = await chainDeps()
+    const packs = deps.packs
+    await generateDocument({
+      pack: packs.get('prod-pack')!, language: 'zh-CN', materials: ['#!inline\nm'], artifactName: 'up',
+      materialsRoot: join(deps.root, 'references'), workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
+      config: { provider: 'p', model: 'm' } as never, llm: { async complete() { return '{"title":"abcdef"}' } }, onRound: () => {},
+      params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
+    } as never)
+    const tool = defineDocGenerateTool(deps as never)
+    const out = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down-echo', upstream: ['output/up.json'], params: { budget: { downFactor: 0.9, upFactor: 1.2, value: 70 } } } as never, { signal } as never) as { pendingConfirmation?: boolean; receipt: { isValid: boolean } }
+    expect(out.pendingConfirmation).toBeUndefined()
+    expect(out.receipt.isValid).toBe(true)
   })
 
   it('gates drifted params with a regenerate impact preview, then refuses after confirm', async () => {
