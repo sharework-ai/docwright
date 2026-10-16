@@ -453,14 +453,40 @@ describe('cosmic-plan: shared-budget band rules', () => {
     expect(issues.map(i => i.ruleId)).not.toContain('plan/func-cfps-recommended-range')
   })
 
-  it('cfp-per-func-band: per-function values outside the band are errors', async () => {
+  it('cfp-avg-band: means outside the avg band are errors even when each size is individually legal', async () => {
     const pack = await packOf('cosmic-plan')
     const service = getDocService(pack, 'zh-CN')
     const artifact = JSON.parse(JSON.stringify(pack.goldenSample)) as { functions: Array<{ estimatedCfps: number }> }
-    artifact.functions[0]!.estimatedCfps = 35
-    const issues = service.validate(artifact, { cfpPerFunc: { value: 30, min: 20, max: 30 }, cfpTotal: BUDGET })
-    expect(issues.map(i => i.ruleId)).toContain('plan/cfp-per-func-band')
-    expect(issues.find(i => i.ruleId === 'plan/cfp-per-func-band')!.message).toContain('[20, 30]')
+    artifact.functions[0]!.estimatedCfps = 50
+    const params = { cfpPerFunc: { value: 30, min: 20, max: 30 }, cfpMin: { value: 10, min: 5, max: 20 }, cfpMax: { value: 70, min: 40, max: 100 }, cfpTotal: BUDGET }
+    const issues = service.validate(artifact, params)
+    expect(issues.map(i => i.ruleId)).toContain('plan/cfp-avg-band')
+    expect(issues.find(i => i.ruleId === 'plan/cfp-avg-band')!.message).toContain('[20, 30]')
+  })
+
+  it('cfp-func-range: individual values outside [cfpMin.value, cfpMax.value] are errors', async () => {
+    const pack = await packOf('cosmic-plan')
+    const service = getDocService(pack, 'zh-CN')
+    const artifact = JSON.parse(JSON.stringify(pack.goldenSample)) as { functions: Array<{ estimatedCfps: number }> }
+    artifact.functions[0]!.estimatedCfps = 5
+    const params = { cfpPerFunc: { value: 30, min: 15, max: 45 }, cfpMin: { value: 10, min: 5, max: 20 }, cfpMax: { value: 70, min: 40, max: 100 }, cfpTotal: BUDGET }
+    const issues = service.validate(artifact, params)
+    expect(issues.map(i => i.ruleId)).toContain('plan/cfp-func-range')
+    expect(issues.find(i => i.ruleId === 'plan/cfp-func-range')!.message).toContain('[10, 70]')
+  })
+
+  it('heterogeneous sizes with an on-target mean stay green (avg band, not per-func band)', async () => {
+    const pack = await packOf('cosmic-plan')
+    const all = await loadPacks(packsRoot, {})
+    const context = { upstream: [all.get('cosmic-context')!.goldenSample] }
+    const service = getDocService(pack, 'zh-CN')
+    const artifact = JSON.parse(JSON.stringify(pack.goldenSample)) as { functions: Array<{ estimatedCfps: number }>; totalCfps: number }
+    artifact.functions[0]!.estimatedCfps = 10
+    artifact.functions[1]!.estimatedCfps = 60
+    artifact.totalCfps = 70
+    const params = { cfpPerFunc: { value: 30, min: 15, max: 45 }, cfpMin: { value: 10, min: 5, max: 20 }, cfpMax: { value: 70, min: 40, max: 100 }, cfpTotal: BUDGET }
+    const issues = service.validate(artifact, params, context)
+    expect(issues.filter(i => i.severity === 'error')).toEqual([])
   })
 
   it('cfp-total-band: totals outside [value×down, value×up] are errors', async () => {
@@ -475,7 +501,8 @@ describe('cosmic-plan: shared-budget band rules', () => {
     const pack = await packOf('cosmic-plan')
     const service = getDocService(pack, 'zh-CN')
     const issues = service.validate(pack.goldenSample, {})
-    expect(issues.map(i => i.ruleId)).not.toContain('plan/cfp-per-func-band')
+    expect(issues.map(i => i.ruleId)).not.toContain('plan/cfp-func-range')
+    expect(issues.map(i => i.ruleId)).not.toContain('plan/cfp-avg-band')
     expect(issues.map(i => i.ruleId)).not.toContain('plan/cfp-total-band')
   })
 })

@@ -17,14 +17,24 @@ Status: implemented（2026-10-13 定稿并当日落地：D5 参数治理 / D6 �
 
 ```jsonc
 {
-  "cfpPerFunc":    { "value": 12,  "min": 8,   "max": 15 },  // 单功能点：目标 + 绝对带
+  "cfpPerFunc":    { "value": 30,  "min": 15,  "max": 45 },  // 单功能均值：目标 + 均值校验带
+  "cfpMin":        { "value": 10,  "min": 5,   "max": 20 },  // 单功能下限：目标 + 声明值校验带
+  "cfpMax":        { "value": 70,  "min": 40,  "max": 100 }, // 单功能上限：目标 + 声明值校验带，超出应拆分模块
   "cfpTotal":      { "value": 100, "downFactor": 0.9, "upFactor": 1.2 },  // 总量：目标 + 相对偏离带 → [90, 120]
   "cfpPerSubProc": { "value": 2.5 }                                  // 子过程平均 CFP
 }
 ```
 
 - `cfpTotal.value` **必填且无默认**：缺失即拒绝执行，错误信息引导调用方向用户确认后经 params 传入。预算只从用户意图来，不从素材文本来。
-- 各阶段接线：plan 按 `cfpPerFunc.{min,max}` 与 `cfpTotal` 带生成并校验；func/tech 按锚点与 `cfpPerSubProc` 引导过程/子过程规模，总量按偏离带校验。
+- 各阶段接线：plan 按 `cfpMin.value`/`cfpMax.value` 约束单功能取值（规则 plan/cfp-func-range）、按 `cfpPerFunc.{min,max}` 校验跨功能均值（规则 plan/cfp-avg-band）、按 `cfpTotal` 偏离带校验总量；func/tech 按锚点与 `cfpPerSubProc` 引导过程/子过程规模，总量按偏离带校验。单功能体量天然允许异构——{10, 60} 均值 35 合规，1×70 均值 70 违规。
+
+## Mind the gap：只有 value 进生成上下文
+
+参数对象里只有 `value` 是生成目标，渲染进 prompt 的 `<effective-params>`（`{value, min, max}` 投影为 `{value}`）；`min`/`max`/`downFactor`/`upFactor` 等区间端点是校验容差，只活在规则与回执里，经修复回路的 issue 消息到达模型（渲染投影见 `src/prompt.ts` generationParams）。
+
+为什么：模型会把上下文中出现的数值当作写作目标贴合。校验带入词有两种失败——带太宽时违约值合法通过（历史案例：`cfpPerFunc {30,10,100}` 入词，1×70 的单功能规划全绿通过）；带收紧后模型会压缩估算凑带宽而不是拆分模块。生成语义与校验语义必须分家。
+
+若某个 min/max 本身就是生成语义（如"单功能不低于 10、不超过 70"），把它升级为独立参数的 `value`（`cfpMin`/`cfpMax`），而不是把外层参数的校验端点暴露进上下文。判断标准一句话：**这个数描述"文档应该长什么样"（进上下文），还是"离目标多远必须打回"（留在规则）？**
 
 ## 参数属性与解析顺序
 
@@ -60,7 +70,7 @@ pack 级参数 `paramDriftPolicy`：
 
 ## prompt 接线
 
-生效参数渲染进 prompt 的"生效参数"节（既有机制）。模板中写死的推荐值（如 plan 的"estimatedCfps 推荐 20-50"）在对应参数存在时不得渲染，避免模板推荐与用户预算竞争；参数缺席时维持现有默认行为。
+生效参数以 value 投影视（见"Mind the gap"）渲染进 prompt 的"生效参数"节（既有机制）。模板中写死的推荐值（如 plan 的"estimatedCfps 推荐 20-50"）在对应参数存在时不得渲染，避免模板推荐与用户预算竞争；参数缺席时维持现有默认行为。
 
 ## seal——回执回签
 

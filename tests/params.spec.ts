@@ -181,6 +181,18 @@ describe('prompt: {{params}} slot', () => {
     expect(without).toBe('T')
   })
 
+  it('projects object params to their value field (bands stay out of the context)', () => {
+    const out = assembleGeneratorPrompt({ promptTemplate: 'T{{params}}', materials: ['m'], params: { cfpPerFunc: { value: 30, min: 15, max: 45 }, cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 }, limit: 10 } })
+    expect(out).toContain('"cfpPerFunc"')
+    expect(out).toContain('"value": 30')
+    expect(out).toContain('"cfpTotal"')
+    expect(out).toContain('"value": 70')
+    expect(out).not.toContain('"min"')
+    expect(out).not.toContain('"max":')
+    expect(out).not.toContain('"downFactor"')
+    expect(out).toContain('"limit": 10')
+  })
+
   it('does not mangle $-patterns inside rendered params', () => {
     const out = assembleGeneratorPrompt({ promptTemplate: 'T{{params}}', materials: ['m'], params: { note: '$& $`' } })
     expect(out).toContain('"note": "$& $`"')
