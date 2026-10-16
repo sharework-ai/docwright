@@ -1,7 +1,7 @@
 // Cross-field rules for the cosmic-plan pack, migrated from
 // cosmic-claude cosmic_core/auditors/plan_auditor.py (E204 funcId unique,
-// E205 path unique, E200 family) plus the shared-budget band rules
-// plan/cfp-per-func-band and plan/cfp-total-band
+// E205 path unique, E200 family) plus the shared-budget rules
+// plan/cfp-func-range, plan/cfp-avg-band and plan/cfp-total-band
 // (docs/designs/params-and-chain-contract.md), the upstream-context
 // reconciliation rule plan/context-alignment and the moduleLevels-driven
 // plan/name-hierarchy (docs/designs/cosmic-context.md).
@@ -101,28 +101,65 @@ export const rules = [
     },
   },
   {
-    // Band rule driven by the shared param cfpPerFunc {value, min, max}
-    // (docs/designs/params-and-chain-contract.md): user budgets are first-
-    // class validation, not prompt prose. Skips when params are absent
-    // (programmatic misuse); required chain-head params guarantee presence.
-    id: 'plan/cfp-per-func-band',
+    // Individual-range rule driven by the shared params cfpMin/cfpMax
+    // {value, min, max}: a single function may sit anywhere inside
+    // [cfpMin.value, cfpMax.value] — granularity is governed by the MEAN
+    // (plan/cfp-avg-band), not by forcing uniform sizes. Skips when params
+    // are absent (programmatic misuse); required chain-head params
+    // guarantee presence.
+    id: 'plan/cfp-func-range',
     severity: 'error',
-    suggestion: '调整该功能的 estimatedCfps 到生效参数 cfpPerFunc 的 [min, max] 区间内；如需调整预算请向用户确认后修改 params',
+    suggestion: '调整该功能的 estimatedCfps 到生效参数 cfpMin.value 与 cfpMax.value 之间；超出上限说明模块体量过大，应拆分为多个模块功能而不是压缩估算',
     check(artifact, context) {
-      const budget = context?.params?.cfpPerFunc
-      if (typeof budget !== 'object' || budget === null || typeof budget.min !== 'number' || typeof budget.max !== 'number') return []
+      const cfpMin = context?.params?.cfpMin
+      const cfpMax = context?.params?.cfpMax
+      if (typeof cfpMin !== 'object' || cfpMin === null || typeof cfpMin.value !== 'number') return []
+      if (typeof cfpMax !== 'object' || cfpMax === null || typeof cfpMax.value !== 'number') return []
       const issues = []
       getFunctions(artifact).forEach((fn, index) => {
         const cfps = fn?.estimatedCfps
-        if (typeof cfps === 'number' && Number.isFinite(cfps) && (cfps < budget.min || cfps > budget.max)) {
+        if (typeof cfps === 'number' && Number.isFinite(cfps) && (cfps < cfpMin.value || cfps > cfpMax.value)) {
           issues.push({
             jsonPath: `$.functions[${index}].estimatedCfps`,
-            message: `单功能CFP超出预算区间：${cfps}，允许 [${budget.min}, ${budget.max}]（cfpPerFunc）`,
+            message: say(artifact,
+              `单功能CFP超出允许范围：${cfps}，允许 [${cfpMin.value}, ${cfpMax.value}]（cfpMin/cfpMax）`,
+              `Per-function CFP out of range: ${cfps}, allowed [${cfpMin.value}, ${cfpMax.value}] (cfpMin/cfpMax)`),
             snapshot: String(cfps),
           })
         }
       })
       return issues
+    },
+  },
+  {
+    // Average-band rule driven by the shared param cfpPerFunc {value, min,
+    // max}: value is the target MEAN size per function; [min, max] validates
+    // the mean across functions — a plan of one function absorbing the whole
+    // budget fails here even though each size could be individually legal.
+    id: 'plan/cfp-avg-band',
+    severity: 'error',
+    suggestion: '拆分或合并模块功能，使平均单功能体量接近生效参数 cfpPerFunc.value；如需调整预算请向用户确认后修改 params',
+    check(artifact, context) {
+      const budget = context?.params?.cfpPerFunc
+      if (typeof budget !== 'object' || budget === null || typeof budget.value !== 'number' || typeof budget.min !== 'number' || typeof budget.max !== 'number') return []
+      const functions = getFunctions(artifact)
+      if (functions.length === 0) return []
+      const total = functions.reduce((sum, fn) => {
+        const cfps = fn?.estimatedCfps
+        return typeof cfps === 'number' && Number.isFinite(cfps) ? sum + cfps : sum
+      }, 0)
+      const avg = total / functions.length
+      if (avg < budget.min || avg > budget.max) {
+        const rounded = Math.round(avg * 100) / 100
+        return [{
+          jsonPath: '$.functions',
+          message: say(artifact,
+            `平均单功能CFP偏离目标：实际均值 ${rounded}，目标 ${budget.value}，允许均值区间 [${budget.min}, ${budget.max}]（cfpPerFunc）`,
+            `Average per-function CFP misses the target: actual mean ${rounded}, target ${budget.value}, allowed mean band [${budget.min}, ${budget.max}] (cfpPerFunc)`),
+          snapshot: String(rounded),
+        }]
+      }
+      return []
     },
   },
   {
@@ -152,11 +189,11 @@ export const rules = [
   },
   {
     // Thresholds migrated from plan_auditor.py: per-function recommended
-    // 20-50 (W101), schema hard bounds 10-100; without desiredCfps the
+    // 20-50 (W101), schema hard bounds 5-100; without desiredCfps the
     // total band is [20, 1000]. Also verifies totalCfps === sum.
     id: 'plan/total-cfps-range',
     severity: 'error',
-    suggestion: '调整各功能的 estimatedCfps（单项建议 20-50、硬边界 10-100），使总和落在 20-1000 区间，并保证 totalCfps 等于各项之和',
+    suggestion: '调整各功能的 estimatedCfps（单项建议 20-50、硬边界 5-100），使总和落在 20-1000 区间，并保证 totalCfps 等于各项之和',
     check: (artifact) => {
       const doc = typeof artifact === 'object' && artifact !== null ? artifact : {}
       const functions = getFunctions(artifact)

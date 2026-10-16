@@ -1,6 +1,6 @@
 {
   "name": "cosmic-plan",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "COSMIC function-point estimation plan: given one requirement and the green project context, plan which modules to add or modify — each changed leaf module becomes one function with hierarchical names and estimated CFPs (consumes a green cosmic-context artifact; requires topic — one requirement per topic).",
   "consumes": [
     "cosmic-context"
@@ -18,7 +18,27 @@
         "max": 45
       },
       "confirm": true,
-      "description": "Per-function CFP budget {value, min, max}: value is the target size per function — when a module exceeds max, split it into several module functions instead of shrinking estimates; every estimatedCfps must fall inside [min, max] (rule plan/cfp-per-func-band)"
+      "description": "Per-function average CFP budget {value, min, max}: value is the target MEAN size per function and [min, max] validates that mean across functions (rule plan/cfp-avg-band); individual functions are bounded by cfpMin/cfpMax instead"
+    },
+    "cfpMin": {
+      "type": "object",
+      "default": {
+        "value": 10,
+        "min": 5,
+        "max": 20
+      },
+      "confirm": true,
+      "description": "Per-function CFP floor {value, min, max}: value bounds any single estimatedCfps from below (rule plan/cfp-func-range); [min, max] validates the declared floor itself"
+    },
+    "cfpMax": {
+      "type": "object",
+      "default": {
+        "value": 70,
+        "min": 40,
+        "max": 100
+      },
+      "confirm": true,
+      "description": "Per-function CFP ceiling {value, min, max}: value bounds any single estimatedCfps from above — a module larger than this must be split into several module functions (rule plan/cfp-func-range); [min, max] validates the declared ceiling itself"
     },
     "cfpTotal": {
       "type": "object",

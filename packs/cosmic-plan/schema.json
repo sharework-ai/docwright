@@ -59,7 +59,7 @@
           "estimatedCfps": {
             "type": "number",
             "description": "Estimated CFP count for this function (hard bounds 10-100, recommended 20-50)",
-            "minimum": 10,
+            "minimum": 5,
             "maximum": 100
           },
           "changeKind": {

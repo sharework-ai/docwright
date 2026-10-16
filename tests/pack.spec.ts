@@ -18,14 +18,14 @@ async function loadCosmic() {
 describe('pack loader', () => {
   it('loads the builtin cosmic-plan pack with both languages', async () => {
     const pack = await loadCosmic()
-    expect(pack.manifest.version).toBe('0.5.0')
+    expect(pack.manifest.version).toBe('0.6.0')
     expect(pack.manifest.consumes).toEqual(['cosmic-context'])
     for (const lang of ['zh-CN', 'en-US']) {
       expect(pack.prompts.get(lang)).toContain('{{materials}}')
       expect(pack.templates.get(lang)).toBeTruthy()
       expect((pack.rules.get(lang) ?? []).length).toBeGreaterThan(0)
     }
-    expect(pack.functionRules.length).toBe(7)
+    expect(pack.functionRules.length).toBe(8)
   })
 
   it('golden sample passes all-green in both languages', async () => {
