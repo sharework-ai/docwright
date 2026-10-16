@@ -21,7 +21,7 @@ A requirement lands as module changes: **every added-or-modified leaf module is 
   - `l2Name` (string): level-2 name, required when `moduleLevels≥2`.
   - `l3Name` (string, optional): level-3 name, required when `moduleLevels=3`.
   - `funcDesc` (string): at least 80 characters, covering trigger conditions, data validation, processing steps, outputs, and error handling.
-  - `estimatedCfps` (number): estimated CFP inside `cfpPerFunc.min`-`cfpPerFunc.max` (schema hard bounds 10-100).
+  - `estimatedCfps` (number): estimated CFP targeting the effective `cfpPerFunc.value`, inside `cfpPerFunc.min`-`cfpPerFunc.max` (schema hard bounds 10-100).
 
 ## Hard constraints
 
@@ -30,6 +30,7 @@ A requirement lands as module changes: **every added-or-modified leaf module is 
 3. `funcId` is unique across the document; the `l1Name/l2Name/l3Name` combined paths are unique too.
 4. Function names (l1Name/l2Name/l3Name) must not contain: management, processing, system, handle, control — name by "concrete business object + action" instead, e.g. "Add favorite".
 5. Every `estimatedCfps` falls inside the effective `cfpPerFunc` [min, max]; `totalCfps` equals the sum and falls inside the `cfpTotal.value × [downFactor, upFactor]` budget band. Budget params follow `<effective-params>` exactly.
+6. An `estimatedCfps` above `cfpPerFunc.max` means the module is too large: split it into several module functions (one module per function, following the numbering conventions) instead of shrinking the estimate to fit the band.
 
 ## Input materials
 

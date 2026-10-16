@@ -1,6 +1,6 @@
 {
   "name": "cosmic-func",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "COSMIC functional-process design for one function: decomposes the function into functional processes (originator, receiver, origination event) refined from a green cosmic-req artifact (requires topic — one requirement per topic).",
   "consumes": [
     "cosmic-req"
@@ -14,8 +14,8 @@
       "type": "object",
       "default": {
         "value": 30,
-        "min": 10,
-        "max": 100
+        "min": 15,
+        "max": 45
       },
       "confirm": true,
       "description": "Per-function CFP budget {value, min, max}; inherited from the upstream receipt and re-recorded for the chain"
