@@ -62,7 +62,7 @@ Status: implemented（2026-10-13 定稿并当日落地：D5 参数治理 / D6 �
 
 插件配置 `confirmPolicy`（每次调用可用同名入参覆盖，未知取值 fail loud）决定**门立不立**；怎么过门（把参数表转呈用户）始终是调用方的职责，不得自答用户未见表格的门：
 
-- `"standard"`（默认）：显式改参或 confirm 参数未经上游确认时立门。
+- `"standard"`（默认）：显式改参或 confirm 参数未经上游确认时立门；required 且非 confirm 的参数（如扇出寻址的 `targetIndex`）是调用路由而非策略，其出现永不立门。
 - `"none"`：永不立门（headless/CI）。required 缺失仍 fail loud；as-run params 照常入回执，审计性不变。
 - `"strict"`：只要有参数表可展示就立门，每阶段都过一遍用户确认。
 

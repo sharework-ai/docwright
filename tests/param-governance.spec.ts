@@ -108,6 +108,7 @@ async function chainFixture(root: string, consumerPolicy?: string): Promise<void
     params: {
       budget: { type: 'object', confirm: true, description: 'the shared budget' },
       minTitle: { type: 'number', description: 'inherited drift target' },
+      targetIndex: { type: 'number', required: true, description: 'fan-out addressing' },
     },
   }), 'utf8')
   await writeFile(join(consumer, 'schema.json'), '{"type":"object"}', 'utf8')
@@ -374,10 +375,29 @@ describe('doc_generate: chain inheritance and param drift', () => {
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
     const tool = defineDocGenerateTool(deps as never)
-    const out = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'] } as never, { signal } as never) as { pendingConfirmation?: boolean; receipt: { isValid: boolean; params?: Record<string, unknown> } }
+    const out = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { targetIndex: 1 } } as never, { signal } as never) as { pendingConfirmation?: boolean; receipt: { isValid: boolean; params?: Record<string, unknown> } }
     expect(out.pendingConfirmation).toBeUndefined()
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.params).toMatchObject({ budget: { value: 70 } })
+  })
+
+  it('required addressing params never gate, policy params still do', async () => {
+    const deps = await chainDeps()
+    const packs = deps.packs
+    await generateDocument({
+      pack: packs.get('prod-pack')!, language: 'zh-CN', materials: ['#!inline\nm'], artifactName: 'up2',
+      materialsRoot: join(deps.root, 'references'), workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
+      config: { provider: 'p', model: 'm' } as never, llm: { async complete() { return '{"title":"abcdef"}' } }, onRound: () => {},
+      params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
+    } as never)
+    const tool = defineDocGenerateTool(deps as never)
+    // targetIndex alone (call routing): executes without the gate.
+    const echo = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down-addr', upstream: ['output/up2.json'], params: { targetIndex: 1 } } as never, { signal } as never) as { pendingConfirmation?: boolean; receipt: { isValid: boolean } }
+    expect(echo.pendingConfirmation).toBeUndefined()
+    expect(echo.receipt.isValid).toBe(true)
+    // a genuinely changed policy param still gates.
+    const gated = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down-chg', upstream: ['output/up2.json'], params: { targetIndex: 1, budget: { value: 80, downFactor: 0.9, upFactor: 1.2 } } } as never, { signal } as never) as { pendingConfirmation?: boolean }
+    expect(gated.pendingConfirmation).toBe(true)
   })
 
   it('re-passing upstream-identical params downstream is inheritance, not a gate', async () => {
@@ -390,7 +410,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
     const tool = defineDocGenerateTool(deps as never)
-    const out = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down-echo', upstream: ['output/up.json'], params: { budget: { downFactor: 0.9, upFactor: 1.2, value: 70 } } } as never, { signal } as never) as { pendingConfirmation?: boolean; receipt: { isValid: boolean } }
+    const out = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down-echo', upstream: ['output/up.json'], params: { targetIndex: 1, budget: { downFactor: 0.9, upFactor: 1.2, value: 70 } } } as never, { signal } as never) as { pendingConfirmation?: boolean; receipt: { isValid: boolean } }
     expect(out.pendingConfirmation).toBeUndefined()
     expect(out.receipt.isValid).toBe(true)
   })
@@ -406,11 +426,11 @@ describe('doc_generate: chain inheritance and param drift', () => {
     } as never)
     const tool = defineDocGenerateTool(deps as never)
     const drifted = { budget: { value: 120, downFactor: 0.9, upFactor: 1.2 } }
-    const gated = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: drifted } as never, { signal } as never) as { pendingConfirmation: boolean; paramDrift: Array<{ name: string }>; driftImpact: string }
+    const gated = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { targetIndex: 1, ...drifted } } as never, { signal } as never) as { pendingConfirmation: boolean; paramDrift: Array<{ name: string }>; driftImpact: string }
     expect(gated.pendingConfirmation).toBe(true)
     expect(gated.paramDrift.map(d => d.name)).toEqual(['budget'])
     expect(gated.driftImpact).toContain('paramDriftPolicy is "regenerate"')
-    await expect(tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: drifted, confirm: true } as never, { signal } as never)).rejects.toThrow(/params drift from the upstream receipts \(budget: .* → .*\); pack "cons-pack" paramDriftPolicy is "regenerate"/)
+    await expect(tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { targetIndex: 1, ...drifted }, confirm: true } as never, { signal } as never)).rejects.toThrow(/params drift from the upstream receipts \(budget: .* → .*\); pack "cons-pack" paramDriftPolicy is "regenerate"/)
   })
 
   it('revalidate policy: the gate previews the deterministic re-check result', async () => {
@@ -422,10 +442,10 @@ describe('doc_generate: chain inheritance and param drift', () => {
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
     const tool = defineDocGenerateTool(deps as never)
-    const green = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { minTitle: 5 } } as never, { signal } as never) as { pendingConfirmation: boolean; driftImpact: string }
+    const green = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { targetIndex: 1, minTitle: 5 } } as never, { signal } as never) as { pendingConfirmation: boolean; driftImpact: string }
     expect(green.pendingConfirmation).toBe(true)
     expect(green.driftImpact).toContain('revalidated green under the new params')
-    const red = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { minTitle: 10 } } as never, { signal } as never) as { driftImpact: string }
+    const red = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { targetIndex: 1, minTitle: 10 } } as never, { signal } as never) as { driftImpact: string }
     expect(red.driftImpact).toContain('fail under the new params')
     expect(red.driftImpact).toContain('p/min')
   })
@@ -439,7 +459,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
     const tool = defineDocGenerateTool(deps as never)
-    await expect(tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { minTitle: 10 }, confirm: true } as never, { signal } as never)).rejects.toThrow(/upstream artifacts fail validation under the new params \(prod-pack: p\/min\)/)
+    await expect(tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { targetIndex: 1, minTitle: 10 }, confirm: true } as never, { signal } as never)).rejects.toThrow(/upstream artifacts fail validation under the new params \(prod-pack: p\/min\)/)
   })
 
   it('revalidate policy: a hand-written receipt with a spec-violating base fails loud (language falls back)', async () => {
@@ -453,7 +473,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
       params: { minTitle: 'not-a-number', budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     }), 'utf8')
     const tool = defineDocGenerateTool(deps as never)
-    await expect(tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/hand.json'], params: { budget: { value: 100, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never, { signal } as never)).rejects.toThrow(/upstream artifacts fail validation under the new params \(prod-pack: pack "prod-pack" param "minTitle" \(receipt-recorded\) must be a number/)
+    await expect(tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/hand.json'], params: { targetIndex: 1, budget: { value: 100, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never, { signal } as never)).rejects.toThrow(/upstream artifacts fail validation under the new params \(prod-pack: pack "prod-pack" param "minTitle" \(receipt-recorded\) must be a number/)
   })
 
   it('revalidate policy: a language-less receipt falls back to the pack first language before rule replay', async () => {
@@ -467,7 +487,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
       params: { minTitle: 5, budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     }), 'utf8')
     const tool = defineDocGenerateTool(deps as never)
-    await expect(tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/hand2.json'], params: { budget: { value: 100, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never, { signal } as never)).rejects.toThrow(/fail validation under the new params \(prod-pack: p\/min\)/)
+    await expect(tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/hand2.json'], params: { targetIndex: 1, budget: { value: 100, downFactor: 0.9, upFactor: 1.2 } }, confirm: true } as never, { signal } as never)).rejects.toThrow(/fail validation under the new params \(prod-pack: p\/min\)/)
   })
 
   it('revalidate policy: drifted params re-check the upstream artifact under its own pack rules', async () => {
@@ -481,7 +501,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
     } as never)
     const tool = defineDocGenerateTool(deps as never)
     // The producer declares no further rules, so any budget value revalidates green.
-    const out = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { budget: { value: 500 } }, confirm: true } as never, { signal } as never) as { receipt: { isValid: boolean; params?: Record<string, unknown> } }
+    const out = await tool.execute({ pack: 'cons-pack', materials: ['#!inline\nm'], artifactName: 'down', upstream: ['output/up.json'], params: { targetIndex: 1, budget: { value: 500 } }, confirm: true } as never, { signal } as never) as { receipt: { isValid: boolean; params?: Record<string, unknown> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.params).toMatchObject({ budget: { value: 500 } })
   })
