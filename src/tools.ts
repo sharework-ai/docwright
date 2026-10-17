@@ -484,9 +484,15 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       // Gate policy: the policy decides WHETHER the gate stands; discharging
       // it (presenting the table to the user) stays the caller's duty.
       // Explicit params that equal the upstream-recorded values are
-      // inheritance, not a change (docs/designs/params-and-chain-contract.md).
+      // inheritance, not a change; required non-confirm params (fan-out
+      // addressing like targetIndex) are call routing and never gate
+      // (docs/designs/params-and-chain-contract.md).
       const policy = resolveConfirmPolicy(args.confirmPolicy, deps.config.confirmPolicy)
-      const changedOverrides = paramsProvided && (paramsBase === undefined || Object.entries(overrides!).some(([name, value]) => stableStringify(paramsBase[name]) !== stableStringify(value)))
+      const addressNames = new Set(Object.entries(pack.manifest.params ?? {})
+        .filter(([, spec]) => spec.required === true && spec.confirm !== true)
+        .map(([name]) => name))
+      const changedOverrides = paramsProvided && (paramsBase === undefined
+        || Object.entries(overrides!).some(([name, value]) => !addressNames.has(name) && stableStringify(paramsBase[name]) !== stableStringify(value)))
       const gateHit = policy === 'strict'
         ? preview.rows.length > 0
         : policy === 'standard' && (changedOverrides || (confirmNames.length > 0 && !satisfiedUpstream))
