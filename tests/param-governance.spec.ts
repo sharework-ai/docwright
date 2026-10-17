@@ -138,9 +138,11 @@ async function chainDeps(consumerPolicy?: string, reply = '{}'): Promise<GateDep
 }
 
 describe('pack loader: param attributes', () => {
-  it('rejects a required param that declares a default', async () => {
-    const error = await loadFailing({ type: 'number', required: true, default: 5, description: 'd' })
-    expect(error.message).toMatch(/manifest\.params\.p\.default is forbidden on a required param/)
+  it('accepts a required param with a default (chain-necessary: default is the standing value)', async () => {
+    const packs = await loadPacks(packsRoot, {})
+    const spec = packs.get('cosmic-context')!.manifest.params!.topicNoPattern!
+    expect(spec.required).toBe(true)
+    expect(spec.default).toBeDefined()
   })
 
   it('rejects non-boolean required/overridable/confirm flags', async () => {
