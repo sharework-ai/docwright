@@ -43,7 +43,7 @@ export async function seedContext(deps: DepsLike): Promise<string> {
   deps.ctx.llm = scriptedLlm([JSON.stringify(contextPack.goldenSample)])
   try {
     await defineDocGenerateTool(deps as never).execute(
-      { pack: 'cosmic-context', materials: ['#!inline\n项目背景素材'], language: 'zh-CN', artifactName: 'context' } as never,
+      { pack: 'cosmic-context', materials: ['#!inline\n项目背景素材'], language: 'zh-CN', artifactName: 'context', confirm: true } as never,
       { signal } as never,
     )
   } finally {
