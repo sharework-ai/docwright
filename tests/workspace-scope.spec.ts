@@ -137,7 +137,7 @@ describe('requiresTopic enforcement (doc_generate)', () => {
   it('topic is a plain-segment name even when the pack requires it', async () => {
     const deps = await makeDeps({})
     await expect(defineDocGenerateTool(deps).execute({ ...PLAN_ARGS, topic: '../escape' } as never, { signal } as never))
-      .rejects.toThrow(/topic must be a plain path segment/)
+      .rejects.toThrow(/topic must be a single directory name/)
   })
 })
 
@@ -158,7 +158,7 @@ describe('topic parameter (doc_generate roots)', () => {
     const deps = await makeDeps({})
     for (const bad of ['../escape', 'a/b', '.hidden', '..']) {
       await expect(defineDocGenerateTool(deps).execute({ ...PLAN_ARGS, topic: bad } as never, { signal } as never))
-        .rejects.toThrow(/topic must be a plain path segment/)
+        .rejects.toThrow(/topic must be a single directory name/)
     }
   })
 
@@ -280,6 +280,29 @@ describe('upstream riders (verifyUpstreamReceipts)', () => {
     } as never, { signal } as never) as { receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string }> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.upstreamHashes.map(a => a.pack)).toEqual(['cosmic-plan', 'ws-pack'])
+  })
+
+  it('accepts CJK and inner spaces in topic names; still rejects path separators', async () => {
+    const wsRoot = await mkdtemp(join(tmpdir(), 'docwright-cjk-'))
+    const packs = await loadPacks(packsRoot, {})
+    const deps = { packs, config: { provider: 'p', model: 'm', workspaceRoot: wsRoot } as never, ctx: { llm: {} } }
+    const numbered = JSON.parse(JSON.stringify(packs.get('cosmic-plan')!.goldenSample)) as { functions: Array<{ funcId: string }> }
+    numbered.functions[0]!.funcId = 'KERQ-352-01'
+    numbered.functions[1]!.funcId = 'KERQ-352-02'
+    await generatePlan(deps, numbered, { topic: 'KERQ-352 收藏夹' })
+    const reqPack = packs.get('cosmic-req')!
+    const reqReply = JSON.parse(JSON.stringify(reqPack.goldenSample)) as { funcId: string }
+    reqReply.funcId = 'KERQ-352-01'
+    deps.ctx.llm = scriptedLlm([JSON.stringify(reqReply)]).llm
+    const out = await defineDocGenerateTool(deps).execute({
+      pack: 'cosmic-req', materials: [], language: 'zh-CN', topic: 'KERQ-352 收藏夹',
+      upstream: ['KERQ-352 收藏夹/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
+    } as never, { signal } as never) as { receipt: { isValid: boolean } }
+    expect(out.receipt.isValid).toBe(true)
+    await expect(defineDocGenerateTool(deps).execute({
+      pack: 'cosmic-req', materials: [], language: 'zh-CN', topic: 'a/b',
+      upstream: ['a/b/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
+    } as never, { signal } as never)).rejects.toThrow(/topic must be a single directory name/)
   })
 
   it('fails loud when no upstream artifact is of a consumed type', async () => {

@@ -34,7 +34,11 @@ export interface ToolDeps {
  */
 function normalizeParams(raw: unknown): Record<string, unknown> | undefined {
   if (raw === undefined) return undefined
-  return raw as Record<string, unknown>
+  // Clone: the engine injects derived params (topicNo) into this object, and
+  // callers routinely share one literal across calls — mutating in place
+  // would leak values between calls (a real cross-test leak).
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  return { ...(raw as Record<string, unknown>) }
 }
 
 /** Resolve and lexically confine a user-supplied path to the workspace root. */
@@ -51,12 +55,21 @@ function confinePath(workspaceRoot: string, ref: string, what: string): string {
 /** Conventional workspace-level artifact directory for workspace-scope packs (docs/designs/cosmic-context.md). */
 const WORKSPACE_CONTEXT_DIR = 'context'
 
-/** Plain single-segment directory name for the topic parameter (same charset as artifactName). */
+/** Single-segment directory name for the topic parameter. Unicode letters
+ * (CJK included) and inner spaces are allowed — the topicNoPattern reads
+ * only the leading requirement number, the rest is free description. Path
+ * safety stays absolute: no separators, no leading dot, no `..`, trimmed,
+ * bounded length. */
 function assertTopicName(topic: string): string {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(topic) || topic.includes('..')) {
-    throw new Error(`topic must be a plain path segment of [A-Za-z0-9._-] (no separators, no leading dot); got ${JSON.stringify(topic)}`)
+  const trimmed = topic.trim()
+  if (
+    trimmed === '' || trimmed !== topic || trimmed === '.' || trimmed === '..' || trimmed.includes('..')
+    || /[/\\\0]/.test(trimmed) || /\s/.test(trimmed[0]!) || trimmed.length > 120
+    || !/^[\p{L}\p{N}][\p{L}\p{N} ._\-]*$/u.test(trimmed)
+  ) {
+    throw new Error(`topic must be a single directory name: no path separators, no leading/trailing space or dot, no '..'; unicode letters and inner spaces allowed (1-120 chars); got ${JSON.stringify(topic)}`)
   }
-  return topic
+  return trimmed
 }
 
 /**
@@ -420,7 +433,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       language: { type: 'string', description: 'Output language (default: config defaultLanguage)' },
       upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn"). Extra green artifacts of installed packs may ride along as context (e.g. the project context), but at least one consumed-type artifact is required' },
       artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>); REFUSED on per-function calls — the engine names those <pack>-<funcId> from the upstream plan' },
-      topic: { type: 'string', description: 'Topic directory name (a plain [A-Za-z0-9._-] segment, e.g. the requirement id): relocates the output root to <topic>/output/ and the materials root to <topic>/references/; REQUIRED by packs declaring requiresTopic (the cosmic chain stages), ignored by workspace-scope packs' },
+      topic: { type: 'string', description: 'Topic directory name, e.g. the requirement number plus a free description ("KERQ-352 收藏夹" or "KERQ-352-favorites"): relocates the output root to <topic>/output/ and the materials root to <topic>/references/; REQUIRED by packs declaring requiresTopic (the cosmic chain stages), ignored by workspace-scope packs' },
       maxRounds: { type: 'number', description: 'Round cap for this call (e.g. when the user asks to try more rounds); clamped to config maxRoundsCeiling' },
       force: { type: 'boolean', description: 'Rebuild even when a reusable green artifact of this pack already exists (bypasses the reuse pre-check)' },
       params: { type: 'object', additionalProperties: true, description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpTotal": {"value": 100, "downFactor": 0.9, "upFactor": 1.2}}; unknown names, out-of-range values, and missing required params fail loud; explicit params always trigger the confirmation gate' },
@@ -442,7 +455,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       // (docs/designs/cosmic-context.md): one requirement, one topic
       // directory, so chain paths and coverage scans key off it.
       if (pack.manifest.requiresTopic === true && (args.topic === undefined || args.topic.length === 0)) {
-        throw new Error(`pack "${pack.manifest.name}" scopes its artifacts to one requirement: pass topic (a plain [A-Za-z0-9._-] segment, e.g. the requirement id) — artifacts land under <topic>/output/ and upstream/doc_chain_status paths key off it`)
+        throw new Error(`pack "${pack.manifest.name}" scopes its artifacts to one requirement: pass topic (a single directory name, e.g. "KERQ-352 收藏夹") — artifacts land under <topic>/output/ and upstream/doc_chain_status paths key off it`)
       }
       // Reuse pre-check (docs/designs/cosmic-context.md): before any param,
       // route, or input work — a green, hash-intact artifact of a reuse pack
