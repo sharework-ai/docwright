@@ -91,7 +91,7 @@ pack 级参数 `paramDriftPolicy`：
 plan 整需求一份；req/func/tech 与 plan 的 functions **一一对应，份数相等**；每个功能一条平行微链 req→func→tech，无树形组合扇出。
 
 - `targetIndex`（req/func/tech）**必填参数**，无默认；缺失即 fail loud，错误信息列出上游全部候选（index、funcId、l2Name）。prompt 中"未指明时选 index 1"删除。
-- **命名契约**：per-function 产物的 artifactName 由工具按 `<name>-<funcId>` 默认生成，调用方无需手起名，同名覆盖在机制上不可能发生。
+- **命名契约**：per-function 产物命名权在引擎——缺省即 `<name>-<funcId>`（funcId 在 plan 阶段确定并写入产物），显式传 `artifactName` 响亮报错（真实会话手起名撞车、一份产物被静默覆盖），同名覆盖在机制上不可能发生，重生成幂等。
 - 锚定规则（三点对齐 index/funcId/desiredCfps）保持不变，逐产物照常校验。
 
 ## 覆盖账目

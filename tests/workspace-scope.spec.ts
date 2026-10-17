@@ -275,7 +275,7 @@ describe('upstream riders (verifyUpstreamReceipts)', () => {
     const reqPack = packs.get('cosmic-req')!
     deps.ctx.llm = scriptedLlm([JSON.stringify(reqPack.goldenSample)]).llm
     const out = await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-req', topic: 'topic-a', materials: [], language: 'zh-CN', artifactName: 'req',
+      pack: 'cosmic-req', topic: 'topic-a', materials: [], language: 'zh-CN',
       upstream: ['topic-a/output/plan.json', 'context/ctx.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string }> } }
     expect(out.receipt.isValid).toBe(true)
@@ -318,7 +318,7 @@ describe('doc_chain_status output-root inference', () => {
     const reqPack = packs.get('cosmic-req')!
     deps.ctx.llm = scriptedLlm([JSON.stringify(reqPack.goldenSample)]).llm
     await defineDocGenerateTool(deps).execute({
-      pack: 'cosmic-req', materials: [], language: 'zh-CN', artifactName: 'req', topic: 'req-a',
+      pack: 'cosmic-req', materials: [], language: 'zh-CN', topic: 'req-a',
       upstream: ['req-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
     // A decoy req artifact in the workspace-level output/ must not leak into the topic scan.

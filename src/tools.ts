@@ -419,7 +419,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       materials: { type: 'array', items: { type: 'string' }, description: 'Material references: paths relative to the materials root (default references/ under the workspace) or #!inline text. Optional for chained packs whose upstream artifacts carry the context' },
       language: { type: 'string', description: 'Output language (default: config defaultLanguage)' },
       upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn"). Extra green artifacts of installed packs may ride along as context (e.g. the project context), but at least one consumed-type artifact is required' },
-      artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>)' },
+      artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>); REFUSED on per-function calls — the engine names those <pack>-<funcId> from the upstream plan' },
       topic: { type: 'string', description: 'Topic directory name (a plain [A-Za-z0-9._-] segment, e.g. the requirement id): relocates the output root to <topic>/output/ and the materials root to <topic>/references/; REQUIRED by packs declaring requiresTopic (the cosmic chain stages), ignored by workspace-scope packs' },
       maxRounds: { type: 'number', description: 'Round cap for this call (e.g. when the user asks to try more rounds); clamped to config maxRoundsCeiling' },
       force: { type: 'boolean', description: 'Rebuild even when a reusable green artifact of this pack already exists (bypasses the reuse pre-check)' },
@@ -546,13 +546,19 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       }
       const route = requireRoute(deps)
       const llm = createLlmPort(deps.ctx as never, route)
-      // Fan-out naming: a per-function call without an explicit artifactName
-      // defaults to `<pack>-<funcId>`, so distinct functions never collide
-      // and regeneration is idempotent. An explicit name wins verbatim;
-      // non-per-function defaults keep the timestamp form.
+      // Fan-out naming: a per-function call is ENGINE-named `<pack>-<funcId>`
+      // from the upstream plan — distinct functions never collide and
+      // regeneration is idempotent. An explicit artifactName on a
+      // per-function call fails loud: in a real session hand-picked names
+      // collided (two req artifacts shared one file and a function's output
+      // was silently overwritten). Non-per-function defaults keep the
+      // timestamp form.
       const targetIndex = (overrides?.targetIndex ?? paramsBase?.targetIndex)
       const target = typeof targetIndex === 'number' ? planCandidates(upstreamRecords).find(c => c.index === targetIndex) : undefined
-      const artifactName = target !== undefined && args.artifactName === undefined
+      if (target !== undefined && args.artifactName !== undefined) {
+        throw new Error(`pack "${pack.manifest.name}" is per-function: omit artifactName — the engine names this artifact ${pack.manifest.name}-${target.funcId} from the upstream plan (index ${String(targetIndex)}, funcId ${target.funcId})`)
+      }
+      const artifactName = target !== undefined
         ? `${pack.manifest.name}-${target.funcId}`
         : args.artifactName ?? `${pack.manifest.name}-${Date.now()}`
       const result = await generateDocument({
