@@ -92,7 +92,7 @@ plan 整需求一份；req/func/tech 与 plan 的 functions **一一对应，份
 
 - `targetIndex`（req/func/tech）**必填参数**，无默认；缺失即 fail loud，错误信息列出上游全部候选（index、funcId、l2Name）。prompt 中"未指明时选 index 1"删除。
 - **命名契约**：per-function 产物命名权在引擎，显式传 `artifactName` 响亮报错（真实会话手起名撞车、一份产物被静默覆盖），同名覆盖在机制上不可能发生，重生成幂等。声明了 `artifactPrefix`（REQ/FUNC/TECH/PLAN）的 pack，产物名 = `<PREFIX>-<topicNo>-<NN>`（NN = targetIndex 两位右对齐）；未声明的保持 `<pack>-<funcId>`。
-- **funcId 编号**：funcId = `<topicNo>-<序号>`（规则 plan/func-id-numbering）——topicNo 由引擎按 pack 参数 `topicNoPattern`（默认提取 topic 名中字母开头、截至数字段，如 `KERQ-352-favorites` → `KERQ-352`）从 topic 名提取并注入派生参数，沿回执继承；序号两位右对齐（01-99，100 起无引导零）且等于功能在 plan 数组中的位置。提取不到编号时优雅降级（规则跳过、命名回退 `<pack>-<funcId>`）。funcId 不再承载模块编号链——一个模块可承载多个功能，模块对账改按模块名（l2Name，规则 plan/context-alignment）。
+- **funcId 编号**：funcId = `<topicNo>-<序号>`（规则 plan/func-id-numbering）——topicNo 由引擎按参数 `topicNoPattern`（默认提取 topic 名中字母开头、截至数字段，如 `KERQ-352-favorites` → `KERQ-352`）从 topic 名提取并注入派生参数；pattern 声明在链头 cosmic-context（confirm: true，链头参数表可见、随回执全链继承——编号规范属项目级知识，应源于项目参考素材）；序号两位右对齐（01-99，100 起无引导零）且等于功能在 plan 数组中的位置。提取不到编号时优雅降级（规则跳过、命名回退 `<pack>-<funcId>`）。funcId 不再承载模块编号链——一个模块可承载多个功能，模块对账改按模块名（l2Name，规则 plan/context-alignment）。
 - 锚定规则（三点对齐 index/funcId/desiredCfps）保持不变，逐产物照常校验。
 
 ## 覆盖账目

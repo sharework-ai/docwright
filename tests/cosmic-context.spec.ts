@@ -56,7 +56,8 @@ describe('cosmic-context pack shape', () => {
     expect(context.manifest.reuse).toBe(true)
     expect(context.manifest.consumes).toEqual([])
     expect(context.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(context.manifest.params ?? {})).toEqual(['moduleLevels'])
+    expect(Object.keys(context.manifest.params ?? {})).toEqual(['topicNoPattern', 'moduleLevels'])
+    expect(context.manifest.params!.topicNoPattern!.confirm).toBe(true)
     expect(context.manifest.params!.moduleLevels!.default).toBe(2)
     expect(context.functionRules.map(r => r.id)).toEqual([
       'context/module-code-unique',
@@ -94,7 +95,7 @@ describe('cosmic-context golden sample', () => {
       config: { provider: 'p', model: 'm', workspaceRoot: await mkdtemp(join(tmpdir(), 'docwright-ctx-')), maxIterations: 3, promptTokenBudget: 60_000 } as never,
       ctx: { llm: scriptedLlm([JSON.stringify(context.goldenSample)]) },
     }
-    const out = await defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-context', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'context' } as never, { signal } as never) as { artifactPath: string; receipt: { isValid: boolean; packVersion: string } }
+    const out = await defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-context', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'context', confirm: true } as never, { signal } as never) as { artifactPath: string; receipt: { isValid: boolean; packVersion: string } }
     expect(out.artifactPath).toContain(`${deps.config.workspaceRoot}/context/`)
     expect(out.receipt.isValid).toBe(true)
     // The golden plan validates against the generated context via the chain rule.

@@ -126,7 +126,7 @@ describe('session-driven roots end to end (doc_generate via tool)', () => {
       },
     })
     await tool.execute(
-      { pack: 'cosmic-context', materials: ['#!inline\n项目背景素材'], language: 'zh-CN', artifactName: 'context' } as never,
+      { pack: 'cosmic-context', materials: ['#!inline\n项目背景素材'], language: 'zh-CN', artifactName: 'context', confirm: true } as never,
       { agent: { session: { cwd: sessionWs } }, signal } as never,
     )
     const out = await tool.execute(
