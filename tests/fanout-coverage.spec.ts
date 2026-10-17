@@ -74,7 +74,7 @@ describe('fan-out contract: targetIndex selection', () => {
     await seedContext(deps as never)
     await gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     await expect(gen.execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true, artifactName: 'req' } as never, { signal } as never))
-      .rejects.toThrow(/per-function: omit artifactName[\s\S]*cosmic-req-USR-FAV/)
+      .rejects.toThrow(/engine-named \(artifactPrefix "REQ"\)[\s\S]*REQ-<topicNo>/)
   })
 
   it('numbers funcIds from the topic and names artifacts REQ-<topicNo>-<NN>', async () => {
@@ -113,6 +113,15 @@ describe('fan-out contract: targetIndex selection', () => {
     await writeFile(join(dir, 'templates', 'zh-CN.hbs'), 't', 'utf8')
     await writeFile(join(dir, 'samples', 'golden.json'), '{}', 'utf8')
     await expect(import('../src/pack-loader.ts').then(m => m.loadPacks(root, {}))).rejects.toThrow(/artifactPrefix must be/)
+  })
+
+  it('refuses an explicit artifactName on a prefixed whole-requirement call', async () => {
+    const { plan } = await packs()
+    const deps = await makeDeps([JSON.stringify(plan.goldenSample)])
+    const gen = defineDocGenerateTool(deps as never)
+    await seedContext(deps as never)
+    await expect(gen.execute({ pack: 'cosmic-plan', topic: 'KERQ-352-x', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never))
+      .rejects.toThrow(/engine-named \(artifactPrefix "PLAN"\)[\s\S]*PLAN-KERQ-352/)
   })
 
   it('generates the second function when targetIndex picks it', async () => {

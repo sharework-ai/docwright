@@ -582,10 +582,10 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       // timestamp form.
       const targetIndex = (overrides?.targetIndex ?? paramsBase?.targetIndex)
       const target = typeof targetIndex === 'number' ? planCandidates(upstreamRecords).find(c => c.index === targetIndex) : undefined
-      if (target !== undefined && args.artifactName !== undefined) {
-        throw new Error(`pack "${pack.manifest.name}" is per-function: omit artifactName — the engine names this artifact ${pack.manifest.name}-${target.funcId} from the upstream plan (index ${String(targetIndex)}, funcId ${target.funcId})`)
-      }
       const topicNo = overrides?.topicNo ?? paramsBase?.topicNo
+      if (pack.manifest.artifactPrefix !== undefined && args.artifactName !== undefined && (target !== undefined || typeof topicNo === 'string')) {
+        throw new Error(`pack "${pack.manifest.name}" is engine-named (artifactPrefix "${pack.manifest.artifactPrefix}"): omit artifactName${target !== undefined ? ` — this artifact is ${pack.manifest.artifactPrefix}-${topicNo ?? '<topicNo>'}-${String(targetIndex).padStart(2, '0')}` : ` — this artifact is ${pack.manifest.artifactPrefix}-${topicNo ?? '<topicNo>'}`}`)
+      }
       const artifactName = target !== undefined
         ? (typeof pack.manifest.artifactPrefix === 'string' && typeof topicNo === 'string'
             ? `${pack.manifest.artifactPrefix}-${topicNo}-${String(target.index).padStart(2, '0')}`
