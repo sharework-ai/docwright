@@ -289,14 +289,19 @@ describe('upstream riders (verifyUpstreamReceipts)', () => {
     const numbered = JSON.parse(JSON.stringify(packs.get('cosmic-plan')!.goldenSample)) as { functions: Array<{ funcId: string }> }
     numbered.functions[0]!.funcId = 'KERQ-352-01'
     numbered.functions[1]!.funcId = 'KERQ-352-02'
-    await generatePlan(deps, numbered, { topic: 'KERQ-352 收藏夹' })
+    await seedContext(deps)
+    deps.ctx.llm = scriptedLlm([JSON.stringify(numbered)]).llm
+    await defineDocGenerateTool(deps).execute({
+      pack: 'cosmic-plan', topic: 'KERQ-352 收藏夹', materials: ['#!inline\nx'], language: 'zh-CN',
+      upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true,
+    } as never, { signal } as never)
     const reqPack = packs.get('cosmic-req')!
     const reqReply = JSON.parse(JSON.stringify(reqPack.goldenSample)) as { funcId: string }
     reqReply.funcId = 'KERQ-352-01'
     deps.ctx.llm = scriptedLlm([JSON.stringify(reqReply)]).llm
     const out = await defineDocGenerateTool(deps).execute({
       pack: 'cosmic-req', materials: [], language: 'zh-CN', topic: 'KERQ-352 收藏夹',
-      upstream: ['KERQ-352 收藏夹/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
+      upstream: ['KERQ-352 收藏夹/output/PLAN-KERQ-352.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(true)
     await expect(defineDocGenerateTool(deps).execute({
