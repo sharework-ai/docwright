@@ -107,7 +107,7 @@ describe('API conveniences: optional materials and artifact summary', () => {
       yield { type: 'block-end', index: 0, block: { type: 'text', text: reply } }
       yield { type: 'finish', reason: 'stop' }
     }
-    const out = await gen.execute({ pack: 'cosmic-req', topic: 'topic-a', language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true, artifactName: 'req',
+    const out = await gen.execute({ pack: 'cosmic-req', topic: 'topic-a', language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean }; summary: { functions?: number; totalCfps?: number } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.summary).toEqual({})

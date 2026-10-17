@@ -34,7 +34,7 @@ Zero-arg discovery tool: lists installed packs as `[{ name, version, description
 | `materials` | string[]? | paths relative to the materials root (default `<workspace>/references/`), or inline text starting with `#!inline`; optional for chained packs whose upstream carries the context |
 | `language` | string? | default: config `defaultLanguage`, else the pack's first language |
 | `upstream` | string[]? | workspace-relative paths to upstream artifacts; each must carry a green sidecar receipt (hash-verified, pack type matched against `consumes`, and recording the installed pack version — see `upstreamVersionPolicy`). Extra green artifacts of installed packs may ride along as prompt context (e.g. the project context beside a plan); at least one consumed type is required |
-| `artifactName` | string? | output base name (default `<pack>-<timestamp>`) |
+| `artifactName` | string? | output base name (default `<pack>-<timestamp>`); refused on per-function calls — those are engine-named `<pack>-<funcId>` from the upstream plan |
 | `maxRounds` | number? | round cap for this call (user intent via the model); clamped to config `maxRoundsCeiling` |
 | `topic` | string? | topic directory name (a plain `[A-Za-z0-9._-]` segment, e.g. the requirement id): relocates the output root to `<topic>/output/` and the materials root to `<topic>/references/`; REQUIRED by the cosmic chain stages (plan/req/func/tech — one requirement per topic), ignored by workspace-scope packs |
 | `force` | boolean? | bypass the reuse pre-check and rebuild |

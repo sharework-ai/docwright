@@ -67,6 +67,16 @@ describe('fan-out contract: targetIndex selection', () => {
     expect(out.coverage).toEqual({ covered: 1, total: 2, missing: ['USR-DEL'] })
   })
 
+  it('refuses an explicit artifactName on a per-function call (naming is engine-owned)', async () => {
+    const { req } = await packs()
+    const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample), JSON.stringify(req.goldenSample)])
+    const gen = defineDocGenerateTool(deps as never)
+    await seedContext(deps as never)
+    await gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
+    await expect(gen.execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true, artifactName: 'req' } as never, { signal } as never))
+      .rejects.toThrow(/per-function: omit artifactName[\s\S]*cosmic-req-USR-FAV/)
+  })
+
   it('generates the second function when targetIndex picks it', async () => {
     const { req } = await packs()
     const second = JSON.parse(JSON.stringify(req.goldenSample)) as { index: number; funcId: string; desiredCfps: number }
