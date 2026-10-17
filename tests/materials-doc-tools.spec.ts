@@ -54,6 +54,24 @@ describe('materials', () => {
     await expect(readMaterials([], '/tmp', '/tmp')).resolves.toEqual([])
   })
 
+  it('accepts a ref that redundantly repeats the materials root directory name', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'docwright-mat-'))
+    await mkdir(join(root, 'references'), { recursive: true })
+    await writeFile(join(root, 'references', 'arch.md'), 'arch content', 'utf8')
+    expect(await readMaterials(['references/arch.md'], root, join(root, 'references'))).toEqual(['arch content'])
+  })
+
+  it('ENOENT error lists available names in the root and in workspace references', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'docwright-mat-'))
+    await mkdir(join(root, 'references'), { recursive: true })
+    await mkdir(join(root, 'topic', 'references'), { recursive: true })
+    await writeFile(join(root, 'references', 'req.md'), 'req content', 'utf8')
+    await expect(readMaterials(['missing.md'], root, join(root, 'topic', 'references')))
+      .rejects.toThrow(/material not readable: missing\.md[\s\S]*available: \(no files\)[\s\S]*workspace references\/ has: req\.md/)
+    await expect(readMaterials(['also-missing.md'], root, join(root, 'references')))
+      .rejects.toThrow(/available: req\.md/)
+  })
+
   it('rejects a missing file with a readable error', async () => {
     const root = await mkdtemp(join(tmpdir(), 'docwright-ws-'))
     await expect(readMaterials(['nope.md'], root, root)).rejects.toThrow(/not readable/)

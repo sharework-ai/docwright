@@ -1,5 +1,5 @@
-import { readFile, realpath } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { readFile, readdir, realpath } from 'node:fs/promises'
+import { basename, isAbsolute, relative, resolve } from 'node:path'
 import { normalizeWindowsPath } from './paths.ts'
 
 /**
@@ -11,6 +11,31 @@ import { normalizeWindowsPath } from './paths.ts'
  * the workspace that points outside it is rejected too). Both keep secrets
  * out of prompts.
  */
+/** Sorted file names under dir (capped); explains a missing dir instead of throwing. */
+async function listFiles(dir: string): Promise<string> {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true })
+    const names = entries.filter(e => e.isFile()).map(e => e.name).sort()
+    return names.length === 0 ? '(no files)' : names.slice(0, 8).join(', ')
+  } catch {
+    return '(directory does not exist)'
+  }
+}
+
+/** Loud failure with recovery hints: what exists where, and the no-prefix rule. */
+async function notReadable(ref: string, abs: string, materialBase: string, root: string, cause: unknown): Promise<Error> {
+  const parts = [
+    `material not readable: ${ref}`,
+    `resolved: ${abs}`,
+    `materials root: ${materialBase}`,
+    `available: ${await listFiles(materialBase)}`,
+  ]
+  const defaultRoot = resolve(root, 'references')
+  if (resolve(materialBase) !== defaultRoot) parts.push(`workspace references/ has: ${await listFiles(defaultRoot)}`)
+  parts.push(`hint: refs are relative to the materials root — do not repeat the root directory name inside the ref; cause: ${(cause as Error).message}`)
+  return new Error(parts.join('; '))
+}
+
 export async function readMaterials(
   refs: readonly string[],
   workspaceRoot: string,
@@ -35,11 +60,27 @@ export async function readMaterials(
     if (lexicalRel === '..' || lexicalRel.startsWith('../') || isAbsolute(lexicalRel)) {
       throw new Error(`material path escapes the workspace root: ${ref} (root: ${root})`)
     }
-    let real: string
+    let real: string | undefined
     try {
       real = await realpath(abs)
     } catch (error) {
-      throw new Error(`material not readable: ${ref} (resolved: ${abs}; materials root: ${materialBase}; cause: ${(error as Error).message})`)
+      // Models habitually prefix refs with the materials root's directory
+      // name ("references/x.md" under a references/ root double-resolves to
+      // references/references/x.md). When stripping that leading segment
+      // lands on an existing in-root file, accept it; otherwise fail loud
+      // with the available names so the retry can pick a real one.
+      const prefix = `${basename(materialBase)}/`
+      if (ref.startsWith(prefix)) {
+        const strippedAbs = resolve(materialBase, ref.slice(prefix.length))
+        const strippedRel = relative(root, strippedAbs)
+        const contained = strippedRel !== '..' && !strippedRel.startsWith('../') && !isAbsolute(strippedRel)
+        if (contained) {
+          try {
+            real = await realpath(strippedAbs)
+          } catch { /* fall through to the loud error below */ }
+        }
+      }
+      if (real === undefined) throw await notReadable(ref, abs, materialBase, root, error)
     }
     const realRel = relative(root, real)
     if (realRel === '..' || realRel.startsWith('../') || isAbsolute(realRel)) {
