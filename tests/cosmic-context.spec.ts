@@ -57,7 +57,7 @@ describe('cosmic-context pack shape', () => {
     expect(context.manifest.consumes).toEqual([])
     expect(context.manifest.languages).toEqual(['zh-CN', 'en-US'])
     expect(Object.keys(context.manifest.params ?? {})).toEqual(['topicNoPattern', 'moduleLevels'])
-    expect(context.manifest.params!.topicNoPattern!.confirm).toBe(true)
+    expect(context.manifest.params!.topicNoPattern!.confirm).toBe(false)
     expect(context.manifest.params!.moduleLevels!.default).toBe(2)
     expect(context.functionRules.map(r => r.id)).toEqual([
       'context/module-code-unique',
