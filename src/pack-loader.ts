@@ -31,7 +31,9 @@ function assertParamSpec(raw: unknown, dir: string, name: string): ParamSpec {
     if (s[flag] !== undefined && typeof s[flag] !== 'boolean') throw new Error(`${where}.${flag} must be a boolean when present`)
   }
   if (s.required === true) {
-    if (s.default !== undefined) throw new Error(`${where}.default is forbidden on a required param (required means the caller states the value; drop the default or drop required)`)
+    // required + default is legal: a chain-necessary param whose default is
+    // the standing value (always resolves, never confirm-gates on its own);
+    // pure required (no default) still fails loud without an explicit value.
   } else if (s.default !== undefined) {
     const defaultMatches = s.type === 'number' ? typeof s.default === 'number' && Number.isFinite(s.default) : s.type === 'object' ? typeof s.default === 'object' && s.default !== null && !Array.isArray(s.default) : typeof s.default === s.type
     if (!defaultMatches) throw new Error(`${where}.default must match type "${s.type}"`)
