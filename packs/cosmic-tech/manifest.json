@@ -40,6 +40,15 @@
       "confirm": true,
       "description": "Per-function CFP ceiling {value, min, max}: value bounds any single estimatedCfps from above — a module larger than this must be split into several module functions (rule plan/cfp-func-range); inherited from the upstream receipt and re-recorded for the chain"
     },
+    "topicNo": {
+      "type": "string",
+      "description": "Derived by the engine: requirement number extracted from the topic name via topicNoPattern (explicit values override); inherited along the chain; drives <artifactPrefix>-<topicNo>-<NN> artifact naming"
+    },
+    "topicNoPattern": {
+      "type": "string",
+      "default": "^([A-Za-z][A-Za-z0-9]*[-_ ]?[0-9]+)",
+      "description": "Regex (first capture group, else whole match) extracting the requirement number from the topic name, e.g. topic 'KERQ-352 收藏夹' → KERQ-352"
+    },
     "cfpTotal": {
       "type": "object",
       "confirm": true,
@@ -59,5 +68,6 @@
       "description": "1-based position of the target function in the upstream plan functions array; no default — pick from the candidates listed when missing"
     }
   },
-  "requiresTopic": true
+    "requiresTopic": true,
+  "artifactPrefix": "TECH"
 }

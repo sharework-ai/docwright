@@ -111,7 +111,7 @@ describe('cosmic-tech pack shape', () => {
     const { tech } = await packs()
     expect(tech.manifest.consumes).toEqual(['cosmic-func'])
     expect(tech.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(tech.manifest.params ?? {}).sort()).toEqual(['cfpMax', 'cfpMin', 'cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'targetIndex'])
+    expect(Object.keys(tech.manifest.params ?? {}).sort()).toEqual(['cfpMax', 'cfpMin', 'cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'targetIndex', 'topicNo', 'topicNoPattern'])
     expect(tech.functionRules.map(r => r.id)).toEqual([
       'tech/func-alignment',
       'tech/movement-pattern',

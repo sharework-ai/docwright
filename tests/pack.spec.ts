@@ -25,7 +25,7 @@ describe('pack loader', () => {
       expect(pack.templates.get(lang)).toBeTruthy()
       expect((pack.rules.get(lang) ?? []).length).toBeGreaterThan(0)
     }
-    expect(pack.functionRules.length).toBe(8)
+    expect(pack.functionRules.length).toBe(9)
   })
 
   it('golden sample passes all-green in both languages', async () => {

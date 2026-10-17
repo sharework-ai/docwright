@@ -475,9 +475,23 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       // LLM cost — resolved before the route check. Explicit params always
       // gate; confirm-flagged params gate until confirmed at the chain head,
       // after which downstream stages inherit the recorded values.
-      const overrides = normalizeParams(args.params)
+      let overrides = normalizeParams(args.params)
       const paramsProvided = overrides !== undefined && Object.keys(overrides).length > 0
       const paramsBase = mergeUpstreamParams(upstreamRecords)
+      // Derived param topicNo: extracted from the topic name via the pack's
+      // topicNoPattern (explicit params.topicNo wins; the inherited value
+      // also wins — downstream stages re-extract identically anyway). When
+      // absent (no topic or no match) the numbering rule skips and naming
+      // falls back to <pack>-<funcId>.
+      if (typeof args.topic === 'string' && pack.manifest.params?.topicNoPattern !== undefined && overrides?.topicNo === undefined && paramsBase?.topicNo === undefined) {
+        const pattern = overrides?.topicNoPattern ?? paramsBase?.topicNoPattern ?? pack.manifest.params.topicNoPattern.default
+        try {
+          const m = typeof pattern === 'string' ? args.topic.match(new RegExp(pattern, 'u')) : undefined
+          if (m) (overrides ??= {}).topicNo = m[1] ?? m[0]
+        } catch (error) {
+          throw new Error(`topicNoPattern is not a valid regex: ${(error as Error).message}`)
+        }
+      }
       const preview = previewParams(pack, overrides, paramsBase)
       const confirmNames = Object.entries(pack.manifest.params ?? {}).filter(([, spec]) => spec.confirm === true).map(([name]) => name)
       const satisfiedUpstream = confirmNames.length > 0 && paramsBase !== undefined && confirmNames.every(name => paramsBase[name] !== undefined)
@@ -558,9 +572,14 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       if (target !== undefined && args.artifactName !== undefined) {
         throw new Error(`pack "${pack.manifest.name}" is per-function: omit artifactName — the engine names this artifact ${pack.manifest.name}-${target.funcId} from the upstream plan (index ${String(targetIndex)}, funcId ${target.funcId})`)
       }
+      const topicNo = overrides?.topicNo ?? paramsBase?.topicNo
       const artifactName = target !== undefined
-        ? `${pack.manifest.name}-${target.funcId}`
-        : args.artifactName ?? `${pack.manifest.name}-${Date.now()}`
+        ? (typeof pack.manifest.artifactPrefix === 'string' && typeof topicNo === 'string'
+            ? `${pack.manifest.artifactPrefix}-${topicNo}-${String(target.index).padStart(2, '0')}`
+            : `${pack.manifest.name}-${target.funcId}`)
+        : args.artifactName ?? (typeof pack.manifest.artifactPrefix === 'string' && typeof topicNo === 'string'
+            ? `${pack.manifest.artifactPrefix}-${topicNo}`
+            : `${pack.manifest.name}-${Date.now()}`)
       const result = await generateDocument({
         pack,
         language,

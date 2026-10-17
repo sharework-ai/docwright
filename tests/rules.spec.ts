@@ -69,13 +69,13 @@ describe('mutation tests (guardrail-is-real)', () => {
     expect(issues.some(i => i.ruleId.includes('total-cfps'))).toBe(true)
   })
 
-  it('catches a bad funcId format (pattern family)', async () => {
+  it('catches a funcId that violates the topicNo numbering', async () => {
     const pack = await cosmic()
     const service = new DocService(pack, 'zh-CN')
     const broken = clone(pack.goldenSample) as { functions: Array<Record<string, unknown>> }
-    broken.functions[0]!.funcId = 'bad id!'
-    const issues = service.validate(broken)
-    expect(issues.some(i => i.message.includes('pattern') || i.ruleId.includes('pattern'))).toBe(true)
+    broken.functions[0]!.funcId = 'KERQ-352-99'
+    const issues = service.validate(broken, { topicNo: 'KERQ-352' })
+    expect(issues.some(i => i.ruleId.includes('func-id-numbering'))).toBe(true)
   })
 
   it('every ERROR issue carries a suggestion (DX contract)', async () => {

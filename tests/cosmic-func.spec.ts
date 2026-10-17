@@ -78,7 +78,7 @@ describe('cosmic-func pack shape', () => {
     const { func } = await packs()
     expect(func.manifest.consumes).toEqual(['cosmic-req'])
     expect(func.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(func.manifest.params ?? {}).sort()).toEqual(['cfpMax', 'cfpMin', 'cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'targetIndex'])
+    expect(Object.keys(func.manifest.params ?? {}).sort()).toEqual(['cfpMax', 'cfpMin', 'cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'targetIndex', 'topicNo', 'topicNoPattern'])
     expect(func.functionRules.map(r => r.id)).toEqual([
       'func/originator-receiver-distinct',
       'func/process-name-unique',

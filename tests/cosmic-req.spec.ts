@@ -86,7 +86,7 @@ describe('cosmic-req pack shape', () => {  it('declares the chain and the three 
     const { req } = await packs()
     expect(req.manifest.consumes).toEqual(['cosmic-plan'])
     expect(req.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(req.manifest.params ?? {}).sort()).toEqual(['cfpMax', 'cfpMin', 'cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'cfpsPerRule', 'funcDescMaxLength', 'functionalUserRoles', 'targetIndex'])
+    expect(Object.keys(req.manifest.params ?? {}).sort()).toEqual(['cfpMax', 'cfpMin', 'cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'cfpsPerRule', 'funcDescMaxLength', 'functionalUserRoles', 'targetIndex', 'topicNo', 'topicNoPattern'])
     expect(req.functionRules.map(r => r.id)).toEqual(['req/functional-user-roles', 'req/business-rule-count', 'req/plan-alignment'])
   })
 

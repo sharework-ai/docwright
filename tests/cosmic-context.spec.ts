@@ -190,15 +190,15 @@ describe('plan/context-alignment (chain head reconciliation)', () => {
     void context
   })
 
-  it('a modified function must reference an existing module code', async () => {
+  it('a modified function must reference an existing module name', async () => {
     const { context, plan } = await packs()
     const draft = mutate(plan.goldenSample, d => {
       ;(d.functions as Array<{ changeKind: string }>)[0]!.changeKind = 'modified'
     })
     expect(issueRuleIds(validateOf(plan, 'zh-CN', draft, planParams(plan), contextUpstream(context.goldenSample)))).toContain('plan/context-alignment')
-    // Pointing the modified function at an existing module passes the rule.
+    // Pointing the modified function at an existing module name passes the rule.
     const existing = mutate(draft, d => {
-      ;(d.functions as Array<{ funcId: string }>)[0]!.funcId = 'USR-MGT'
+      ;(d.functions as Array<{ l2Name: string }>)[0]!.l2Name = '用户管理'
     })
     expect(issueRuleIds(validateOf(plan, 'zh-CN', existing, planParams(plan), contextUpstream(context.goldenSample)))).not.toContain('plan/context-alignment')
   })
@@ -206,19 +206,11 @@ describe('plan/context-alignment (chain head reconciliation)', () => {
   it('an added function must not collide with an existing code and follows the level convention', async () => {
     const { context, plan } = await packs()
     const colliding = mutate(plan.goldenSample, d => {
-      ;(d.functions as Array<{ funcId: string }>)[0]!.funcId = 'USR-AUTH' // AUTH exists in the context tree
+      ;(d.functions as Array<{ l2Name: string }>)[0]!.l2Name = '认证授权' // an existing context module name
     })
     expect(issueRuleIds(validateOf(plan, 'zh-CN', colliding, planParams(plan), contextUpstream(context.goldenSample)))).toContain('plan/context-alignment')
-    // The golden level-2 convention is alphabetic: numeric leaf codes violate it.
-    const violating = mutate(plan.goldenSample, d => {
-      const functions = d.functions as Array<{ funcId: string }>
-      functions[0]!.funcId = 'USR-01'
-      functions[1]!.funcId = 'USR-02'
-    })
-    expect(issueRuleIds(validateOf(plan, 'zh-CN', violating, planParams(plan), contextUpstream(context.goldenSample)))).toContain('plan/context-alignment')
-    // Under a numeric level-2 convention the same numeric leaf codes pass.
-    const numeric = mutate(context.goldenSample, d => { d.moduleIdConventionForLevel2 = 'numeric' })
-    expect(issueRuleIds(validateOf(plan, 'zh-CN', violating, planParams(plan), contextUpstream(numeric)))).not.toContain('plan/context-alignment')
+    // The golden's added modules use fresh names: the rule stays green.
+    expect(issueRuleIds(validateOf(plan, 'zh-CN', plan.goldenSample, planParams(plan), contextUpstream(context.goldenSample)))).not.toContain('plan/context-alignment')
   })
 
   it('plan/name-hierarchy: l2Name/l3Name requiredness and the funcId segment floor follow moduleLevels', async () => {
