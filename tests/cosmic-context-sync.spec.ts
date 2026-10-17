@@ -114,13 +114,13 @@ describe('cosmic-context-sync deterministic generation', () => {
     // The topic plan lands under <topic>/output/.
     deps.ctx.llm = scriptedLlm([JSON.stringify(plan.goldenSample)])
     await defineDocGenerateTool(deps as never).execute({
-      pack: 'cosmic-plan', materials: ['#!inline\n需求素材'], language: 'zh-CN', artifactName: 'plan', topic: 'req-2026-001', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true,
+      pack: 'cosmic-plan', materials: ['#!inline\n需求素材'], language: 'zh-CN', artifactName: 'plan', topic: 'sync-topic', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true,
     } as never, { signal } as never)
     // Sync: workspace scope ignores the topic; both upstreams are anchored.
     deps.ctx.llm = scriptedLlm([JSON.stringify((await packs()).sync.goldenSample)])
     const out = await defineDocGenerateTool(deps as never).execute({
-      pack: 'cosmic-context-sync', materials: [], language: 'zh-CN', artifactName: 'context', topic: 'req-2026-001',
-      upstream: ['context/context.json', 'req-2026-001/output/plan.json'],
+      pack: 'cosmic-context-sync', materials: [], language: 'zh-CN', artifactName: 'context', topic: 'sync-topic',
+      upstream: ['context/context.json', 'sync-topic/output/plan.json'],
     } as never, { signal } as never) as { artifactPath: string; reused?: boolean; receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string }>; params?: Record<string, unknown> } }
     expect(out.artifactPath).toBe(join((deps.config as { workspaceRoot: string }).workspaceRoot, 'context', 'context.json'))
     expect(out.reused).toBeUndefined() // reuse: false — sync is an action, never short-circuited

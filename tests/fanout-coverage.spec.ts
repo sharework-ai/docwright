@@ -77,6 +77,44 @@ describe('fan-out contract: targetIndex selection', () => {
       .rejects.toThrow(/per-function: omit artifactName[\s\S]*cosmic-req-USR-FAV/)
   })
 
+  it('numbers funcIds from the topic and names artifacts REQ-<topicNo>-<NN>', async () => {
+    const { plan, req } = await packs()
+    const planScript = JSON.parse(JSON.stringify(plan.goldenSample)) as { functions: Array<{ funcId: string }> }
+    planScript.functions[0]!.funcId = 'KERQ-352-01'
+    planScript.functions[1]!.funcId = 'KERQ-352-02'
+    const reqScript = JSON.parse(JSON.stringify(req.goldenSample)) as { funcId: string }
+    reqScript.funcId = 'KERQ-352-01'
+    const deps = await makeDeps([JSON.stringify(planScript), JSON.stringify(reqScript)])
+    const gen = defineDocGenerateTool(deps as never)
+    await seedContext(deps as never)
+    await gen.execute({ pack: 'cosmic-plan', topic: 'KERQ-352-favorites', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true } as never, { signal } as never)
+    const out = await gen.execute({ pack: 'cosmic-req', topic: 'KERQ-352-favorites', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['KERQ-352-favorites/output/PLAN-KERQ-352.json'], params: { targetIndex: 1 }, confirm: true } as never, { signal } as never) as { artifactPath: string; receipt: { isValid: boolean } }
+    expect(out.receipt.isValid).toBe(true)
+    expect(out.artifactPath.endsWith('REQ-KERQ-352-01.json')).toBe(true)
+  })
+
+  it('fails loud on an invalid topicNoPattern regex', async () => {
+    const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample)])
+    const gen = defineDocGenerateTool(deps as never)
+    await seedContext(deps as never)
+    await expect(gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET, topicNoPattern: '(' }, confirm: true } as never, { signal } as never))
+      .rejects.toThrow(/topicNoPattern is not a valid regex/)
+  })
+
+  it('fails loud on a malformed artifactPrefix at load time', async () => {
+    const { mkdir, writeFile } = await import('node:fs/promises')
+    const root = await mkdtemp(join(tmpdir(), 'docwright-prefix-'))
+    const dir = join(root, 'bad-pack')
+    for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
+    await writeFile(join(dir, 'manifest.json'), JSON.stringify({ name: 'bad-pack', version: '1', description: 'd', scope: 'topic', languages: ['zh-CN'], artifactPrefix: '!!!' }), 'utf8')
+    await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
+    await writeFile(join(dir, 'rules', 'zh-CN.json'), '[]', 'utf8')
+    await writeFile(join(dir, 'prompts', 'zh-CN.md'), 'C {{materials}}', 'utf8')
+    await writeFile(join(dir, 'templates', 'zh-CN.hbs'), 't', 'utf8')
+    await writeFile(join(dir, 'samples', 'golden.json'), '{}', 'utf8')
+    await expect(import('../src/pack-loader.ts').then(m => m.loadPacks(root, {}))).rejects.toThrow(/artifactPrefix must be/)
+  })
+
   it('generates the second function when targetIndex picks it', async () => {
     const { req } = await packs()
     const second = JSON.parse(JSON.stringify(req.goldenSample)) as { index: number; funcId: string; desiredCfps: number }

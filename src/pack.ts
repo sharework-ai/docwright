@@ -119,6 +119,12 @@ export interface PackManifest {
    * workspace-scope packs (topic is ignored there) and rejected at load time.
    */
   readonly requiresTopic?: boolean | undefined
+  /**
+   * Stage prefix for engine-named artifacts (e.g. REQ/FUNC/TECH/PLAN):
+   * per-function artifacts become `<prefix>-<topicNo>-<NN>`, whole-scope
+   * ones `<prefix>-<topicNo>`; absent keeps `<pack>-<funcId>` / timestamp.
+   */
+  readonly artifactPrefix?: string | undefined
   /** Declared tunables; declaration is the allowlist — undeclared names are rejected at call time. */
   readonly params?: Readonly<Record<string, ParamSpec>> | undefined
 }

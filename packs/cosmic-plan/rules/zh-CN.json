@@ -18,16 +18,6 @@
     "suggestion": "功能描述超过2000字：拆分功能或精简描述，只保留估算 CFP 所需的处理过程信息。"
   },
   {
-    "id": "plan/func-id-format",
-    "severity": "error",
-    "given": "$.functions[*]",
-    "field": "funcId",
-    "kind": "pattern",
-    "pattern": "^[A-Z0-9]{1,8}(-[A-Z0-9]{1,8})+$",
-    "mustMatch": true,
-    "suggestion": "funcId 格式不合法：使用大写字母/数字分段、段间以连字符分隔、至少两段，每段1-8个字符，如 USR-FAV-01。"
-  },
-  {
     "id": "plan/l1-name-forbidden-keywords",
     "severity": "error",
     "given": "$.functions[*]",

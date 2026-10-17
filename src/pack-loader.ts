@@ -80,6 +80,9 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
   if (m.requiresTopic !== undefined && typeof m.requiresTopic !== 'boolean') {
     throw new Error(`pack ${dir}: manifest.requiresTopic must be a boolean when present`)
   }
+  if (m.artifactPrefix !== undefined && (typeof m.artifactPrefix !== 'string' || !/^[A-Za-z0-9-]{1,12}$/.test(m.artifactPrefix))) {
+    throw new Error(`pack ${dir}: manifest.artifactPrefix must be a 1-12 char [A-Za-z0-9-] string when present`)
+  }
   if (m.maxRounds !== undefined && (!Number.isInteger(m.maxRounds) || m.maxRounds < 1)) {
     throw new Error(`pack ${dir}: manifest.maxRounds must be a positive integer`)
   }
@@ -113,6 +116,7 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
     ...(m.maxRounds === undefined ? {} : { maxRounds: m.maxRounds }),
     ...(m.paramDriftPolicy === undefined ? {} : { paramDriftPolicy: m.paramDriftPolicy }),
     ...(m.requiresTopic === undefined ? {} : { requiresTopic: m.requiresTopic }),
+    ...(m.artifactPrefix === undefined ? {} : { artifactPrefix: m.artifactPrefix }),
     ...(params === undefined ? {} : { params }),
   }
 }

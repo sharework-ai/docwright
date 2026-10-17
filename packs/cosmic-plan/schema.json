@@ -33,7 +33,7 @@
         "properties": {
           "funcId": {
             "type": "string",
-            "description": "Function ID: segments separated by hyphens, each segment 1-8 chars (A-Z, 0-9), at least as many segments as the effective param moduleLevels; the segments are the module code chain of the changed module",
+            "description": "Function ID: <topicNo>-<NN> — the requirement number extracted from the topic name (derived param topicNo, via topicNoPattern) plus the two-digit right-aligned ordinal (01-99, 100+ unpadded) equal to the function's position in functions[]; enforced by rule plan/func-id-numbering",
             "examples": [
               "A-A-01",
               "USR-MGT-01",
