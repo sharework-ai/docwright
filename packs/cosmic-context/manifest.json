@@ -5,13 +5,20 @@
   "consumes": [],
   "scope": "workspace",
   "reuse": true,
-  "languages": ["zh-CN", "en-US"],
+  "languages": [
+    "zh-CN",
+    "en-US"
+  ],
   "params": {
     "topicNoPattern": {
       "type": "string",
       "required": true,
       "default": "^([A-Za-z][A-Za-z0-9]*[-_ ]?[0-9]+)",
       "description": "Regex (first capture group, else whole match) extracting the requirement number from the topic name, e.g. topic 'KERQ-352 收藏夹' → KERQ-352; recorded at the chain head and inherited by every downstream stage — funcId = <topicNo>-<NN>, per-function artifacts are named <artifactPrefix>-<topicNo>-<NN>. The convention itself should come from the project reference materials"
+    },
+    "topicNo": {
+      "type": "string",
+      "description": "Derived param: the engine extracts it from the topic name via topicNoPattern and injects it here (and into every downstream stage via receipt inheritance); do not pass it by hand"
     },
     "moduleLevels": {
       "type": "number",
