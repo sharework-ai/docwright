@@ -37,3 +37,67 @@ pnpm run smoke:host     # pre-release: pack → real dsh host boot → tool asse
 - Loop/tool tests mock the LLM seam (`LlmPort`) with scripted replies.
 - Every rule family in every pack ships with mutation tests (corrupt the golden sample; assert the checker catches it).
 - Receipts are verified by re-hashing (key-order independent canonical JSON).
+
+## Real-session testing via headless browser (self-serve, no human needed)
+
+Unit tests mock the LLM seam and call `execute()` directly, so they miss
+call-shape bugs a real session hits (e.g. the derived-`topicNo` validation
+failure was invisible to tests). Run a real end-to-end against the local dsh
+web service with the gstack headless browser — this is fully scriptable and
+must be done by the agent itself after any tool-contract change.
+
+**Prerequisites (one-time per test round):**
+
+1. Build + restart so the web service loads the new bundle (only restart
+   without build = old code): `pnpm run build` then
+   `bash ~/workspaces/doc-harness/scripts/dsh-web.sh restart`; wait ~12s, get
+   the URL: `.../dsh-web.sh url` (prints `https://dsh.shrwk.com/?token=...`).
+2. Prepare the workspace `~/文档/deepseek-harness/default-workspace/`:
+   `input/` = the user's requirement doc (`req.md`), `references/` = project
+   reference knowledge; CLEAN previous outputs per test need:
+   `rm -rf context/* <topic>/output/*` (old receipts also self-invalidate via
+   the version gate / missing materials manifest, but cleaning makes
+   assertions unambiguous).
+
+**Driving the UI** (gstack headless browser at
+`~/.claude/skills/gstack/browse/dist/browse`, below `$B`):
+
+```sh
+$B goto "<url-with-token>"     # token URL IS the auth; headless needs no cookies
+$B snapshot -i                 # interactive refs (@eN); re-snapshot after every action
+$B click @e10                  # workspace treeitem "默认工作区" — click selects + expands,
+                               # and auto-creates/selects a "新会话"
+$B fill @e22 "<message>"       # composer is a CONTENTEDITABLE DIV, not a textarea —
+                               # plain fill sets the value but the framework ignores it
+$B js "document.querySelector('[contenteditable=true]').dispatchEvent(new InputEvent('input',{bubbles:true}))"
+                               # <- REQUIRED after fill, or the send button stays disabled
+$B click @eN                   # then click 发送消息
+$B text                        # read the conversation; poll with sleep loops for LLM rounds
+```
+
+Gotchas learned the hard way:
+
+- A "预览版说明" modal can block clicks (5s timeouts): dismiss the 继续 button
+  first if clicks time out.
+- `snapshot` refs go stale after navigation/updates — always re-snapshot
+  before clicking.
+- One real LLM round is 10-90s; poll `$B text` in a sleep loop (20s ticks)
+  and grep for the expected reply markers (tool-call names, `reused`,
+  `pendingConfirmation`, error strings) instead of fixed sleeps.
+- Verify engine-level effects on DISK, not only in the UI: receipts under
+  `context/` and `<topic>/output/*.receipt.json` show `materials` manifests,
+  `isValid`, `packVersion`, `upstreamHashes`; a reused call must leave the
+  artifact bytes unchanged and make zero LLM rounds (the session UI shows
+  the round/step counters).
+
+**Standard scenario (covers the reuse + topic + input-dir contracts):**
+
+1. Send a requirement message WITHOUT a topic → the agent must ask for the
+   topic explicitly (never invent one).
+2. Reply with the topic (`KERQ-352 收藏夹`) → agent runs context (from
+   `references/`) → plan (from `input/`, topic-level shadows workspace-level)
+   → req with `targetIndex`.
+3. Ask again to regenerate context and re-run req → both must return
+   `reused: true` with zero LLM rounds; check the receipts on disk.
+4. Screenshot evidence optional; disk receipts are the authoritative
+   assertion.

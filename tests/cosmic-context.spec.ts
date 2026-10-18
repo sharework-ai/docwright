@@ -56,7 +56,7 @@ describe('cosmic-context pack shape', () => {
     expect(context.manifest.reuse).toBe(true)
     expect(context.manifest.consumes).toEqual([])
     expect(context.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(context.manifest.params ?? {})).toEqual(['topicNoPattern', 'topicNo', 'moduleLevels'])
+    expect(Object.keys(context.manifest.params ?? {})).toEqual(['topicNoPattern', 'moduleLevels'])
     expect(context.manifest.params!.topicNoPattern!.required).toBe(true)
     expect(context.manifest.params!.topicNoPattern!.confirm ?? false).toBe(false)
     expect(context.manifest.params!.moduleLevels!.default).toBe(2)
@@ -89,7 +89,7 @@ describe('cosmic-context golden sample', () => {
     }
   })
 
-  it('accepts a topic on the workspace-scope pack: the derived topicNo is declared and lands in the receipt', async () => {
+  it('accepts a topic on the workspace-scope pack without recording a per-topic number', async () => {
     const { context } = await packs()
     const deps = {
       packs: (await loadPacks(packsRoot, {})) as never,
@@ -98,7 +98,9 @@ describe('cosmic-context golden sample', () => {
     }
     const out = await defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-context', topic: 'KERQ-352 收藏夹', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'context', confirm: true } as never, { signal } as never) as { artifactPath: string; receipt: { params?: Record<string, unknown> } }
     expect(out.artifactPath).toContain(`${deps.config.workspaceRoot}/context/`)
-    expect(out.receipt.params?.topicNo).toBe('KERQ-352')
+    // The context artifact is shared across topics: no topic-specific topicNo
+    // may leak into its receipt params.
+    expect(out.receipt.params?.topicNo).toBeUndefined()
   })
 
   it('generates deterministically into context/ and reuses on the next call', async () => {

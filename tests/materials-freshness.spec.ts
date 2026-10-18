@@ -230,7 +230,7 @@ describe('chained reuse pre-check (upstream anchors, addressing, params)', () =>
       generate(upstream, extra = {}) {
         deps.ctx = { llm: scriptedLlm(['{"d":1}']).llm }
         return defineDocGenerateTool(deps).execute({
-          pack: 'ch-pack', topic: 't1', materials: [], language: 'zh-CN', artifactName: 'one', upstream, ...extra,
+          pack: 'ch-pack', topic: 't1', materials: [], language: 'zh-CN', artifactName: 'one', upstream, confirm: true, ...extra,
         } as never, { signal } as never) as never
       },
       async rewriteUpstream(path, content) {

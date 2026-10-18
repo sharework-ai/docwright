@@ -190,6 +190,46 @@ describe('topic parameter (doc_generate roots)', () => {
   })
 })
 
+describe('topic confirmation gate (doc_generate)', () => {
+  it('a topic entering the chain for the first time gates and leads the param table', async () => {
+    const deps = await makeDeps({})
+    await seedContext(deps)
+    deps.ctx.llm = scriptedLlm([JSON.stringify((await loadPacks(packsRoot, {})).get('cosmic-plan')!.goldenSample)]).llm
+    const args: Record<string, unknown> = { ...PLAN_ARGS, params: {} }
+    delete args.confirm
+    const out = await defineDocGenerateTool(deps).execute(args as never, { signal } as never) as { pendingConfirmation: boolean; paramTable: Array<{ name: string; confirm: boolean; value?: unknown }> }
+    expect(out.pendingConfirmation).toBe(true)
+    expect(out.paramTable[0]).toMatchObject({ name: 'topic', confirm: true, value: 'topic-a' })
+  })
+
+  it('confirm executes the chain head and records topicNo for downstream inheritance', async () => {
+    const deps = await makeDeps({})
+    const packs = await loadPacks(packsRoot, {})
+    await seedContext(deps)
+    const numbered = JSON.parse(JSON.stringify(packs.get('cosmic-plan')!.goldenSample)) as { functions: Array<{ funcId: string }> }
+    numbered.functions[0]!.funcId = 'REQ-142-01'
+    numbered.functions[1]!.funcId = 'REQ-142-02'
+    deps.ctx.llm = scriptedLlm([JSON.stringify(numbered)]).llm
+    const headArgs: Record<string, unknown> = { ...PLAN_ARGS, topic: 'REQ-142 favorites', params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } } }
+    delete headArgs.artifactName
+    const out = await defineDocGenerateTool(deps).execute(headArgs as never, { signal } as never) as { pendingConfirmation?: boolean; receipt: { params?: Record<string, unknown>; isValid: boolean } }
+    expect(out.pendingConfirmation).toBeUndefined()
+    expect(out.receipt.isValid).toBe(true)
+    expect(out.receipt.params?.topicNo).toBe('REQ-142')
+    // Downstream inherits the recorded topicNo: no second topic gate in the chain.
+    const reqPack = packs.get('cosmic-req')!
+    const reqReply = JSON.parse(JSON.stringify(reqPack.goldenSample)) as { funcId: string }
+    reqReply.funcId = 'REQ-142-01'
+    deps.ctx.llm = scriptedLlm([JSON.stringify(reqReply)]).llm
+    const down = await defineDocGenerateTool(deps).execute({
+      pack: 'cosmic-req', topic: 'REQ-142 favorites', materials: [], language: 'zh-CN',
+      upstream: ['REQ-142 favorites/output/PLAN-REQ-142.json'], params: { targetIndex: 1 },
+    } as never, { signal } as never) as { pendingConfirmation?: boolean; receipt: { isValid: boolean } }
+    expect(down.pendingConfirmation).toBeUndefined()
+    expect(down.receipt.isValid).toBe(true)
+  })
+})
+
 describe('workspace reuse pre-check (doc_generate)', () => {
   it('returns the green hash-intact artifact without calling the LLM', async () => {
     const root = await mkdtemp(join(tmpdir(), 'docwright-reuse-'))

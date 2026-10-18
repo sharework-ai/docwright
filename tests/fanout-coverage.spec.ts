@@ -51,7 +51,7 @@ describe('fan-out contract: targetIndex selection', () => {
     const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample)])
     await seedContext(deps as never)
     await defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
-    await expect(defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'req', upstream: ['topic-a/output/plan.json'],
+    await expect(defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'req', upstream: ['topic-a/output/plan.json'], confirm: true,
     } as never, { signal } as never)).rejects.toThrow(/missing required pack params for "cosmic-req": targetIndex.*Candidates from the upstream plan: 1\. USR-FAV \(添加收藏\); 2\. USR-DEL \(删除收藏\)/)
   })
 
@@ -231,7 +231,7 @@ describe('doc_chain_status: coverage accounting', () => {
       pack: 'cosmic-plan', packVersion: '0.6.0', artifactHash: artifactHashOf({}), isValid: true,
       params: { cfpTotal: { value: 1, downFactor: 1, upFactor: 1 }, cfpPerFunc: { value: 1, min: 1, max: 2 }, cfpMin: { value: 1, min: 1, max: 1 }, cfpMax: { value: 2, min: 1, max: 3 } },
     }), 'utf8')
-    await expect(defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['output/shapeless.json'],
+    await expect(defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['output/shapeless.json'], confirm: true,
     } as never, { signal } as never)).rejects.toThrow(/missing required pack params for "cosmic-req": targetIndex/)
     // Chain status with no output directory at all: empty matrix, no crash.
     const ws2 = await mkdtemp(join(tmpdir(), 'docwright-fanout-noout-'))

@@ -469,7 +469,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       language: { type: 'string', description: 'Output language (default: config defaultLanguage)' },
       upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn"). Extra green artifacts of installed packs may ride along as context (e.g. the project context), but at least one consumed-type artifact is required' },
       artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>); REFUSED on per-function calls — the engine names those <pack>-<funcId> from the upstream plan' },
-      topic: { type: 'string', description: 'Topic directory name — the work item\'s id plus a free description ("REQ-142 favorites" or "REQ-142-收藏夹"): relocates the output root to <topic>/output/ and the materials dir to <topic>/<materials-dir>/; REQUIRED by packs declaring requiresTopic (per-topic documents such as a requirement analysis, functional design, or technical design), ignored by workspace-scope packs. When the user has not explicitly named the topic, ask them for it (work-item id and short name) before calling — never invent one' },
+      topic: { type: 'string', description: 'Topic directory name — the work item\'s id plus a free description ("REQ-142 favorites" or "REQ-142-收藏夹"): relocates the output root to <topic>/output/ and the materials dir to <topic>/<materials-dir>/; REQUIRED by packs declaring requiresTopic (per-topic documents such as a requirement analysis, functional design, or technical design), ignored by workspace-scope packs. A topic entering the chain for the first time is confirm-flagged: the call returns a pendingConfirmation whose table leads with the topic row — present it to the user to confirm or correct (infer a sensible default from the inputs when the user did not name one), then re-call with confirm: true' },
       maxRounds: { type: 'number', description: 'Round cap for this call (e.g. when the user asks to try more rounds); clamped to config maxRoundsCeiling' },
       force: { type: 'boolean', description: 'Rebuild even when a reusable green artifact of this pack already exists (bypasses the reuse pre-check)' },
       params: { type: 'object', additionalProperties: true, description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpTotal": {"value": 100, "downFactor": 0.9, "upFactor": 1.2}}; unknown names, out-of-range values, and missing required params fail loud; explicit params always trigger the confirmation gate' },
@@ -519,10 +519,12 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       const paramsBase = mergeUpstreamParams(upstreamRecords)
       // Derived param topicNo: extracted from the topic name via the pack's
       // topicNoPattern (explicit params.topicNo wins; the inherited value
-      // also wins — downstream stages re-extract identically anyway). When
-      // absent (no topic or no match) the numbering rule skips and naming
-      // falls back to <pack>-<funcId>.
-      if (typeof args.topic === 'string' && pack.manifest.params?.topicNoPattern !== undefined && overrides?.topicNo === undefined && paramsBase?.topicNo === undefined) {
+      // also wins — downstream stages re-extract identically anyway).
+      // Topic-scope packs only: a workspace-scope pack ignores topic (its
+      // artifact is shared across topics), so it must not record one topic's
+      // number into a shared receipt. When absent (no topic or no match) the
+      // numbering rule skips and naming falls back to <pack>-<funcId>.
+      if (typeof args.topic === 'string' && pack.manifest.scope !== 'workspace' && pack.manifest.params?.topicNoPattern !== undefined && overrides?.topicNo === undefined && paramsBase?.topicNo === undefined) {
         const pattern = overrides?.topicNoPattern ?? paramsBase?.topicNoPattern ?? pack.manifest.params.topicNoPattern.default
         try {
           const m = typeof pattern === 'string' ? args.topic.match(new RegExp(pattern, 'u')) : undefined
@@ -591,9 +593,24 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       const policy = resolveConfirmPolicy(args.confirmPolicy, deps.config.confirmPolicy)
       const changedOverrides = paramsProvided && (paramsBase === undefined
         || Object.entries(overrides!).some(([name, value]) => !addressingParams.has(name) && stableStringify(paramsBase[name]) !== stableStringify(value)))
+      // Topic confirmation: a topic entering the chain for the first time
+      // (no upstream receipt records its topicNo yet) is confirm-flagged —
+      // the caller's topic may be inferred from the requirement text rather
+      // than named by the user, so the user signs off on it through the same
+      // pendingConfirmation table as pack params. Once any upstream receipt
+      // records topicNo, downstream stages inherit it and never re-gate.
+      const topicRow: ParamRow | undefined = pack.manifest.requiresTopic === true
+        && typeof args.topic === 'string' && args.topic.length > 0
+        && paramsBase?.topicNo === undefined
+        ? {
+            name: 'topic', type: 'string', value: args.topic, source: 'explicit',
+            required: true, confirm: true, overridable: false,
+            description: 'Topic directory name establishing this document chain (inferred from the inputs if the user did not name it) — confirm it or correct it',
+          }
+        : undefined
       const gateHit = policy === 'strict'
-        ? preview.rows.length > 0
-        : policy === 'standard' && (changedOverrides || (confirmNames.length > 0 && !satisfiedUpstream))
+        ? preview.rows.length > 0 || topicRow !== undefined
+        : policy === 'standard' && (changedOverrides || (confirmNames.length > 0 && !satisfiedUpstream) || topicRow !== undefined)
       if (gateHit && args.confirm !== true) {
         let driftImpact: string | undefined
         if (preview.drift.length > 0) {
@@ -617,7 +634,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
           pendingConfirmation: true,
           pack: pack.manifest.name,
           language,
-          paramTable: [...preview.rows],
+          paramTable: [...(topicRow !== undefined ? [topicRow] : []), ...preview.rows],
           missingRequired: [...preview.missingRequired],
           ...candidateFields,
           ...driftFields,
