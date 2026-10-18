@@ -3,11 +3,12 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { DEFAULT_CONFIRM_POLICY, DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type ConfirmPolicy, type UpstreamVersionPolicy } from './config.ts'
 import { generateDocument, getDocService, parseUpstreamArtifacts, summarizeArtifact, writeAtomic } from './doc-service.ts'
+import { materialAnchorsOf } from './materials.ts'
 import { createLlmPort } from './llm-port.ts'
 import { previewParams, resolveEffectiveParams, type ParamDrift, type ParamRow } from './params.ts'
 import type { Pack } from './pack.ts'
 import { effectiveWorkspaceRoot, normalizeWindowsPath, resolveRootWithin, type SessionWorkspaceCarrier } from './paths.ts'
-import { artifactHashOf, type Receipt, type UpstreamAnchor } from './receipt.ts'
+import { artifactHashOf, type MaterialAnchor, type Receipt, type UpstreamAnchor } from './receipt.ts'
 import { severityCounts } from './issue.ts'
 
 /**
@@ -313,14 +314,18 @@ function planCandidates(records: readonly { artifact: unknown }[]): FunctionCand
 /**
  * Reuse pre-check (docs/designs/cosmic-context.md): a pack declaring reuse
  * skips generation when its output root already holds an artifact of the same
- * pack whose sidecar receipt is green and whose canonical hash still matches
- * the file (staleness reconciliation — no LLM re-validation). A receipt from
- * another installed pack version certifies the OLD ruleset and never reuses;
- * a red receipt or an edited artifact falls through to normal generation.
+ * pack whose sidecar receipt is green, whose canonical hash still matches
+ * the file (staleness reconciliation — no LLM re-validation), and whose
+ * materials manifest equals this call's resolved ref+hash anchors (input
+ * freshness: a changed, added, or dropped material forces regeneration). A
+ * receipt from another installed pack version certifies the OLD ruleset and
+ * never reuses, nor does a legacy receipt without a materials manifest; a red
+ * receipt or an edited artifact falls through to normal generation.
  */
 async function findReusableArtifact(
   outputRoot: string,
   pack: Pack,
+  materialAnchors: readonly MaterialAnchor[],
 ): Promise<{ artifactPath: string; markdownPath: string; receipt: Receipt; summary: ReturnType<typeof summarizeArtifact> } | undefined> {
   let entries
   try {
@@ -335,6 +340,10 @@ async function findReusableArtifact(
       const receipt = JSON.parse(await readFile(join(outputRoot, `${base}.receipt.json`), 'utf8')) as Partial<Receipt>
       if (receipt.pack !== pack.manifest.name || receipt.isValid !== true) continue
       if ((receipt.packVersion ?? '') !== pack.manifest.version) continue
+      // Input freshness: the receipt must carry a materials manifest (legacy
+      // receipts certify unknown inputs) and it must equal this call's
+      // canonical anchors element-wise (both sides sorted the same way).
+      if (JSON.stringify(receipt.materials) !== JSON.stringify(materialAnchors)) continue
       const artifact: unknown = JSON.parse(await readFile(join(outputRoot, entry.name), 'utf8'))
       if (receipt.artifactHash !== artifactHashOf(artifact)) continue
       return {
@@ -423,7 +432,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       + 'Materials are paths relative to the materials root (default <workspace>/references/) or inline text starting with "#!inline"; '
       + 'if the workspace references/ folder holds project-context material (system architecture, module map, numbering conventions), include it. '
       + 'Artifacts land under the output root — <topic>/output/ when topic is given (requirement-scoped packs REQUIRE topic: one requirement per topic, e.g. its id), <workspace>/output/ otherwise; '
-      + 'workspace-scope packs ignore topic and write to <workspace>/context/ — when their existing green artifact is unchanged it is reused as-is (reused: true), unless force: true rebuilds it. '
+      + 'workspace-scope packs ignore topic and write to <workspace>/context/ — when their existing green artifact was generated from exactly the same materials (same refs and content hashes) and is unchanged, it is reused as-is (reused: true); a changed, added, or dropped material, an edited artifact, or force: true rebuilds it. '
       + 'Pack-declared tunables can be overridden via params; required params (no default) must be provided. '
       + 'Passing params that change the upstream-recorded values — or generating a pack with confirm-flagged params whose values are not yet confirmed upstream — returns a pendingConfirmation param table first: present it to the user for approval, then re-call with confirm: true (do not self-confirm a gate the user has not seen; re-passing values identical to the upstream receipt counts as inheritance and does not gate). '
       + 'maxRounds caps this call\'s loop rounds.',
@@ -457,11 +466,17 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       if (pack.manifest.requiresTopic === true && (args.topic === undefined || args.topic.length === 0)) {
         throw new Error(`pack "${pack.manifest.name}" scopes its artifacts to one requirement: pass topic (a single directory name, e.g. "KERQ-352 收藏夹") — artifacts land under <topic>/output/ and upstream/doc_chain_status paths key off it`)
       }
-      // Reuse pre-check (docs/designs/cosmic-context.md): before any param,
-      // route, or input work — a green, hash-intact artifact of a reuse pack
-      // is returned as-is; force: true always rebuilds.
+      // Reuse pre-check (docs/designs/cosmic-context.md): before any param
+      // or route work — a green, hash-intact artifact of a reuse pack
+      // generated from exactly this call's materials (same canonical refs,
+      // same content hashes) is returned as-is; force: true always rebuilds.
+      // Materials resolve first, so an unreadable ref fails loud even when a
+      // reusable artifact exists (the caller explicitly named it). On a miss
+      // the files are re-read inside generateDocument, which owns the
+      // receipt's manifest — the double read keeps the service self-contained.
       if (pack.manifest.reuse === true && args.force !== true) {
-        const reused = await findReusableArtifact(outputRoot, pack)
+        const anchors = await materialAnchorsOf(materials, workspaceRoot, materialsRoot)
+        const reused = await findReusableArtifact(outputRoot, pack, anchors)
         if (reused !== undefined) return { ...reused, reused: true } as unknown as DocGenerateResult
       }
       let upstreamTexts: string[] | undefined
@@ -629,6 +644,7 @@ export function defineDocValidateTool(deps: ToolDeps) {
       + 'Deterministic, no LLM. A GREEN validation re-issues (seals) the sidecar receipt for the current content, so externally edited artifacts can rejoin a chain; a red validation never touches it. '
       + 'Call doc_packs to see which packs are installed. '
       + 'Returns a fresh receipt; hashMatches=false means the artifact changed after generation; hashMatches=null means no prior receipt exists. '
+      + 'The prior receipt\'s generation-time materials manifest is carried over unchanged, so doc_generate reuse checks keep comparing against the original inputs. '
       + 'packVersionStale=true means the sidecar receipt was written by a different pack version — the artifact predates the installed pack and its green receipt certifies the OLD rules; regenerate it.',
     parameters: {
       artifactPath: { type: 'string', required: true, description: 'Workspace-relative path to the artifact JSON' },
@@ -659,11 +675,11 @@ export function defineDocValidateTool(deps: ToolDeps) {
 
       // Tamper evidence: compare the canonical hash against the sidecar
       // receipt written at generation time (absent for bundled samples).
-      let storedReceipt: { artifactHash?: string; language?: string; packVersion?: string; params?: Record<string, unknown> } | undefined
+      let storedReceipt: { artifactHash?: string; language?: string; packVersion?: string; params?: Record<string, unknown>; materials?: readonly MaterialAnchor[] } | undefined
       let hashMatches: boolean | null = null
       try {
         const parsed: unknown = JSON.parse(await readFile(`${artifactPath.replace(/\.json$/, '')}.receipt.json`, 'utf8'))
-        storedReceipt = typeof parsed === 'object' && parsed !== null ? parsed as { artifactHash?: string; language?: string; packVersion?: string; params?: Record<string, unknown> } : undefined
+        storedReceipt = typeof parsed === 'object' && parsed !== null ? parsed as { artifactHash?: string; language?: string; packVersion?: string; params?: Record<string, unknown>; materials?: readonly MaterialAnchor[] } : undefined
         hashMatches = storedReceipt?.artifactHash === artifactHashOf(artifact)
       } catch {
         storedReceipt = undefined
@@ -707,6 +723,10 @@ export function defineDocValidateTool(deps: ToolDeps) {
         rounds: [{ round: 0, errorCount: counts.errors, warningCount: counts.warnings }],
         model: 'revalidate',
         ...(verifiedUpstream !== undefined ? { upstream: verifiedUpstream.anchors } : {}),
+        // Carry the generation-time material manifest forward unchanged: a
+        // re-validation certifies content, not inputs — the recorded anchors
+        // stay the reuse pre-check's freshness baseline.
+        ...(storedReceipt?.materials !== undefined ? { materials: storedReceipt.materials } : {}),
         ...(Object.keys(effectiveParams).length > 0 ? { params: effectiveParams } : {}),
       })
       // Seal (docs/designs/params-and-chain-contract.md): a green re-validation

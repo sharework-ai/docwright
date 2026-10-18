@@ -1,6 +1,14 @@
 import { readFile, readdir, realpath } from 'node:fs/promises'
-import { basename, isAbsolute, relative, resolve } from 'node:path'
+import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
 import { normalizeWindowsPath } from './paths.ts'
+import { sha256, type MaterialAnchor } from './receipt.ts'
+
+/** One resolved material: the canonical ref actually read, its content hash, and the text. */
+export interface MaterialEntry {
+  readonly ref: string
+  readonly hash: string
+  readonly text: string
+}
 
 /**
  * Material references: paths relative to the materials root (default
@@ -36,23 +44,31 @@ async function notReadable(ref: string, abs: string, materialBase: string, root:
   return new Error(parts.join('; '))
 }
 
-export async function readMaterials(
+/**
+ * Resolve material refs to entries carrying the canonical ref (what was
+ * actually read), the content hash, and the text. The canonical ref is the
+ * materials-root-relative path of the REAL file — so a double-prefixed
+ * spelling ("references/x.md" under a references/ root) and the plain ref
+ * anchor identically — or the `#!inline` marker for inline text.
+ */
+export async function readMaterialEntries(
   refs: readonly string[],
   workspaceRoot: string,
   materialsRoot: string,
-): Promise<readonly string[]> {
+): Promise<readonly MaterialEntry[]> {
   // An empty list is legal: chained packs may rely on the upstream artifact
   // alone for context. The tool layer enforces "some input exists".
   if (refs.length === 0) return []
   const root = await realpath(resolve(workspaceRoot))
   const materialBase = resolve(root, materialsRoot)
-  const out: string[] = []
+  const out: MaterialEntry[] = []
   for (const ref of refs) {
     if (typeof ref !== 'string') {
       throw new Error(`material reference must be a string, got ${JSON.stringify(ref)}`)
     }
     if (ref.startsWith('#!inline')) {
-      out.push(ref.slice('#!inline'.length).replace(/^\n/, ''))
+      const text = ref.slice('#!inline'.length).replace(/^\n/, '')
+      out.push({ ref: '#!inline', hash: sha256(text), text })
       continue
     }
     const abs = resolve(materialBase, normalizeWindowsPath(ref))
@@ -86,7 +102,33 @@ export async function readMaterials(
     if (realRel === '..' || realRel.startsWith('../') || isAbsolute(realRel)) {
       throw new Error(`material path escapes the workspace root via symlink: ${ref} (root: ${root})`)
     }
-    out.push(await readFile(real, 'utf8'))
+    const text = await readFile(real, 'utf8')
+    out.push({ ref: relative(materialBase, real).split(sep).join('/'), hash: sha256(text), text })
   }
   return out
+}
+
+/** Texts-only view of {@link readMaterialEntries} (the prompt/rule input). */
+export async function readMaterials(
+  refs: readonly string[],
+  workspaceRoot: string,
+  materialsRoot: string,
+): Promise<readonly string[]> {
+  return (await readMaterialEntries(refs, workspaceRoot, materialsRoot)).map(e => e.text)
+}
+
+/** Canonical manifest: {ref, hash} pairs sorted by ref then hash (multiset — duplicates kept). */
+export function materialAnchors(entries: readonly MaterialEntry[]): readonly MaterialAnchor[] {
+  return entries
+    .map(({ ref, hash }) => ({ ref, hash }))
+    .sort((a, b) => (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : a.hash < b.hash ? -1 : a.hash > b.hash ? 1 : 0))
+}
+
+/** Anchors for a call's refs: resolve then canonicalize (the reuse pre-check's comparison side). */
+export async function materialAnchorsOf(
+  refs: readonly string[],
+  workspaceRoot: string,
+  materialsRoot: string,
+): Promise<readonly MaterialAnchor[]> {
+  return materialAnchors(await readMaterialEntries(refs, workspaceRoot, materialsRoot))
 }

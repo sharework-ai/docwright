@@ -34,7 +34,7 @@ Date: 2026-10-14
 输入与产物分两个作用域——**workspace 级**（跨话题共享，如项目知识）与 **topic 级**（一个具体话题/需求的工作集）。作用域是通用机制而非 cosmic 专属概念（其他场景包同样适用），由 pack 声明：
 
 - **manifest `scope`**：`"workspace" | "topic"`（缺省 `"topic"`，loader 校验值域）。cosmic-context 与 cosmic-context-sync 声明 `workspace`；其余 pack 缺省 `topic`。
-- **manifest `reuse`**：布尔，与 scope 正交——scope 决定产物/素材落在哪级目录，reuse 决定 doc_generate 是否做"已有绿产物即复用"预检。机制对所有 scope 通用，**默认值按作用域语义区分**：workspace pack 缺省 `true`（cosmic-context 项目分析只做一次；cosmic-context-sync 显式 `false`——同步是动作，每次执行）；topic pack 缺省 `false`，因为 topic 产物紧跟需求，**"需求是否变更"无法从产物 hash 检测**——素材变了产物仍是绿的，复用会拿旧需求产物冒充。topic pack 声明 `reuse: true` 属 pack 作者的显式选择（适用于"产物只依赖代码素材、同 topic 内参数试调"的场景），文档需附上述语义警告。调用方 `force: true` 始终可绕过预检。
+- **manifest `reuse`**：布尔，与 scope 正交——scope 决定产物/素材落在哪级目录，reuse 决定 doc_generate 是否做"已有绿产物即复用"预检。机制对所有 scope 通用，**默认值按作用域语义区分**：workspace pack 缺省 `true`（cosmic-context 项目分析只做一次；cosmic-context-sync 显式 `false`——同步是动作，每次执行）；topic pack 缺省 `false`——topic 产物紧跟需求推进语义（扇出逐个推进、参数试调都要新鲜生成），缺省不复用。topic pack 声明 `reuse: true` 属 pack 作者的显式选择：素材新鲜度有回执清单对账兜底（见"复用预检"），但必须确认其全部输入类可对账（materials 清单、upstream 锚点、params 漂移策略）。调用方 `force: true` 始终可绕过预检。
 
 ```
 workspaceRoot/
@@ -46,7 +46,7 @@ workspaceRoot/
 ```
 
 - **topic 参数**：`doc_generate` 的 `topic`（单段目录名 `[A-Za-z0-9._-]`，confine 校验在 workspaceRoot 内）对声明 `requiresTopic: true` 的 pack **必填**（2026-10-14 真实会话复盘后收紧：cosmic 链四阶段 plan/req/func/tech 一个需求一个 topic，缺失调用期响亮报错；manifest 声明，引擎不做包名硬编码）；其余 pack 缺省行为不变；`doc_validate` 不设该参数——复验全由产物路径驱动。给定后：产物根为 `<topic>/output/`、素材根为 `<topic>/references/`；缺省维持现状（workspaceRoot 根下的 `output/`、`references/`）——既有调用与测试零迁移。workspace scope 的 pack 忽略 topic（固定 workspace 级目录：素材 `references/`、产物 `context/`）。
-- **复用预检**（`scope: "workspace"` 且 `reuse: true`）：doc_generate 生成前扫 `context/`：存在同 pack 产物且 sidecar 回执 `isValid === true` 且**产物当前 hash 与回执记录一致**（复用 staleness 对账，不重跑 LLM 校验）→ 直接返回该产物（返回值带 `reused: true` 与原回执），除非调用方显式 `force: true`。回执缺失/红色/hash 不符 → 正常走生成闭环。人工 seal 修正后 hash 变化，预检自然不命中，语义自洽。
+- **复用预检**（`scope: "workspace"` 且 `reuse: true`）：doc_generate 生成前扫 `context/`，命中需同时满足四道关卡：同 pack 产物、sidecar 回执 `isValid === true` 且版本与已安装 pack 一致、**产物当前 hash 与回执记录一致**（产物 staleness 对账）、**本次调用的素材清单与回执 `materials` 清单逐项相等**（输入新鲜度对账，均不重跑 LLM 校验）。素材清单是生成时引擎记录的 canonical ref + 内容 sha256（inline 素材记 `#!inline` 标记 + 内容 hash，双重前缀拼写归一为实际读取路径），按集合比对（与顺序无关，重复计数）——素材被改、多传、少传任一漂移即落正常生成闭环；素材文件不可读则响亮报错（调用方点名的输入缺失，不静默吞）。回执无 `materials` 字段（旧格式）一律不复用，重生成一次即补齐。命中返回 `reused: true` + 原回执，除非调用方显式 `force: true`。doc_validate seal 回签时原样携带 `materials`（复验只证内容，不改输入基线），人工修正后的产物经 seal 重新可复用。
 - **doc_chain_status**：从 `plan` 参数的路径推断输出根（plan 所在目录即 output 根），topic 目录自然生效，不加参数。
 - 产物路径对下游照旧是 workspace-relative（如 `context/cosmic-context-….json`、`req-2026-001/output/plan.json`），`upstream` 传递与 confine 校验不变。
 - **upstream 是内容注入，不是引用**：doc_generate 把 upstream 产物全文渲染进该次调用的 prompt（`{{upstream}}` 槽）——LLM 自身无法读文件，"仅传路径"要么模型读不到、要么经额外工具读取后同样进上下文，无节省反多往返。成本量级：context 产物典型 1-2k token，每次 doc_generate 注入一份；修复循环内每轮 prompt 重建时都在，但**不跨调用累积**（会话持久负担只有回执，回执记录的是 upstream hash 而非全文）；promptTokenBudget 预检（既有）兜总量。req/func/tech 按需携带 context 的实际开销即此量级，不构成上下文灾难；若未来 context 产物膨胀，节流手段是按 pack 裁剪注入视图（如 req 只注入 roles/thirdPartySystems），留作观察项不预先实现。
@@ -163,7 +163,7 @@ plan 规划通过并落地后，把"本次 topic 修改/新增的模块"合并�
 4. req `functionalUsers[].kind` 非法值被 schema 拒绝；prompt 含"角色或第三方系统、顶层模块"指引。
 5. 六 pack description 更新且 `doc_packs` 渲染正确。
 6. **作用域**：`topic: "req-a"` 时产物落 `req-a/output/`、素材根 `req-a/references/`；workspace 产物固定落 `context/`、素材根 `references/`；`doc_chain_status` 在 topic 目录下从 plan 路径正确推断输出根。
-7. **复用**：已有绿 context（回执 valid 且 hash 一致）时再调 doc_generate 不调 LLM、返回 `reused: true`；产物被改（hash 不符）或回执红时重新生成；`force: true` 强制重建；cosmic-context-sync 不受预检拦截（`reuse: false`）。
+7. **复用**：已有绿 context（回执 valid、hash 一致、素材清单与本次调用逐项相等）时再调 doc_generate 不调 LLM、返回 `reused: true`；素材被改/多传/少传、产物被改（hash 不符）或回执红时重新生成；无 `materials` 字段的旧回执不复用；`force: true` 强制重建；seal 回签后的产物重新可复用；cosmic-context-sync 不受预检拦截（`reuse: false`）。
 8. **同步**：sync 以旧 context + topic 的绿 plan 生成合并 context；plan 中 added/modified 模块缺失触发 `context-sync/coverage` error；旧模块丢失触发 `context-sync/preserve` warning。
 9. 引擎改动仅限 pack-loader 与 tools/doc-service（scope/reuse 校验、topic 解析、复用预检）。
 10. 全部测试 + 覆盖门 + typecheck + build + host-smoke PASS。

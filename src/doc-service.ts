@@ -8,10 +8,10 @@ import { runRepairLoop } from './loop.ts'
 import type { Pack, RuleContext } from './pack.ts'
 import { resolveEffectiveParams } from './params.ts'
 import { createRuleEngine, rollupRules } from './rule-engine.ts'
-import { readMaterials } from './materials.ts'
+import { materialAnchors, readMaterialEntries } from './materials.ts'
 import { assembleGeneratorPrompt, estimateTokens } from './prompt.ts'
 import { createSchemaCheck } from './schema-check.ts'
-import { artifactHashOf, RECEIPT_FORMAT_VERSION, sha256, type Json, type Receipt, type UpstreamAnchor } from './receipt.ts'
+import { artifactHashOf, RECEIPT_FORMAT_VERSION, sha256, type Json, type MaterialAnchor, type Receipt, type UpstreamAnchor } from './receipt.ts'
 import { createRenderer } from './render.ts'
 
 /**
@@ -69,6 +69,7 @@ export class DocService {
     upstream?: readonly UpstreamAnchor[] | undefined
     terminationReason?: Receipt['terminationReason'] | undefined
     params?: Readonly<Record<string, unknown>> | undefined
+    materials?: readonly MaterialAnchor[] | undefined
   }): Receipt {
     return {
       formatVersion: RECEIPT_FORMAT_VERSION,
@@ -79,6 +80,7 @@ export class DocService {
       schemaHash: this.schemaHash,
       rulesetSnapshot: this.rulesetSnapshot(),
       upstreamHashes: [...(input.upstream ?? [])],
+      ...(input.materials === undefined ? {} : { materials: [...input.materials] }),
       ...(input.params === undefined ? {} : { params: { ...input.params } as { [key: string]: Json } }),
       iterations: input.iterations,
       rounds: input.rounds,
@@ -205,7 +207,11 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
   const overridableParams = Object.entries(input.pack.manifest.params ?? {})
     .filter(([, spec]) => spec.overridable === true)
     .map(([name]) => name)
-  const materialTexts = await readMaterials(input.materials, input.workspaceRoot, input.materialsRoot)
+  // Single read: entries feed both the prompt/rule texts and the receipt's
+  // material manifest (always recorded, [] for upstream-only generations —
+  // an absent field unambiguously means a legacy receipt).
+  const materialEntries = await readMaterialEntries(input.materials, input.workspaceRoot, input.materialsRoot)
+  const materialTexts = materialEntries.map(e => e.text)
   const upstreamArtifacts = parseUpstreamArtifacts(input.upstream)
   const ruleContext: RuleContext = {
     materials: materialTexts,
@@ -255,6 +261,7 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
     rounds: result.rounds,
     model,
     upstream: input.upstreamAnchors,
+    materials: materialAnchors(materialEntries),
     ...(isValid ? {} : { terminationReason: result.reason }),
     ...(Object.keys(effectiveParams).length > 0 ? { params: effectiveParams } : {}),
   })
