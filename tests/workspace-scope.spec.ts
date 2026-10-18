@@ -187,7 +187,7 @@ describe('workspace reuse pre-check (doc_generate)', () => {
     expect(first.calls()).toBe(1)
 
     const deps2 = { ...deps, ctx: { llm: scriptedLlm(['{"v":2}']).llm } }
-    const again = await defineDocGenerateTool(deps2).execute({ pack: 'ws-pack', materials: [], language: 'zh-CN', artifactName: 'whatever' } as never, { signal } as never) as { artifactPath: string; reused?: boolean; receipt: { isValid: boolean } }
+    const again = await defineDocGenerateTool(deps2).execute({ pack: 'ws-pack', materials: ['#!inline\nx'], language: 'zh-CN', artifactName: 'whatever' } as never, { signal } as never) as { artifactPath: string; reused?: boolean; receipt: { isValid: boolean } }
     expect(again.reused).toBe(true)
     expect(again.artifactPath).toBe(gen.artifactPath)
     expect(again.receipt.isValid).toBe(true)

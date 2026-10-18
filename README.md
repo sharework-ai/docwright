@@ -45,7 +45,7 @@ Per-function fan-out (`docs/designs/params-and-chain-contract.md`): chained pack
 
 Returns `{ artifactPath, markdownPath, receipt }`. Artifacts, receipts, and markdown land in the output root (default `<workspace>/output/`, or `<topic>/output/` with `topic`). Exhausted loops throw AND keep the draft + red receipt on disk.
 
-**Scopes & reuse** (`docs/designs/cosmic-context.md`): packs declare `scope` (`workspace` packs fix their homes — materials `references/`, artifacts `context/` — and ignore `topic`; `topic` scope is the default) and `reuse` (workspace packs default true, topic packs false). For `reuse` packs, a green, hash-intact artifact of the same pack and installed version is returned as-is (`reused: true`, zero LLM); `force: true` always rebuilds — a human-corrected artifact changes the hash and therefore regenerates, and `doc_validate`'s seal re-enters it into the chain.
+**Scopes & reuse** (`docs/designs/cosmic-context.md`): packs declare `scope` (`workspace` packs fix their homes — materials `references/`, artifacts `context/` — and ignore `topic`; `topic` scope is the default) and `reuse` (workspace packs default true, topic packs false). For `reuse` packs, a green, hash-intact artifact of the same pack and installed version that was generated from exactly the call's materials (the receipt records a materials manifest of canonical refs + content hashes; changed, added, or dropped materials regenerate) is returned as-is (`reused: true`, zero LLM); `force: true` always rebuilds — a human-corrected artifact changes the hash and therefore regenerates, and `doc_validate`'s seal (which carries the manifest forward) re-enters it into the chain.
 
 ### `doc_validate`
 

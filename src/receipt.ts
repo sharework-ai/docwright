@@ -41,6 +41,17 @@ export type UpstreamAnchor = {
   readonly artifactHash: string
 }
 
+/**
+ * Material anchor: one material input as it was at generation time — the
+ * canonical ref actually read (inline texts record the `#!inline` marker)
+ * plus the sha256 of its content. The receipt's sorted manifest is the
+ * freshness baseline the doc_generate reuse pre-check compares against.
+ */
+export type MaterialAnchor = {
+  readonly ref: string
+  readonly hash: string
+}
+
 export type Receipt = {
   readonly formatVersion: number
   readonly pack: string
@@ -52,6 +63,14 @@ export type Receipt = {
   readonly rulesetSnapshot: { readonly declarative: Record<string, Json>[]; readonly functionsSourceHash: string }
   /** Chain anchors for consumed upstream artifacts ([] for root packs and revalidation). */
   readonly upstreamHashes: UpstreamAnchor[]
+  /**
+   * Generation-time material manifest (sorted canonical refs + content
+   * hashes): the input-freshness baseline the doc_generate reuse pre-check
+   * compares against. Absent on legacy receipts — they certified unknown
+   * inputs and never reuse. [] is authoritative for "generated without
+   * materials" (upstream-only chained packs).
+   */
+  readonly materials?: MaterialAnchor[]
   /** Effective pack params as-run (declared defaults + call overrides); revalidation replays by these. */
   readonly params?: { [key: string]: Json }
   readonly iterations: number
