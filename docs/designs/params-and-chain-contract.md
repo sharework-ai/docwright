@@ -2,6 +2,8 @@
 
 Status: implemented（2026-10-13 定稿并当日落地：D5 参数治理 / D6 扇出契约与覆盖账目 / D7 seal 与 API 便利性；packs v0.2.0；scripts/e2e-real-llm.ts 真实模型全链 PASS）
 
+参数的层级归属、属性全集、生命周期矩阵与全量清单见 `param-object-model.md`（界面管理设计地基）；本文负责机制语义（门控、漂移、Mind the gap、topic 确认）。
+
 ## 问题
 
 真实 web 会话（session-b4ff21a7，收藏夹 COSMIC 全链）暴露四类缺口：

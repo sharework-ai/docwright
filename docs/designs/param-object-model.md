@@ -1,0 +1,130 @@
+# 参数对象模型 —— 界面管理的设计地基
+
+参数体系的机制语义（门控细节、漂移策略、Mind the gap、topic 确认）以 `params-and-chain-contract.md` 为准；本文是它的对象模型补充：**参数的层级归属、属性全集、全生命周期行为矩阵、全量清单**，为"插件级 / pack 级参数的界面管理"产品设计提供事实基础。全部内容为现状描述，每条均有代码依据（`src/params.ts`、`src/config.ts`、`src/pack-loader.ts`、`src/tools.ts`、各 `packs/*/manifest.json`）。
+
+## 1. 参数的四个层级
+
+| 层级 | 拥有者 | 载体 | 作用范围 | 修改影响半径 |
+|---|---|---|---|---|
+| 插件 Config | 部署运维 | `cordis.yml` / 宿主配置 | 全部工具调用 | 即时生效；不触碰已生成产物与回执（`provider`/`model` 例外：进入 prompt，影响后续 `promptHash`） |
+| pack manifest `params` | pack 作者 | `manifest.json`（随 `version` 门控） | 声明即白名单 + 默认值 + 门控/校验属性 | 改 default：影响后续生成，不追溯已产物；结构性增删应升 `version`，否则旧回执照常复用 |
+| 调用参数 | 用户 · agent | `doc_generate` 的 `params` 入参 | 单次调用 | 受确认门与 `paramDriftPolicy` 约束；写进本次回执沿链继承 |
+| 引擎派生 | 引擎（不可配置） | 运行时注入（`topicNo`） | 本调用 + 沿回执继承 | 只能改其来源（`topicNoPattern` 的声明值），不能关闭派生本身 |
+
+## 2. ParamSpec 属性全集（pack 级声明）
+
+| 属性 | 约束 | 语义 | 装载期校验（fail loud） |
+|---|---|---|---|
+| `type` | `number \| string \| boolean \| object` | 值类型；`object` 必须是平面对象（非数组） | 必填，四值枚举 |
+| `description` | 非空字符串 | 唯一说明文案；`doc_packs` 与确认表逐字展示 | 必填 |
+| `default` | 与 `type` 匹配 | 缺省值（现役值） | 非 required 时必须匹配 type；number 型须落在 [min,max]；enum 型必须是枚举成员 |
+| `required` | boolean | 声明契约性（见下） | 仅 boolean |
+| `confirm` | boolean | 立门属性：未经理确认不得以该值执行 | 仅 boolean |
+| `overridable` | boolean | prompt 中渲染"素材内容可调整此参数"提示；**不放松任何校验** | 仅 boolean |
+| `min` / `max` | number 型专用 | 值域闭区间 | min ≤ max，须为有限数；object/string 型声明即报错 |
+| `enum` | 非 string/number 外禁用 | 取值白名单 | 非空数组、成员类型匹配、default 必须是成员 |
+
+**`required` 的两种组合**（语义完全不同，界面必须区分呈现）：
+
+- **纯 required**（无 `default`，如 `cfpTotal`、`targetIndex`）：值必须来自调用方显式传参或上游回执继承；两者皆无 → 响亮报错（`missing required pack param`），缺失项进确认表的 `missingRequired`。
+- **required + default**（如 context 的 `topicNoPattern`）：链级必备契约参数——默认值即现役值，永远可解析、永不因自身缺值而立门；required 标记表达"该参数是链契约的一部分，不可缺位"。
+
+**值校验三路统一**：显式值、上游回执继承值、声明 default 在解析时走同一个 `assertValueMatches`（type / enum / min-max 全查；回执值违规同样报错，错误文案标注 `(receipt-recorded)`）。未知参数名一律拒绝（白名单原则，错误列出可用名）。
+
+**当前内置 pack 未使用 `overridable` 与 `enum`**——机制完整可用、场景暂未用。界面做属性编辑器时需支持，优先级可低。
+
+## 3. 一次调用内的解析与确认
+
+解析顺序（`resolveEffectiveParams`）：**显式覆盖 > 上游回执基（`paramsBase`，多上游按数组顺序浅合并、后者覆盖）> 声明 default > 纯 required 缺失报错 > 可选无 default 留空**。
+
+门控判定（`params-and-chain-contract.md` 为准，此处只列触发条件）：显式非寻址改参、confirm 参数未经上游确认、topic 首次进入链（topic 行）；required 且非 confirm 的**寻址参数**（如 `targetIndex`）是调用路由，永不立门。档位 `none/standard/strict` 决定门立不立，过门（转呈用户）永远是调用方义务。
+
+## 4. 生命周期矩阵（环节 × 参数类）
+
+参数类（列）：
+
+- **P1 普通带默认**：`moduleLevels`、`cfpPerSubProc`、`funcDescMaxLength`、`functionalUserRoles`
+- **P2 纯 required**：`cfpTotal`（plan）、`targetIndex`（req/func/tech）
+- **P3 required+default 链契约**：`topicNoPattern`（context）
+- **P4 confirm 预算组**：`cfpPerFunc` / `cfpMin` / `cfpMax`（各 pack confirm）、下游 `cfpTotal` 声明（confirm 无 default）
+- **P5 引擎派生**：`topicNo`
+- **P6 寻址参数**：`targetIndex`（= P2 的子集，required 且非 confirm）
+
+| 环节 | P1 普通带默认 | P2 纯 required | P3 链契约 | P4 confirm | P5 派生 | P6 寻址 |
+|---|---|---|---|---|---|---|
+| 装载期校验 | default 匹配 type/值域 | 结构校验 | 同 P1 | 同 P1 | 无声明要求（下游 pack 需声明以接纳继承值） | 同 P2 |
+| 值解析 | default 兜底 | 显式或继承，缺失报错 | default 即现役值 | 同 P2（下游 cfpTotal 靠继承） | 引擎从 topic 名提取注入（仅 topic 级 pack；显式与继承值优先） | 同 P2 |
+| prompt 注入 | 全量进 `<effective-params>`；object 型只投影 `value` | 同左 | 同左 | 同左（端点 min/max 不进 prompt——Mind the gap） | 同左（被动出现，context 无消费语义） | 同左 |
+| 门控确认 | 不立门 | 缺失进 `missingRequired`；显式传值即立门 | 不自立门 | 未经理确认即立门；上游记录后豁免 | topic 首次进链时随 topic 行立门 | **永不立门** |
+| 规则校验消费 | 值域/带校验的容差来源 | 预算对账基准 | 编号规则的提取约定 | 带端点校验（issue 文案携带端点） | funcId 编号规则、产物命名 | 三点锚定（index/funcId 对齐） |
+| 回执记录 | 全量 effective 进 `receipt.params` | 同左 | 同左 | 同左（记录即下游"已确认"凭据） | 同左 | 同左 |
+| 链继承 | 经 `paramsBase` 覆盖同名 default | 继承即免报错 | 继承的 pattern 供下游推导 | 继承即豁免下游门 | 继承值优先于重新推导 | 继承不豁免寻址（每次仍必填） |
+| 复用预检 | 显式改值 → 跳过复用 | 同左 | 同左 | 同左 | （派生值随 topic 定，等价寻址） | **不跳过复用** |
+| 漂移处理 | `paramDriftPolicy`（regenerate 拒绝 / revalidate 确定性重验上游） | 同左 | 同左 | 同左 | — | 不参与漂移判定 |
+| seal 重验 | 按回执 params 重放；显式 params 覆盖用于 what-if | 同左 | 同左 | 同左 | 同左 | 同左 |
+
+## 5. 内置 pack 全量参数清单
+
+**cosmic-context v0.2.0**（workspace / reuse / 无上游）
+
+| 参数 | type | default | required | confirm | 说明 |
+|---|---|---|---|---|---|
+| topicNoPattern | string | `^([A-Za-z][A-Za-z0-9]*[-_ ]?[0-9]+)` | ✓ | — | 链契约（P3）：从 topic 名提取编号，沿链继承 |
+| moduleLevels | number | 2 (1–3) | — | — | 模块树深度，产物规则校验，与 plan 共享 |
+
+**cosmic-plan v0.6.0**（topic / reuse / consumes context / `materialsRoot: input`）
+
+| 参数 | type | default | required | confirm | 说明 |
+|---|---|---|---|---|---|
+| cfpTotal | object | — | ✓ | ✓ | 总预算 {value, downFactor, upFactor}；用户给定，门控常客 |
+| cfpPerFunc | object | {value:30, min:15, max:45} | — | ✓ | 单功能均值目标（value 进 prompt，端点校验） |
+| cfpMin / cfpMax | object | {10,5–20} / {70,40–100} | — | ✓ | 单功能下/上限 |
+| cfpPerSubProc | number | 2.5 (1–10) | — | — | 数据移动均值，向下游传递 |
+| moduleLevels | number | 2 (1–3) | — | — | 与 context 共享（继承） |
+| topicNoPattern / topicNo | string | 同 context / — | — | — | 继承 + 派生（P3/P5） |
+
+**cosmic-req v0.6.0 / cosmic-func v0.5.0 / cosmic-tech v0.5.0**（topic / reuse / 逐上游链式）
+
+共同参数：`cfpTotal`（confirm，继承）、`cfpPerFunc`/`cfpMin`/`cfpMax`（confirm，继承）、`cfpPerSubProc`、`topicNoPattern`/`topicNo`、`targetIndex`（**number，required，min 1——寻址参数**）。req 专属：`functionalUserRoles`（string 逗号清单）、`funcDescMaxLength`（number 100–2000，default 500）、`cfpsPerRule`（number 10–100，default 30）。
+
+**cosmic-context-sync v0.1.0**（workspace / 不复用）：仅 `moduleLevels`。
+
+## 6. 插件 Config 全量清单
+
+| 键 | 默认 | 作用 |
+|---|---|---|
+| provider / model | —（首次生成前必填） | LLM 路由；进 prompt（影响 promptHash） |
+| confirmPolicy | `standard` | 门控档位，调用可逐次覆盖 |
+| upstreamVersionPolicy | `strict` | 上游版本错配：strict 拒绝 / warn 放行并附警告 |
+| materialsRoot / outputRoot | `references` / `output` | 素材/产物根目录（pack 可用 `materialsRoot` 覆盖，如 plan=input） |
+| workspaceRoot | cwd | 无会话工作区时的根 |
+| packsDir | — | 额外 pack 目录（同名覆盖内置） |
+| defaultLanguage | 首个 pack 首语言 | 输出语言缺省 |
+| maxIterations / maxRoundsCeiling | 5 / 10 | 修复轮数上限 / 硬顶（tool arg > pack default > config，clamp 到 ceiling） |
+| promptTokenBudget | 60000 | 单轮 prompt 预算，超限响亮报错 |
+| oscillation.{mode,stagnantRounds,decliningRounds,maxRepeats,epsilon,defaultScore} | auto/3/3/3/0/{10,3,1} | 收敛终止调参（green 恒为 0 错误，终止只提前退出） |
+
+## 7. 面向界面管理的客观事实（设计输入，非设计）
+
+**读取面现状**：`doc_packs` 暴露每参数 `{name, type, description, default?, required, confirm, overridable}`——**不含 `min`/`max`/`enum`**；`receipt.params` 提供每次调用的 as-run 值（含派生 topicNo）。界面若要编辑约束（min/max/enum）需先扩展暴露面。
+
+**修改影响半径**（界面每类写操作对应的事实）：
+
+| 写操作 | 生效 | 追溯 |
+|---|---|---|
+| 改 Config | 立即、全局 | 不动已产物；provider/model 影响后续 promptHash |
+| 改 manifest default | 下次生成起 | 已产物不变；不升版本则旧回执照常复用 |
+| 改 manifest 结构（增删参数/改 type/门属性） | 下次生成起 | **应升 packVersion**——版本门使旧回执不可复用，强制按新契约重生成 |
+| 调用级传值 | 单次 | 沿回执继承；受漂移策略约束 |
+| 改回执 | **没有这个操作**——回执只能经 `doc_validate` 绿色 seal 重签（内容改变 hash 才重签），参数记录不单独可改 |
+
+**界面必须遵守的不变量**：白名单（不能创建未声明参数的值）；值校验三路统一（界面上改 default 也要过 min-max/enum 校验）；Mind the gap（object 参数只有 `value` 是生成目标，端点是校验容差——界面上两者必须视觉区分）；纯 required 缺值只能问人；确认权属于用户（agent 转呈受"不得自答"约束，**界面由本人操作，天然满足**——这是 UI 相对 agent 通道的本质优势）；结构性 manifest 改动必须伴随版本升级。
+
+**现状没有任何运行时写 manifest / Config 的工具**——一切修改走文件编辑 + 部署。界面管理是全新的写入面，上述不变量目前全部由装载期/调用期校验兜底，界面侧需要同等强度的前置校验（或复用同一校验函数）。
+
+## 8. 已知差距（设计阶段输入）
+
+1. `doc_packs` 不暴露 min/max/enum——参数编辑器缺约束元数据。
+2. 参数无分组/场景标签——跨 pack 共享参数（moduleLevels、cfp* 族）在 UI 上按 pack 平铺会重复呈现（关联 scenario-chains PROPOSAL 的 `scenario` 标签）。
+3. 同链重复调用 plan 会重立 cfpTotal 门（显式 params 每次都门控）——"会话内已确认记忆"是潜在 UI 便利点，当前契约无此状态。
+4. 派生参数 topicNo 不可关闭，且会被动出现在 prompt 的参数块中（语义无作用，噪音可忽略）。
