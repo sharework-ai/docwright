@@ -127,7 +127,7 @@ describe('generateDocument integration: reason + round scores land in the red re
       pack,
       language: 'zh-CN',
       materials: ['#!inline\n素材'],
-      materialsRoot: join(ws, 'references'),
+      materialsRoots: [join(ws, 'references')],
       artifactName: 'conv-e2e',
       workspaceRoot: ws,
       outputRoot: join(ws, 'output'),

@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { DeclarativeRule, FunctionRule, Pack, PackManifest, ParamSpec, ScoreFn } from './pack.ts'
 import { isParamRef } from './pack.ts'
@@ -82,6 +82,9 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
   if (m.requiresTopic !== undefined && typeof m.requiresTopic !== 'boolean') {
     throw new Error(`pack ${dir}: manifest.requiresTopic must be a boolean when present`)
   }
+  if (m.materialsRoot !== undefined && (typeof m.materialsRoot !== 'string' || m.materialsRoot.length === 0 || isAbsolute(m.materialsRoot) || m.materialsRoot.split('/').includes('..'))) {
+    throw new Error(`pack ${dir}: manifest.materialsRoot must be a workspace-relative directory path without ".." when present`)
+  }
   if (m.artifactPrefix !== undefined && (typeof m.artifactPrefix !== 'string' || !/^[A-Za-z0-9-]{1,12}$/.test(m.artifactPrefix))) {
     throw new Error(`pack ${dir}: manifest.artifactPrefix must be a 1-12 char [A-Za-z0-9-] string when present`)
   }
@@ -101,8 +104,9 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
     params = out
   }
   // Scope/reuse defaults follow the scope semantics (docs/designs/cosmic-context.md):
-  // workspace packs default reuse=true (project analysis happens once), topic
-  // packs default false (a changed requirement is invisible in artifact hashes).
+  // workspace packs default reuse=true (the workspace-level analysis happens
+  // once), topic packs default false (per-topic generation is progressive —
+  // fan-out advances, params get retuned).
   const scope = m.scope ?? 'topic'
   if (scope === 'workspace' && m.requiresTopic === true) {
     throw new Error(`pack ${dir}: manifest.requiresTopic is meaningless on a workspace-scope pack (topic is ignored there); drop it or switch scope to "topic"`)
@@ -118,6 +122,7 @@ function assertManifest(raw: unknown, dir: string): PackManifest {
     ...(m.maxRounds === undefined ? {} : { maxRounds: m.maxRounds }),
     ...(m.paramDriftPolicy === undefined ? {} : { paramDriftPolicy: m.paramDriftPolicy }),
     ...(m.requiresTopic === undefined ? {} : { requiresTopic: m.requiresTopic }),
+    ...(m.materialsRoot === undefined ? {} : { materialsRoot: m.materialsRoot }),
     ...(m.artifactPrefix === undefined ? {} : { artifactPrefix: m.artifactPrefix }),
     ...(params === undefined ? {} : { params }),
   }

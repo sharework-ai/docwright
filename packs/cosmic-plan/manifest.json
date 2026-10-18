@@ -71,5 +71,6 @@
     }
   },
   "requiresTopic": true,
-  "artifactPrefix": "PLAN"
+  "artifactPrefix": "PLAN",
+  "materialsRoot": "input"
 }

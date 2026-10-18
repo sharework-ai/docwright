@@ -100,15 +100,15 @@ describe('resolveRootWithin', () => {  it('defaults materialsRoot to references/
 })
 
 describe('session-driven roots end to end (doc_generate via tool)', () => {
-  it('reads materials from <session-ws>/references and writes to <session-ws>/output', async () => {
+  it('reads materials from <session-ws>/topic/input and writes to <session-ws>/topic/output', async () => {
     const packs = await loadPacks(packsRoot, {})
     const pack = packs.get('cosmic-plan')!
     const contextGolden = JSON.stringify(packs.get('cosmic-context')!.goldenSample)
     const replies = [contextGolden, JSON.stringify(pack.goldenSample)]
     let calls = 0
     const sessionWs = await mkdtemp(join(tmpdir(), 'docwright-session-'))
-    await mkdir(join(sessionWs, 'topic-a', 'references'), { recursive: true })
-    await writeFile(join(sessionWs, 'topic-a', 'references', 'req.md'), '素材内容', 'utf8')
+    await mkdir(join(sessionWs, 'topic-a', 'input'), { recursive: true })
+    await writeFile(join(sessionWs, 'topic-a', 'input', 'req.md'), '素材内容', 'utf8')
     const configWs = await mkdtemp(join(tmpdir(), 'docwright-config-'))
     const tool = defineDocGenerateTool({
       packs,

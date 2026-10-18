@@ -112,7 +112,7 @@ export interface GenerateInput {
   readonly language: string
   readonly materials: readonly string[]
   /** Absolute root material references resolve against (from the tool layer). */
-  readonly materialsRoot: string
+  readonly materialsRoots: readonly string[]
   /** Upstream artifact JSON texts, receipt-verified by the tool layer. */
   readonly upstream?: readonly string[] | undefined
   /** Chain anchors recorded into the receipt (pack/version/hash per upstream). */
@@ -210,7 +210,7 @@ export async function generateDocument(input: GenerateInput): Promise<GenerateOu
   // Single read: entries feed both the prompt/rule texts and the receipt's
   // material manifest (always recorded, [] for upstream-only generations —
   // an absent field unambiguously means a legacy receipt).
-  const materialEntries = await readMaterialEntries(input.materials, input.workspaceRoot, input.materialsRoot)
+  const materialEntries = await readMaterialEntries(input.materials, input.workspaceRoot, input.materialsRoots)
   const materialTexts = materialEntries.map(e => e.text)
   const upstreamArtifacts = parseUpstreamArtifacts(input.upstream)
   const ruleContext: RuleContext = {

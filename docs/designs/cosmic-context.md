@@ -38,15 +38,19 @@ Date: 2026-10-14
 
 ```
 workspaceRoot/
-  references/              ← workspace 级素材（workspace pack 的备料：架构文档、README 等）
+  references/              ← 项目参考知识（架构文档、模块图、编号规范——workspace 级分析类 pack 的备料）
+  input/                   ← 用户输入（一次工作事项的需求文档等工作产物）
   context/                 ← workspace 级产物目录（约定名）
-  <topic>/                 ← topic 目录（每个话题/需求一个，如 req-2026-001）
-    references/            ← topic 级素材
+  <topic>/                 ← topic 目录（一个工作事项一个，如 REQ-142 收藏夹）
+    input/                 ← topic 级用户输入（优先于工作区级）
+    references/            ← topic 级参考知识
     output/                ← topic 级产物
 ```
 
+**references 与 input 语义分离，不得混用**：`references/` 是项目级参考知识（跨工作事项共享的背景材料），`input/` 是一次工作事项的用户输入（驱动本次生成的需求文档）。素材目录由 manifest `materialsRoot` 声明（缺省 `references`；cosmic-plan 声明 `input`——需求文档是 plan 的生成输入）。topic 级 pack 的素材 ref 先在 `<topic>/<dir>/` 解析、落空再落到工作区级 `<workspace>/<dir>/`（topic 自己的输入遮蔽共享目录）；workspace 级 pack 固定 `<workspace>/<dir>/`。
+
 - **topic 参数**：`doc_generate` 的 `topic`（单段目录名 `[A-Za-z0-9._-]`，confine 校验在 workspaceRoot 内）对声明 `requiresTopic: true` 的 pack **必填**（2026-10-14 真实会话复盘后收紧：cosmic 链四阶段 plan/req/func/tech 一个需求一个 topic，缺失调用期响亮报错；manifest 声明，引擎不做包名硬编码）；其余 pack 缺省行为不变；`doc_validate` 不设该参数——复验全由产物路径驱动。给定后：产物根为 `<topic>/output/`、素材根为 `<topic>/references/`；缺省维持现状（workspaceRoot 根下的 `output/`、`references/`）——既有调用与测试零迁移。workspace scope 的 pack 忽略 topic（固定 workspace 级目录：素材 `references/`、产物 `context/`）。
-- **复用预检**（`scope: "workspace"` 且 `reuse: true`）：doc_generate 生成前扫 `context/`，命中需同时满足四道关卡：同 pack 产物、sidecar 回执 `isValid === true` 且版本与已安装 pack 一致、**产物当前 hash 与回执记录一致**（产物 staleness 对账）、**本次调用的素材清单与回执 `materials` 清单逐项相等**（输入新鲜度对账，均不重跑 LLM 校验）。素材清单是生成时引擎记录的 canonical ref + 内容 sha256（inline 素材记 `#!inline` 标记 + 内容 hash，双重前缀拼写归一为实际读取路径），按集合比对（与顺序无关，重复计数）——素材被改、多传、少传任一漂移即落正常生成闭环；素材文件不可读则响亮报错（调用方点名的输入缺失，不静默吞）。回执无 `materials` 字段（旧格式）一律不复用，重生成一次即补齐。命中返回 `reused: true` + 原回执，除非调用方显式 `force: true`。doc_validate seal 回签时原样携带 `materials`（复验只证内容，不改输入基线），人工修正后的产物经 seal 重新可复用。
+- **复用预检**（`reuse: true` 的 pack，机制对所有 scope 通用）：doc_generate 生成前扫 `context/`，命中需同时满足：同 pack 产物、sidecar 回执 `isValid === true` 且版本与已安装 pack 一致、**产物当前 hash 与回执记录一致**（产物 staleness 对账）、**本次调用的素材清单与回执 `materials` 清单逐项相等**（输入新鲜度对账，均不重跑 LLM 校验）、链式 pack 还需**本次 upstream 校验后的锚点与回执 `upstreamHashes` 逐项相等**（上游重生成即级联失效下游复用）、**本次调用寻址的确定性产物名与扫描文件一致**（扇出寻址：targetIndex 2 绝不复用功能 1 的产物；仅时间戳缺省名按文件名无关扫描）；**显式传入非寻址类 params 跳过复用**（交给正常路径的 paramDriftPolicy）。素材清单是生成时引擎记录的 canonical ref + 内容 sha256（inline 素材记 `#!inline` 标记 + 内容 hash，双重前缀拼写归一为实际读取路径），按集合比对（与顺序无关，重复计数）——素材被改、多传、少传任一漂移即落正常生成闭环；素材文件不可读则响亮报错（调用方点名的输入缺失，不静默吞）。回执无 `materials` 字段（旧格式）一律不复用，重生成一次即补齐。命中返回 `reused: true` + 原回执，除非调用方显式 `force: true`。doc_validate seal 回签时原样携带 `materials`（复验只证内容，不改输入基线），人工修正后的产物经 seal 重新可复用。
 - **doc_chain_status**：从 `plan` 参数的路径推断输出根（plan 所在目录即 output 根），topic 目录自然生效，不加参数。
 - 产物路径对下游照旧是 workspace-relative（如 `context/cosmic-context-….json`、`req-2026-001/output/plan.json`），`upstream` 传递与 confine 校验不变。
 - **upstream 是内容注入，不是引用**：doc_generate 把 upstream 产物全文渲染进该次调用的 prompt（`{{upstream}}` 槽）——LLM 自身无法读文件，"仅传路径"要么模型读不到、要么经额外工具读取后同样进上下文，无节省反多往返。成本量级：context 产物典型 1-2k token，每次 doc_generate 注入一份；修复循环内每轮 prompt 重建时都在，但**不跨调用累积**（会话持久负担只有回执，回执记录的是 upstream hash 而非全文）；promptTokenBudget 预检（既有）兜总量。req/func/tech 按需携带 context 的实际开销即此量级，不构成上下文灾难；若未来 context 产物膨胀，节流手段是按 pack 裁剪注入视图（如 req 只注入 roles/thirdPartySystems），留作观察项不预先实现。
@@ -56,7 +60,7 @@ workspaceRoot/
 
 ### 1. cosmic-context pack（新链头）
 
-- manifest：`name: "cosmic-context"`、`consumes: []`、`scope: "workspace"`、`reuse: true`、双语、参数 `moduleLevels`（共享，见下）。description（见"description 文案"节）。
+- manifest：`name: "cosmic-context"`、`consumes: []`、`scope: "workspace"`、`reuse: true`、双语、参数 `moduleLevels`（共享，见下）。description（见"description 文案"节）。plan 声明 `materialsRoot: "input"`（需求文档是用户输入，落 `input/` 不落 `references/`，见工作区布局节）；req/func/tech 声明 `reuse: true`（链式复用，输入类全部有锚：materials 清单、upstream 锚点、params 漂移策略、pack 版本门）。
 - schema（`docType: "context"`，顶层字段）：
   - `projectName`（string，非空）
   - `background`（string，业务背景，minLength 20）

@@ -172,14 +172,14 @@ describe('review fix: material containment hardening', () => {
   it('accepts an absolute path inside the workspace root', async () => {
     const root = await mkdtemp(join(tmpdir(), 'docwright-abs-'))
     await writeFile(join(root, 'in.txt'), 'inside', 'utf8')
-    expect(await readMaterials([join(root, 'in.txt')], root, root)).toEqual(['inside'])
+    expect(await readMaterials([join(root, 'in.txt')], root, [root])).toEqual(['inside'])
   })
 
   it('rejects an absolute path outside the workspace root', async () => {
     const root = await mkdtemp(join(tmpdir(), 'docwright-abs-'))
     const outside = await mkdtemp(join(tmpdir(), 'docwright-out-'))
     await writeFile(join(outside, 'secret.txt'), 's', 'utf8')
-    await expect(readMaterials([join(outside, 'secret.txt')], root, root)).rejects.toThrow(/escapes the workspace root/)
+    await expect(readMaterials([join(outside, 'secret.txt')], root, [root])).rejects.toThrow(/escapes the workspace root/)
   })
 
   it('rejects a symlink inside the workspace that points outside it', async () => {
@@ -187,7 +187,7 @@ describe('review fix: material containment hardening', () => {
     const outside = await mkdtemp(join(tmpdir(), 'docwright-out-'))
     await writeFile(join(outside, 'secret.txt'), 's', 'utf8')
     await symlink(join(outside, 'secret.txt'), join(root, 'leak.txt'))
-    await expect(readMaterials(['leak.txt'], root, root)).rejects.toThrow(/symlink/)
+    await expect(readMaterials(['leak.txt'], root, [root])).rejects.toThrow(/symlink/)
   })
 })
 
@@ -245,7 +245,7 @@ describe('review fix: empty-string config fallback', () => {
 
 describe('review fix: remaining load-time branches', () => {
   it('rejects a non-string material reference', async () => {
-    await expect(readMaterials([42 as never], '/tmp', '/tmp')).rejects.toThrow(/must be a string/)
+    await expect(readMaterials([42 as never], '/tmp', ['/tmp'])).rejects.toThrow(/must be a string/)
   })
 
   it('rejects a rule whose pattern does not compile at load', async () => {

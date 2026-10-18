@@ -71,7 +71,7 @@ docwright 的差异化就在"内容合格性"这一层，由三件事组成：
 
 行为：素材读取与首 prompt token 预检 → 闭环（3.2）→ 落盘三个文件（产物 JSON、sidecar 回执、Markdown 渲染），全部 tmp+rename 原子写、产物先于回执落盘（崩溃只会留下可读草稿，不会留下孤儿回执）。
 
-**复用预检**：`reuse: true` 的 pack（workspace 级默认开）在生成前扫描产物根：存在同 pack 产物且 sidecar 回执绿、记录版本与安装版本一致、产物当前 hash 与回执一致（staleness 对账，不重跑校验）→ 直接返回该产物（`reused: true` + 原回执），零 LLM 开销；`force: true` 始终重建。人工修正产物后 hash 变化，预检自然不命中。
+**复用预检**：`reuse: true` 的 pack（workspace 级默认开）在生成前扫描产物根，命中需过全部门关卡：同 pack + 绿回执 + 版本一致 + 产物 hash 一致 + 素材清单逐项相等 + （链式 pack）upstream 锚点相等与寻址产物名一致 + 显式非寻址 params 不在场 → 直接返回该产物（`reused: true` + 原回执），零 LLM 开销；任一漂移或 `force: true` 落正常生成。机制细节以 docs/designs/cosmic-context.md 复用预检节为准。
 
 返回 `{ artifactPath, markdownPath, receipt, summary }`（回执内联全量；`summary` 为产物关键计数——functions/processes/subProcesses/totalCfps，按字段存在性给出，省一次文件回读）；warn 策略下追加 `upstreamWarnings`；per-function pack 追加 `coverage`（本阶段绿色产物相对参照功能集的 `{ covered, total, missing }`——req 参照 plan functions，func/tech 参照上游阶段已覆盖集）。required 的 `targetIndex` 缺失时 fail loud 并列出上游全部候选（index、funcId、l2Name），pendingConfirmation 同样携带 `candidates`。全绿时产物是正式产物；**迭代耗尽时工具抛错（fail loud），但草稿 + 红回执（`isValid: false` + 全部未解决 Issue）保留在磁盘上**，供人工救援，绝不静默采用最后一轮。
 
@@ -191,7 +191,7 @@ workspaceRoot/
 
 - workspace 级 pack（cosmic-context / cosmic-context-sync）忽略 `topic`：素材根固定 `<workspace>/references/`、产物根固定 `<workspace>/context/`；
 - topic 级 pack：声明 `requiresTopic: true` 的 pack（cosmic 链四阶段）**必须传 `topic`**（缺失即调用期响亮报错）——一个需求一个 topic 目录，链路径与覆盖扫描都以此为锚；未声明的 pack 不传 `topic` 时用 Config 根，传了则两个根移到 `<topic>/` 下（仍受 workspace 包含约束）；
-- `reuse` 与 scope 正交：scope 决定目录，reuse 决定 doc_generate 是否做"已有绿产物即复用"预检。默认按作用域语义区分（workspace true——项目分析只做一次；topic false——需求变更在产物 hash 里不可见，复用会拿旧需求产物冒充），pack 可显式覆盖（cosmic-context-sync 声明 `reuse: false`，同步是动作）；
+- `reuse` 与 scope 正交：scope 决定目录，reuse 决定 doc_generate 是否做"已有绿产物即复用"预检。默认按作用域语义区分（workspace true——工作区级分析只做一次；topic false——逐 topic 生成是推进语义：扇出逐个推进、参数试调），pack 可显式覆盖（cosmic-context-sync 声明 `reuse: false`——同步是动作；cosmic req/func/tech 声明 `reuse: true`——输入类全部有锚后链式复用安全）；
 - `doc_chain_status` 的输出根从 plan 路径推断（plan 所在目录即输出根），topic 目录下的链编排无需额外参数。
 
 ### 3.10 工具 `doc_chain_status` — 扇出覆盖账目
@@ -206,7 +206,7 @@ workspaceRoot/
 
 ```
 packs/<name>/
-├── manifest.json      # name / version / description / consumes / scope? / reuse? / languages / maxRounds? / params?
+├── manifest.json      # name / version / description / consumes / scope? / reuse? / materialsRoot? / languages / maxRounds? / params?
 ├── schema.json        # JSON Schema（draft-07 或 2020-12），定义"文档长什么样"
 ├── rules/<lang>.json  # 声明式规则，定义"什么算合格"（简单族）
 ├── rules/functions.js # JS 函数规则（可选），跨字段规则（唯一性、求和、区间）

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { loadPacks } from '../src/pack-loader.ts'
+import { artifactHashOf } from '../src/receipt.ts'
 import { defineDocGenerateTool, defineDocValidateTool } from '../src/tools.ts'
 
 const packsRoot = fileURLToPath(new URL('../packs', import.meta.url))
@@ -131,6 +132,15 @@ describe('materials freshness (reuse pre-check)', () => {
     expect(doubled.reused).toBeUndefined()
   })
 
+  it('an unparseable artifact of the addressed name falls through to regeneration', async () => {
+    const h = await makeHarness()
+    await writeMaterial(h.wsRoot, 'mat.txt', 'v1')
+    const first = await h.generate(['mat.txt'])
+    await writeFile(first.artifactPath, '{not json', 'utf8')
+    const rerun = await h.generate(['mat.txt'], '{"v":2}')
+    expect(rerun.reused).toBeUndefined()
+  })
+
   it('a legacy receipt without a materials manifest never reuses', async () => {
     const h = await makeHarness()
     await writeMaterial(h.wsRoot, 'mat.txt', 'v1')
@@ -176,3 +186,81 @@ describe('materials freshness (reuse pre-check)', () => {
 async function hashOf(path: string): Promise<string> {
   return createHash('sha256').update(await readFile(path, 'utf8')).digest('hex')
 }
+
+/** Minimal chained fixture pack: consumes ws-pack, topic-scoped, reuse: true, one optional param. */
+async function writeChainedPack(root: string, name: string): Promise<void> {
+  const dir = join(root, name)
+  await mkdir(join(dir, 'rules'), { recursive: true })
+  await mkdir(join(dir, 'prompts'), { recursive: true })
+  await mkdir(join(dir, 'templates'), { recursive: true })
+  await mkdir(join(dir, 'samples'), { recursive: true })
+  await writeFile(join(dir, 'manifest.json'), JSON.stringify({
+    name, version: '1.0.0', description: `${name} fixture`, consumes: ['ws-pack'], languages: ['zh-CN'],
+    scope: 'topic', reuse: true, requiresTopic: true,
+    params: { myParam: { type: 'string', default: 'x', description: 'optional tunable' } },
+  }), 'utf8')
+  await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
+  await writeFile(join(dir, 'rules', 'zh-CN.json'), '[]', 'utf8')
+  await writeFile(join(dir, 'prompts', 'zh-CN.md'), 'p {{materials}} {{upstream}} {{params}}', 'utf8')
+  await writeFile(join(dir, 'templates', 'zh-CN.hbs'), 't', 'utf8')
+  await writeFile(join(dir, 'samples', 'golden.json'), '{}', 'utf8')
+}
+
+describe('chained reuse pre-check (upstream anchors, addressing, params)', () => {
+  interface ChainHarness {
+    wsRoot: string
+    generate(upstream: string[], extra?: Record<string, unknown>): Promise<{ reused?: boolean; artifactPath: string }>
+    rewriteUpstream(path: string, content: unknown): Promise<void>
+  }
+
+  async function makeChainHarness(): Promise<ChainHarness> {
+    const packRoot = await mkdtemp(join(tmpdir(), 'docwright-cr-pack-'))
+    await writeFixturePack(packRoot, 'ws-pack')
+    await writeChainedPack(packRoot, 'ch-pack')
+    const packs = await loadPacks(packsRoot, { extra: [packRoot] })
+    const wsRoot = await mkdtemp(join(tmpdir(), 'docwright-cr-ws-'))
+    await mkdir(join(wsRoot, 'context'), { recursive: true })
+    await writeFile(join(wsRoot, 'context', 'wsart.json'), '{"v":1}\n', 'utf8')
+    await writeFile(join(wsRoot, 'context', 'wsart.receipt.json'), JSON.stringify({
+      pack: 'ws-pack', packVersion: '1.0.0', isValid: true, artifactHash: artifactHashOf({ v: 1 }),
+    }), 'utf8')
+    const deps = { packs, config: { provider: 'p', model: 'm', workspaceRoot: wsRoot } as never, ctx: { llm: {} } }
+    return {
+      wsRoot,
+      generate(upstream, extra = {}) {
+        deps.ctx = { llm: scriptedLlm(['{"d":1}']).llm }
+        return defineDocGenerateTool(deps).execute({
+          pack: 'ch-pack', topic: 't1', materials: [], language: 'zh-CN', artifactName: 'one', upstream, ...extra,
+        } as never, { signal } as never) as never
+      },
+      async rewriteUpstream(path, content) {
+        await writeFile(join(wsRoot, path), `${JSON.stringify(content)}\n`, 'utf8')
+        const receiptPath = join(wsRoot, path.replace(/\.json$/, '.receipt.json'))
+        const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as { artifactHash: string }
+        receipt.artifactHash = artifactHashOf(content)
+        await writeFile(receiptPath, JSON.stringify(receipt), 'utf8')
+      },
+    }
+  }
+
+  it('reuses a green chained artifact on identical inputs and regenerates when the upstream changed', async () => {
+    const h = await makeChainHarness()
+    const first = await h.generate(['context/wsart.json'])
+    expect(first.reused).toBeUndefined()
+    const again = await h.generate(['context/wsart.json'], { artifactName: 'one', topic: 't1' })
+    expect(again.reused).toBe(true)
+    await h.rewriteUpstream('context/wsart.json', { v: 2 })
+    const stale = await h.generate(['context/wsart.json'], { artifactName: 'one', topic: 't1' })
+    expect(stale.reused).toBeUndefined()
+  })
+
+  it('an explicit non-addressing param skips reuse; a different addressed name is simply another artifact', async () => {
+    const h = await makeChainHarness()
+    await h.generate(['context/wsart.json'])
+    const drifted = await h.generate(['context/wsart.json'], { artifactName: 'one', topic: 't1', params: { myParam: 'y' } })
+    expect(drifted.reused).toBeUndefined()
+    const other = await h.generate(['context/wsart.json'], { artifactName: 'two', topic: 't1' })
+    expect(other.reused).toBeUndefined()
+    expect(other.artifactPath).toContain('two.json')
+  })
+})

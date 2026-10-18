@@ -88,7 +88,11 @@ describe('manifest scope/reuse declaration (pack-loader)', () => {
     expect(packs.get('cosmic-context')!.manifest).toMatchObject({ scope: 'workspace', reuse: true })
     // The sync pack is the deliberate workspace-without-reuse exception (sync is an action).
     expect(packs.get('cosmic-context-sync')!.manifest).toMatchObject({ scope: 'workspace', reuse: false })
-    expect(packs.get('cosmic-plan')!.manifest).toMatchObject({ scope: 'topic', reuse: false })
+    expect(packs.get('cosmic-plan')!.manifest).toMatchObject({ scope: 'topic', reuse: false, materialsRoot: 'input' })
+    // The per-topic chain stages now declare reuse: every input class is anchor-verified.
+    expect(packs.get('cosmic-req')!.manifest).toMatchObject({ reuse: true })
+    expect(packs.get('cosmic-func')!.manifest).toMatchObject({ reuse: true })
+    expect(packs.get('cosmic-tech')!.manifest).toMatchObject({ reuse: true })
   })
 
   it('a workspace-scope pack defaults reuse to true', async () => {
@@ -115,6 +119,18 @@ describe('manifest scope/reuse declaration (pack-loader)', () => {
     await expect(loadPacks(badScope, {})).rejects.toThrow(/requiresTopic is meaningless on a workspace-scope pack/)
   })
 
+  it('validates manifest.materialsRoot and keeps a valid declaration', async () => {
+    const bad = await mkdtemp(join(tmpdir(), 'docwright-mr-'))
+    await writeFixturePack(bad, 'mr-abs', { materialsRoot: '/etc' })
+    await expect(loadPacks(bad, {})).rejects.toThrow(/manifest\.materialsRoot must be a workspace-relative directory path/)
+    const esc = await mkdtemp(join(tmpdir(), 'docwright-mr2-'))
+    await writeFixturePack(esc, 'mr-esc', { materialsRoot: 'a/../..b' })
+    await expect(loadPacks(esc, {})).rejects.toThrow(/manifest\.materialsRoot must be a workspace-relative directory path/)
+    const ok = await mkdtemp(join(tmpdir(), 'docwright-mr3-'))
+    await writeFixturePack(ok, 'mr-ok', { materialsRoot: 'input' })
+    expect((await loadPacks(ok, {})).get('mr-ok')!.manifest.materialsRoot).toBe('input')
+  })
+
   it('fails loud on an out-of-domain scope and a non-boolean reuse', async () => {
     const badScope = await mkdtemp(join(tmpdir(), 'docwright-badscope-'))
     await writeFixturePack(badScope, 'galactic', { scope: 'galactic' })
@@ -131,7 +147,7 @@ describe('requiresTopic enforcement (doc_generate)', () => {
     const args = { ...PLAN_ARGS }
     delete (args as Record<string, unknown>).topic
     await expect(defineDocGenerateTool(deps).execute(args as never, { signal } as never))
-      .rejects.toThrow(/scopes its artifacts to one requirement: pass topic/)
+      .rejects.toThrow(/scopes its artifacts to one topic: pass topic/)
   })
 
   it('topic is a plain-segment name even when the pack requires it', async () => {
@@ -142,11 +158,11 @@ describe('requiresTopic enforcement (doc_generate)', () => {
 })
 
 describe('topic parameter (doc_generate roots)', () => {
-  it('relocates the output root to <topic>/output/ and the materials root to <topic>/references/', async () => {
+  it('relocates the output root to <topic>/output/ and the materials dir to <topic>/input/ (plan declares input)', async () => {
     const deps = await makeDeps((await loadPacks(packsRoot, {})).get('cosmic-plan')!.goldenSample)
     const root = (deps.config as { workspaceRoot: string }).workspaceRoot
-    await mkdir(join(root, 'req-a', 'references'), { recursive: true })
-    await writeFile(join(root, 'req-a', 'references', 'mat.txt'), '话题素材', 'utf8')
+    await mkdir(join(root, 'req-a', 'input'), { recursive: true })
+    await writeFile(join(root, 'req-a', 'input', 'mat.txt'), '话题素材', 'utf8')
     await seedContext(deps)
     deps.ctx.llm = scriptedLlm([JSON.stringify((await loadPacks(packsRoot, {})).get('cosmic-plan')!.goldenSample)]).llm
     const out = await defineDocGenerateTool(deps).execute({ ...PLAN_ARGS, materials: ['mat.txt'], topic: 'req-a' } as never, { signal } as never) as { artifactPath: string }
@@ -187,7 +203,7 @@ describe('workspace reuse pre-check (doc_generate)', () => {
     expect(first.calls()).toBe(1)
 
     const deps2 = { ...deps, ctx: { llm: scriptedLlm(['{"v":2}']).llm } }
-    const again = await defineDocGenerateTool(deps2).execute({ pack: 'ws-pack', materials: ['#!inline\nx'], language: 'zh-CN', artifactName: 'whatever' } as never, { signal } as never) as { artifactPath: string; reused?: boolean; receipt: { isValid: boolean } }
+    const again = await defineDocGenerateTool(deps2).execute({ pack: 'ws-pack', materials: ['#!inline\nx'], language: 'zh-CN', artifactName: 'ctx' } as never, { signal } as never) as { artifactPath: string; reused?: boolean; receipt: { isValid: boolean } }
     expect(again.reused).toBe(true)
     expect(again.artifactPath).toBe(gen.artifactPath)
     expect(again.receipt.isValid).toBe(true)

@@ -58,7 +58,7 @@ const WORKSPACE_CONTEXT_DIR = 'context'
 
 /** Single-segment directory name for the topic parameter. Unicode letters
  * (CJK included) and inner spaces are allowed — the topicNoPattern reads
- * only the leading requirement number, the rest is free description. Path
+ * only the leading work-item number, the rest is free description. Path
  * safety stays absolute: no separators, no leading dot, no `..`, trimmed,
  * bounded length. */
 function assertTopicName(topic: string): string {
@@ -78,28 +78,36 @@ function assertTopicName(topic: string): string {
  * workspace-scope packs ignore the topic and fix their homes (materials
  * `references/`, artifacts `context/`); a topic argument relocates both roots
  * under `<workspace>/<topic>/`; otherwise the configured roots apply unchanged.
+ * Topic-scope packs resolve material refs against `<topic>/<dir>/` FIRST, then
+ * the workspace-level `<workspace>/<dir>/` of the same name — a topic's own
+ * input shadows the shared one (dir: manifest materialsRoot, default
+ * config materialsRoot).
  */
 function resolveScopedRoots(
   workspaceRoot: string,
   config: Config,
   pack: Pack,
   topic: string | undefined,
-): { materialsRoot: string; outputRoot: string } {
+): { materialsRoots: readonly string[]; outputRoot: string } {
+  const spec = pack.manifest.materialsRoot ?? config.materialsRoot
   if (pack.manifest.scope === 'workspace') {
     return {
-      materialsRoot: resolveRootWithin(workspaceRoot, config.materialsRoot, 'materialsRoot'),
+      materialsRoots: [resolveRootWithin(workspaceRoot, spec, 'materialsRoot')],
       outputRoot: resolveRootWithin(workspaceRoot, WORKSPACE_CONTEXT_DIR, 'outputRoot'),
     }
   }
   if (topic !== undefined && topic.length > 0) {
     const topicRoot = confinePath(workspaceRoot, assertTopicName(topic), 'topic')
     return {
-      materialsRoot: resolveRootWithin(topicRoot, config.materialsRoot, 'materialsRoot'),
+      materialsRoots: [
+        resolveRootWithin(topicRoot, spec, 'materialsRoot'),
+        resolveRootWithin(workspaceRoot, spec, 'materialsRoot'),
+      ],
       outputRoot: resolveRootWithin(topicRoot, config.outputRoot, 'outputRoot'),
     }
   }
   return {
-    materialsRoot: resolveRootWithin(workspaceRoot, config.materialsRoot, 'materialsRoot'),
+    materialsRoots: [resolveRootWithin(workspaceRoot, spec, 'materialsRoot')],
     outputRoot: resolveRootWithin(workspaceRoot, config.outputRoot, 'outputRoot'),
   }
 }
@@ -311,21 +319,36 @@ function planCandidates(records: readonly { artifact: unknown }[]): FunctionCand
   return []
 }
 
+/** Order-insensitive multiset equality of two upstream anchor lists. */
+function sameAnchors(a: readonly UpstreamAnchor[] | undefined, b: readonly UpstreamAnchor[] | undefined): boolean {
+  const key = (list: readonly UpstreamAnchor[] | undefined) => JSON.stringify(
+    [...(list ?? [])].sort((x, y) => (x.pack < y.pack ? -1 : x.pack > y.pack ? 1 : x.artifactHash < y.artifactHash ? -1 : x.artifactHash > y.artifactHash ? 1 : 0)),
+  )
+  return key(a) === key(b)
+}
+
 /**
  * Reuse pre-check (docs/designs/cosmic-context.md): a pack declaring reuse
  * skips generation when its output root already holds an artifact of the same
  * pack whose sidecar receipt is green, whose canonical hash still matches
- * the file (staleness reconciliation — no LLM re-validation), and whose
- * materials manifest equals this call's resolved ref+hash anchors (input
- * freshness: a changed, added, or dropped material forces regeneration). A
- * receipt from another installed pack version certifies the OLD ruleset and
- * never reuses, nor does a legacy receipt without a materials manifest; a red
- * receipt or an edited artifact falls through to normal generation.
+ * the file (staleness reconciliation — no LLM re-validation), whose materials
+ * manifest equals this call's resolved ref+hash anchors (input freshness: a
+ * changed, added, or dropped material forces regeneration), whose upstream
+ * anchors equal this call's verified anchors (a regenerated upstream forces
+ * downstream regeneration), and — when the call addresses a deterministic
+ * artifact name (explicit, engine-named, or prefix-derived) — which is THAT
+ * artifact (fan-out addressing: targetIndex 2 must never reuse function 1's
+ * file; only timestamp-default calls scan name-agnostically). A receipt from
+ * another installed pack version certifies the OLD ruleset and never reuses,
+ * nor does a legacy receipt without a materials manifest; a red receipt or an
+ * edited artifact falls through to normal generation.
  */
 async function findReusableArtifact(
   outputRoot: string,
   pack: Pack,
   materialAnchors: readonly MaterialAnchor[],
+  expectedName?: string | undefined,
+  upstreamAnchors?: readonly UpstreamAnchor[] | undefined,
 ): Promise<{ artifactPath: string; markdownPath: string; receipt: Receipt; summary: ReturnType<typeof summarizeArtifact> } | undefined> {
   let entries
   try {
@@ -333,8 +356,10 @@ async function findReusableArtifact(
   } catch {
     return undefined
   }
+  const expectedFile = expectedName === undefined ? undefined : `${expectedName}.json`
   for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
     if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.endsWith('.receipt.json')) continue
+    if (expectedFile !== undefined && entry.name !== expectedFile) continue
     const base = entry.name.slice(0, -'.json'.length)
     try {
       const receipt = JSON.parse(await readFile(join(outputRoot, `${base}.receipt.json`), 'utf8')) as Partial<Receipt>
@@ -344,6 +369,9 @@ async function findReusableArtifact(
       // receipts certify unknown inputs) and it must equal this call's
       // canonical anchors element-wise (both sides sorted the same way).
       if (JSON.stringify(receipt.materials) !== JSON.stringify(materialAnchors)) continue
+      // Upstream freshness (chained packs): a regenerated upstream changes
+      // its hash and invalidates every downstream reuse.
+      if (!sameAnchors(receipt.upstreamHashes, upstreamAnchors)) continue
       const artifact: unknown = JSON.parse(await readFile(join(outputRoot, entry.name), 'utf8'))
       if (receipt.artifactHash !== artifactHashOf(artifact)) continue
       return {
@@ -429,20 +457,19 @@ export function defineDocGenerateTool(deps: ToolDeps) {
     description: 'Generate a structured document via the pack\'s closed loop (generate → validate → repair until green). '
       + 'Call doc_packs first to see which packs are installed, then pass its name as pack. '
       + 'Returns artifactPath, markdownPath, and the validation receipt. '
-      + 'Materials are paths relative to the materials root (default <workspace>/references/) or inline text starting with "#!inline"; '
-      + 'if the workspace references/ folder holds project-context material (system architecture, module map, numbering conventions), include it. '
-      + 'Artifacts land under the output root — <topic>/output/ when topic is given (requirement-scoped packs REQUIRE topic: one requirement per topic, e.g. its id), <workspace>/output/ otherwise; '
-      + 'workspace-scope packs ignore topic and write to <workspace>/context/ — when their existing green artifact was generated from exactly the same materials (same refs and content hashes) and is unchanged, it is reused as-is (reused: true); a changed, added, or dropped material, an edited artifact, or force: true rebuilds it. '
+      + 'Materials are paths relative to the active materials dir or inline text starting with "#!inline". The two dirs mean different things: references/ holds project reference knowledge (system architecture, module map, numbering conventions — workspace analysis packs read it), while input/ holds the user\'s per-work-item document (e.g. the requirement analysis brief); topic-scoped packs resolve refs against <topic>/<dir>/ first, then the workspace-level <workspace>/<dir>/. '
+      + 'Artifacts land under the output root — <topic>/output/ when topic is given (topic-scoped packs REQUIRE topic: one work item, one topic directory — e.g. a requirement analysis, a functional design, and a technical design for the same work item share one topic), <workspace>/output/ otherwise; '
+      + 'reuse: a green, unchanged artifact of a reuse pack that was generated from exactly this call\'s inputs (same materials manifest — refs and content hashes — and, for chained packs, hash-matching upstream anchors and the same addressed artifact name) is returned as-is (reused: true, zero LLM); a changed or added/dropped material, a regenerated upstream, an edited artifact, an explicit non-addressing param, or force: true rebuilds it. '
       + 'Pack-declared tunables can be overridden via params; required params (no default) must be provided. '
       + 'Passing params that change the upstream-recorded values — or generating a pack with confirm-flagged params whose values are not yet confirmed upstream — returns a pendingConfirmation param table first: present it to the user for approval, then re-call with confirm: true (do not self-confirm a gate the user has not seen; re-passing values identical to the upstream receipt counts as inheritance and does not gate). '
       + 'maxRounds caps this call\'s loop rounds.',
     parameters: {
       pack: { type: 'string', required: true, description: 'Pack name; discover installed packs with doc_packs (e.g. cosmic-plan)' },
-      materials: { type: 'array', items: { type: 'string' }, description: 'Material references: paths relative to the materials root (default references/ under the workspace) or #!inline text. Optional for chained packs whose upstream artifacts carry the context' },
+      materials: { type: 'array', items: { type: 'string' }, description: 'Material references: paths relative to the active materials dir (references/ for reference knowledge, input/ for the user\'s per-work-item document — packs declare which; topic-level dir wins over the workspace-level one) or #!inline text. Optional for chained packs whose upstream artifacts carry the context' },
       language: { type: 'string', description: 'Output language (default: config defaultLanguage)' },
       upstream: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative paths to upstream artifacts for chained packs; each must carry a green sidecar receipt (hash-verified, and recording the installed pack version unless config upstreamVersionPolicy is "warn"). Extra green artifacts of installed packs may ride along as context (e.g. the project context), but at least one consumed-type artifact is required' },
       artifactName: { type: 'string', description: 'Output base name, plain [A-Za-z0-9._-] basename (default: <pack>-<timestamp>); REFUSED on per-function calls — the engine names those <pack>-<funcId> from the upstream plan' },
-      topic: { type: 'string', description: 'Topic directory name, e.g. the requirement number plus a free description ("KERQ-352 收藏夹" or "KERQ-352-favorites"): relocates the output root to <topic>/output/ and the materials root to <topic>/references/; REQUIRED by packs declaring requiresTopic (the cosmic chain stages), ignored by workspace-scope packs' },
+      topic: { type: 'string', description: 'Topic directory name — the work item\'s id plus a free description ("REQ-142 favorites" or "REQ-142-收藏夹"): relocates the output root to <topic>/output/ and the materials dir to <topic>/<materials-dir>/; REQUIRED by packs declaring requiresTopic (per-topic documents such as a requirement analysis, functional design, or technical design), ignored by workspace-scope packs. When the user has not explicitly named the topic, ask them for it (work-item id and short name) before calling — never invent one' },
       maxRounds: { type: 'number', description: 'Round cap for this call (e.g. when the user asks to try more rounds); clamped to config maxRoundsCeiling' },
       force: { type: 'boolean', description: 'Rebuild even when a reusable green artifact of this pack already exists (bypasses the reuse pre-check)' },
       params: { type: 'object', additionalProperties: true, description: 'Overrides for pack-declared tunables (discovered via doc_packs), e.g. {"cfpTotal": {"value": 100, "downFactor": 0.9, "upFactor": 1.2}}; unknown names, out-of-range values, and missing required params fail loud; explicit params always trigger the confirmation gate' },
@@ -459,25 +486,12 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       const materials = (args.materials as string[] | undefined) ?? []
       const upstream = args.upstream as string[] | undefined
       const workspaceRoot = effectiveWorkspaceRoot(exec as SessionWorkspaceCarrier | undefined, deps.config.workspaceRoot)
-      const { materialsRoot, outputRoot } = resolveScopedRoots(workspaceRoot, deps.config, pack, args.topic)
-      // Requirement-scoped packs refuse to generate without a topic
-      // (docs/designs/cosmic-context.md): one requirement, one topic
+      const { materialsRoots, outputRoot } = resolveScopedRoots(workspaceRoot, deps.config, pack, args.topic)
+      // Topic-scoped packs refuse to generate without a topic
+      // (docs/designs/cosmic-context.md): one work item, one topic
       // directory, so chain paths and coverage scans key off it.
       if (pack.manifest.requiresTopic === true && (args.topic === undefined || args.topic.length === 0)) {
-        throw new Error(`pack "${pack.manifest.name}" scopes its artifacts to one requirement: pass topic (a single directory name, e.g. "KERQ-352 收藏夹") — artifacts land under <topic>/output/ and upstream/doc_chain_status paths key off it`)
-      }
-      // Reuse pre-check (docs/designs/cosmic-context.md): before any param
-      // or route work — a green, hash-intact artifact of a reuse pack
-      // generated from exactly this call's materials (same canonical refs,
-      // same content hashes) is returned as-is; force: true always rebuilds.
-      // Materials resolve first, so an unreadable ref fails loud even when a
-      // reusable artifact exists (the caller explicitly named it). On a miss
-      // the files are re-read inside generateDocument, which owns the
-      // receipt's manifest — the double read keeps the service self-contained.
-      if (pack.manifest.reuse === true && args.force !== true) {
-        const anchors = await materialAnchorsOf(materials, workspaceRoot, materialsRoot)
-        const reused = await findReusableArtifact(outputRoot, pack, anchors)
-        if (reused !== undefined) return { ...reused, reused: true } as unknown as DocGenerateResult
+        throw new Error(`pack "${pack.manifest.name}" scopes its artifacts to one topic: pass topic (a single directory name, e.g. "REQ-142 favorites") — artifacts land under <topic>/output/ and upstream/doc_chain_status paths key off it`)
       }
       let upstreamTexts: string[] | undefined
       let upstreamAnchors: UpstreamAnchor[] | undefined
@@ -494,15 +508,12 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         upstreamWarnings = verified.warnings.length > 0 ? verified.warnings : undefined
         upstreamRecords = verified.records
       }
-      // Some input must exist: materials, or the upstream artifacts of a
-      // chained pack (whose text already feeds the prompt).
-      if (materials.length === 0 && upstreamTexts === undefined) {
-        throw new Error('materials must not be empty: provide at least one material reference (a workspace file path or #!inline text), or pass upstream artifacts for chained packs')
-      }
       // Confirmation gate (docs/designs/params-and-chain-contract.md): zero
       // LLM cost — resolved before the route check. Explicit params always
       // gate; confirm-flagged params gate until confirmed at the chain head,
-      // after which downstream stages inherit the recorded values.
+      // after which downstream stages inherit the recorded values. Params and
+      // naming resolve BEFORE the reuse pre-check, so a chained reuse hit can
+      // verify the receipt's upstream anchors and the addressed artifact name.
       let overrides = normalizeParams(args.params)
       const paramsProvided = overrides !== undefined && Object.keys(overrides).length > 0
       const paramsBase = mergeUpstreamParams(upstreamRecords)
@@ -520,6 +531,54 @@ export function defineDocGenerateTool(deps: ToolDeps) {
           throw new Error(`topicNoPattern is not a valid regex: ${(error as Error).message}`)
         }
       }
+      // Fan-out naming: a per-function call is ENGINE-named `<pack>-<funcId>`
+      // from the upstream plan — distinct functions never collide and
+      // regeneration is idempotent. An explicit artifactName on a
+      // per-function call fails loud: in a real session hand-picked names
+      // collided (two req artifacts shared one file and a function's output
+      // was silently overwritten). Non-per-function defaults keep the
+      // timestamp form — the reuse scan stays name-agnostic there.
+      const targetIndex = (overrides?.targetIndex ?? paramsBase?.targetIndex)
+      const target = typeof targetIndex === 'number' ? planCandidates(upstreamRecords).find(c => c.index === targetIndex) : undefined
+      const topicNo = overrides?.topicNo ?? paramsBase?.topicNo
+      if (pack.manifest.artifactPrefix !== undefined && args.artifactName !== undefined && (target !== undefined || typeof topicNo === 'string')) {
+        throw new Error(`pack "${pack.manifest.name}" is engine-named (artifactPrefix "${pack.manifest.artifactPrefix}"): omit artifactName${target !== undefined ? ` — this artifact is ${pack.manifest.artifactPrefix}-${topicNo ?? '<topicNo>'}-${String(targetIndex).padStart(2, '0')}` : ` — this artifact is ${pack.manifest.artifactPrefix}-${topicNo ?? '<topicNo>'}`}`)
+      }
+      const deterministicName = target !== undefined
+        ? (typeof pack.manifest.artifactPrefix === 'string' && typeof topicNo === 'string'
+            ? `${pack.manifest.artifactPrefix}-${topicNo}-${String(target.index).padStart(2, '0')}`
+            : `${pack.manifest.name}-${target.funcId}`)
+        : args.artifactName ?? (typeof pack.manifest.artifactPrefix === 'string' && typeof topicNo === 'string'
+            ? `${pack.manifest.artifactPrefix}-${topicNo}`
+            : undefined)
+      const artifactName = deterministicName ?? `${pack.manifest.name}-${Date.now()}`
+      // Reuse pre-check (docs/designs/cosmic-context.md): a green, hash-intact
+      // artifact of a reuse pack — generated from exactly this call's
+      // materials (same canonical refs, same content hashes), the same
+      // upstream anchors (a regenerated upstream forces downstream
+      // regeneration), and addressed by the same deterministic name — is
+      // returned as-is; force: true always rebuilds. Explicit non-addressing
+      // params are a drift signal the anchor comparison cannot see, so they
+      // skip reuse and let the normal path apply paramDriftPolicy. Materials
+      // resolve first, so an unreadable ref fails loud even when a reusable
+      // artifact exists (the caller explicitly named it). On a miss the files
+      // are re-read inside generateDocument, which owns the receipt's
+      // manifest — the double read keeps the service self-contained.
+      const addressingParams = new Set(Object.entries(pack.manifest.params ?? {})
+        .filter(([, spec]) => spec.required === true && spec.confirm !== true)
+        .map(([name]) => name))
+      const paramOverrideDrift = paramsProvided && overrides !== undefined
+        && Object.keys(overrides).some(name => !addressingParams.has(name))
+      if (pack.manifest.reuse === true && args.force !== true && !paramOverrideDrift) {
+        const anchors = await materialAnchorsOf(materials, workspaceRoot, materialsRoots)
+        const reused = await findReusableArtifact(outputRoot, pack, anchors, deterministicName, upstreamAnchors)
+        if (reused !== undefined) return { ...reused, reused: true } as unknown as DocGenerateResult
+      }
+      // Some input must exist: materials, or the upstream artifacts of a
+      // chained pack (whose text already feeds the prompt).
+      if (materials.length === 0 && upstreamTexts === undefined) {
+        throw new Error('materials must not be empty: provide at least one material reference (a workspace file path or #!inline text), or pass upstream artifacts for chained packs')
+      }
       const preview = previewParams(pack, overrides, paramsBase)
       const confirmNames = Object.entries(pack.manifest.params ?? {}).filter(([, spec]) => spec.confirm === true).map(([name]) => name)
       const satisfiedUpstream = confirmNames.length > 0 && paramsBase !== undefined && confirmNames.every(name => paramsBase[name] !== undefined)
@@ -530,11 +589,8 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       // addressing like targetIndex) are call routing and never gate
       // (docs/designs/params-and-chain-contract.md).
       const policy = resolveConfirmPolicy(args.confirmPolicy, deps.config.confirmPolicy)
-      const addressNames = new Set(Object.entries(pack.manifest.params ?? {})
-        .filter(([, spec]) => spec.required === true && spec.confirm !== true)
-        .map(([name]) => name))
       const changedOverrides = paramsProvided && (paramsBase === undefined
-        || Object.entries(overrides!).some(([name, value]) => !addressNames.has(name) && stableStringify(paramsBase[name]) !== stableStringify(value)))
+        || Object.entries(overrides!).some(([name, value]) => !addressingParams.has(name) && stableStringify(paramsBase[name]) !== stableStringify(value)))
       const gateHit = policy === 'strict'
         ? preview.rows.length > 0
         : policy === 'standard' && (changedOverrides || (confirmNames.length > 0 && !satisfiedUpstream))
@@ -588,31 +644,11 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       }
       const route = requireRoute(deps)
       const llm = createLlmPort(deps.ctx as never, route)
-      // Fan-out naming: a per-function call is ENGINE-named `<pack>-<funcId>`
-      // from the upstream plan — distinct functions never collide and
-      // regeneration is idempotent. An explicit artifactName on a
-      // per-function call fails loud: in a real session hand-picked names
-      // collided (two req artifacts shared one file and a function's output
-      // was silently overwritten). Non-per-function defaults keep the
-      // timestamp form.
-      const targetIndex = (overrides?.targetIndex ?? paramsBase?.targetIndex)
-      const target = typeof targetIndex === 'number' ? planCandidates(upstreamRecords).find(c => c.index === targetIndex) : undefined
-      const topicNo = overrides?.topicNo ?? paramsBase?.topicNo
-      if (pack.manifest.artifactPrefix !== undefined && args.artifactName !== undefined && (target !== undefined || typeof topicNo === 'string')) {
-        throw new Error(`pack "${pack.manifest.name}" is engine-named (artifactPrefix "${pack.manifest.artifactPrefix}"): omit artifactName${target !== undefined ? ` — this artifact is ${pack.manifest.artifactPrefix}-${topicNo ?? '<topicNo>'}-${String(targetIndex).padStart(2, '0')}` : ` — this artifact is ${pack.manifest.artifactPrefix}-${topicNo ?? '<topicNo>'}`}`)
-      }
-      const artifactName = target !== undefined
-        ? (typeof pack.manifest.artifactPrefix === 'string' && typeof topicNo === 'string'
-            ? `${pack.manifest.artifactPrefix}-${topicNo}-${String(target.index).padStart(2, '0')}`
-            : `${pack.manifest.name}-${target.funcId}`)
-        : args.artifactName ?? (typeof pack.manifest.artifactPrefix === 'string' && typeof topicNo === 'string'
-            ? `${pack.manifest.artifactPrefix}-${topicNo}`
-            : `${pack.manifest.name}-${Date.now()}`)
       const result = await generateDocument({
         pack,
         language,
         materials,
-        materialsRoot,
+        materialsRoots,
         upstream: upstreamTexts,
         upstreamAnchors,
         maxRounds: args.maxRounds,

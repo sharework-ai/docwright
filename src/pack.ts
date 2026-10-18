@@ -101,9 +101,12 @@ export interface PackManifest {
   /**
    * Whether doc_generate may reuse an existing green, hash-intact artifact of
    * this pack without regenerating. Defaults differ by scope semantics
-   * (workspace packs true — project analysis happens once; topic packs false
-   * — a changed requirement is invisible in the artifact hash); a manifest
-   * declaration overrides the default.
+   * (workspace packs true — the workspace-level analysis happens once; topic
+   * packs false — per-topic generation is progressive: fan-out advances and
+   * params get retuned, so a fresh document is the expected outcome). A
+   * manifest declaration overrides the default; declaring reuse on a chained
+   * pack is safe only because every input class is anchor-verified at the
+   * reuse pre-check (materials manifest, upstream hashes, pack version).
    */
   readonly reuse: boolean
   /** IETF-ish language tags the pack provides prompts/templates/keyword rules for. */
@@ -113,9 +116,17 @@ export interface PackManifest {
   /** Behavior when call-time params drift from the upstream receipt's recorded params (docs/designs/params-and-chain-contract.md). */
   readonly paramDriftPolicy?: 'regenerate' | 'revalidate' | undefined
   /**
+   * Material directory name overriding config materialsRoot (default
+   * "references" — project reference knowledge). A different name separates
+   * a different input semantic: e.g. "input" marks user-provided requirement
+   * docs. Topic-scope packs resolve refs against `<topic>/<dir>/` first, then
+   * the workspace-level `<workspace>/<dir>/`.
+   */
+  readonly materialsRoot?: string | undefined
+  /**
    * Require the call's `topic` parameter (docs/designs/cosmic-context.md):
-   * requirement-scoped packs refuse to generate without one, so every
-   * requirement's artifacts land under `<topic>/output/`. Meaningless on
+   * topic-scoped packs refuse to generate without one, so a work item's
+   * artifacts all land under `<topic>/output/`. Meaningless on
    * workspace-scope packs (topic is ignored there) and rejected at load time.
    */
   readonly requiresTopic?: boolean | undefined

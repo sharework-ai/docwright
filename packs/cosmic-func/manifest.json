@@ -68,6 +68,7 @@
       "description": "1-based position of the target function in the upstream plan functions array; no default — pick from the candidates listed when missing"
     }
   },
-    "requiresTopic": true,
-  "artifactPrefix": "FUNC"
+  "requiresTopic": true,
+  "artifactPrefix": "FUNC",
+  "reuse": true
 }

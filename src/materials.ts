@@ -11,13 +11,15 @@ export interface MaterialEntry {
 }
 
 /**
- * Material references: paths relative to the materials root (default
- * `<workspace>/references/`), or inline text whose first line is the explicit
- * `#!inline` marker (no heuristics). Containment is enforced twice against
- * the WORKSPACE root: lexically first (so `../..` gets a clear traversal
- * error even for nonexistent paths), then on REAL paths (so a symlink inside
- * the workspace that points outside it is rejected too). Both keep secrets
- * out of prompts.
+ * Material references: paths relative to one of the candidate material roots
+ * (topic-scope packs try `<topic>/<dir>/` first, then `<workspace>/<dir>/`;
+ * default dir `references/`, pack-declared otherwise — e.g. `input/` for
+ * user-provided requirement docs), or inline text whose first line is the
+ * explicit `#!inline` marker (no heuristics). Containment is enforced twice
+ * against the WORKSPACE root: lexically first (so `../..` gets a clear
+ * traversal error even for nonexistent paths), then on REAL paths (so a
+ * symlink inside the workspace that points outside it is rejected too).
+ * Both keep secrets out of prompts.
  */
 /** Sorted file names under dir (capped); explains a missing dir instead of throwing. */
 async function listFiles(dir: string): Promise<string> {
@@ -31,15 +33,11 @@ async function listFiles(dir: string): Promise<string> {
 }
 
 /** Loud failure with recovery hints: what exists where, and the no-prefix rule. */
-async function notReadable(ref: string, abs: string, materialBase: string, root: string, cause: unknown): Promise<Error> {
-  const parts = [
-    `material not readable: ${ref}`,
-    `resolved: ${abs}`,
-    `materials root: ${materialBase}`,
-    `available: ${await listFiles(materialBase)}`,
-  ]
-  const defaultRoot = resolve(root, 'references')
-  if (resolve(materialBase) !== defaultRoot) parts.push(`workspace references/ has: ${await listFiles(defaultRoot)}`)
+async function notReadable(ref: string, bases: readonly string[], root: string, cause: unknown): Promise<Error> {
+  const parts = [`material not readable: ${ref}`]
+  for (const materialBase of bases) {
+    parts.push(`${relative(root, materialBase) || '.'}/ has: ${await listFiles(materialBase)}`)
+  }
   parts.push(`hint: refs are relative to the materials root — do not repeat the root directory name inside the ref; cause: ${(cause as Error).message}`)
   return new Error(parts.join('; '))
 }
@@ -54,13 +52,13 @@ async function notReadable(ref: string, abs: string, materialBase: string, root:
 export async function readMaterialEntries(
   refs: readonly string[],
   workspaceRoot: string,
-  materialsRoot: string,
+  materialsRoots: readonly string[],
 ): Promise<readonly MaterialEntry[]> {
   // An empty list is legal: chained packs may rely on the upstream artifact
   // alone for context. The tool layer enforces "some input exists".
   if (refs.length === 0) return []
   const root = await realpath(resolve(workspaceRoot))
-  const materialBase = resolve(root, materialsRoot)
+  const bases = materialsRoots.map(r => resolve(root, r))
   const out: MaterialEntry[] = []
   for (const ref of refs) {
     if (typeof ref !== 'string') {
@@ -71,39 +69,65 @@ export async function readMaterialEntries(
       out.push({ ref: '#!inline', hash: sha256(text), text })
       continue
     }
-    const abs = resolve(materialBase, normalizeWindowsPath(ref))
-    const lexicalRel = relative(root, abs)
-    if (lexicalRel === '..' || lexicalRel.startsWith('../') || isAbsolute(lexicalRel)) {
-      throw new Error(`material path escapes the workspace root: ${ref} (root: ${root})`)
-    }
+    // Roots are candidates tried in order (topic-level first, then the
+    // workspace-level dir of the same name): the first root where the ref
+    // resolves wins, so a topic's own input shadows the shared one.
     let real: string | undefined
-    try {
-      real = await realpath(abs)
-    } catch (error) {
+    let resolvedBase: string | undefined
+    let lastError: unknown
+    const escapes: string[] = []
+    for (const materialBase of bases) {
+      const abs = resolve(materialBase, normalizeWindowsPath(ref))
+      const lexicalRel = relative(root, abs)
+      if (lexicalRel === '..' || lexicalRel.startsWith('../') || isAbsolute(lexicalRel)) {
+        escapes.push(abs)
+        continue
+      }
+      try {
+        const candidate = await realpath(abs)
+        const realRel = relative(root, candidate)
+        if (realRel === '..' || realRel.startsWith('../') || isAbsolute(realRel)) {
+          throw new Error(`material path escapes the workspace root via symlink: ${ref} (root: ${root})`)
+        }
+        real = candidate
+        resolvedBase = materialBase
+        break
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('escapes the workspace root via symlink')) throw error
+        lastError = error
+      }
+    }
+    if (real === undefined) {
       // Models habitually prefix refs with the materials root's directory
       // name ("references/x.md" under a references/ root double-resolves to
       // references/references/x.md). When stripping that leading segment
       // lands on an existing in-root file, accept it; otherwise fail loud
       // with the available names so the retry can pick a real one.
-      const prefix = `${basename(materialBase)}/`
-      if (ref.startsWith(prefix)) {
+      for (const materialBase of bases) {
+        const prefix = `${basename(materialBase)}/`
+        if (!ref.startsWith(prefix)) continue
         const strippedAbs = resolve(materialBase, ref.slice(prefix.length))
         const strippedRel = relative(root, strippedAbs)
         const contained = strippedRel !== '..' && !strippedRel.startsWith('../') && !isAbsolute(strippedRel)
-        if (contained) {
-          try {
-            real = await realpath(strippedAbs)
-          } catch { /* fall through to the loud error below */ }
-        }
+        if (!contained) continue
+        try {
+          const candidate = await realpath(strippedAbs)
+          const realRel = relative(root, candidate)
+          if (realRel === '..' || realRel.startsWith('../') || isAbsolute(realRel)) continue
+          real = candidate
+          resolvedBase = materialBase
+          break
+        } catch { /* try the next root */ }
       }
-      if (real === undefined) throw await notReadable(ref, abs, materialBase, root, error)
     }
-    const realRel = relative(root, real)
-    if (realRel === '..' || realRel.startsWith('../') || isAbsolute(realRel)) {
-      throw new Error(`material path escapes the workspace root via symlink: ${ref} (root: ${root})`)
+    if (real === undefined || resolvedBase === undefined) {
+      if (escapes.length === bases.length) {
+        throw new Error(`material path escapes the workspace root: ${ref} (root: ${root})`)
+      }
+      throw await notReadable(ref, bases, root, lastError)
     }
     const text = await readFile(real, 'utf8')
-    out.push({ ref: relative(materialBase, real).split(sep).join('/'), hash: sha256(text), text })
+    out.push({ ref: relative(resolvedBase, real).split(sep).join('/'), hash: sha256(text), text })
   }
   return out
 }
@@ -112,9 +136,9 @@ export async function readMaterialEntries(
 export async function readMaterials(
   refs: readonly string[],
   workspaceRoot: string,
-  materialsRoot: string,
+  materialsRoots: readonly string[],
 ): Promise<readonly string[]> {
-  return (await readMaterialEntries(refs, workspaceRoot, materialsRoot)).map(e => e.text)
+  return (await readMaterialEntries(refs, workspaceRoot, materialsRoots)).map(e => e.text)
 }
 
 /** Canonical manifest: {ref, hash} pairs sorted by ref then hash (multiset — duplicates kept). */
@@ -128,7 +152,7 @@ export function materialAnchors(entries: readonly MaterialEntry[]): readonly Mat
 export async function materialAnchorsOf(
   refs: readonly string[],
   workspaceRoot: string,
-  materialsRoot: string,
+  materialsRoots: readonly string[],
 ): Promise<readonly MaterialAnchor[]> {
-  return materialAnchors(await readMaterialEntries(refs, workspaceRoot, materialsRoot))
+  return materialAnchors(await readMaterialEntries(refs, workspaceRoot, materialsRoots))
 }

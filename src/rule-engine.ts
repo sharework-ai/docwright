@@ -12,7 +12,7 @@ import { truncateSnapshot } from './issue.ts'
 /**
  * Mini rule engine (bake-off winner over @stoplight/spectral-core; see
  * docs/designs/docwright-mvp.md Approach A: probe found CJS-only packaging and
- * custom-function wiring friction; every COSMIC rule family maps here in
+ * custom-function wiring friction; the packs' rule families map here in
  * ~100 lines). Runs declarative rules then function rules over the artifact.
  */
 

@@ -372,7 +372,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
     const packs = deps.packs
     await generateDocument({
       pack: packs.get('prod-pack')!, language: 'zh-CN', materials: ['#!inline\nm'], artifactName: 'up',
-      materialsRoot: join(deps.root, 'references'), workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
+      materialsRoots: [join(deps.root, 'references')], workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
       config: { provider: 'p', model: 'm' } as never, llm: { async complete() { return '{"title":"abcdef"}' } }, onRound: () => {},
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
@@ -388,7 +388,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
     const packs = deps.packs
     await generateDocument({
       pack: packs.get('prod-pack')!, language: 'zh-CN', materials: ['#!inline\nm'], artifactName: 'up2',
-      materialsRoot: join(deps.root, 'references'), workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
+      materialsRoots: [join(deps.root, 'references')], workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
       config: { provider: 'p', model: 'm' } as never, llm: { async complete() { return '{"title":"abcdef"}' } }, onRound: () => {},
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
@@ -407,7 +407,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
     const packs = deps.packs
     await generateDocument({
       pack: packs.get('prod-pack')!, language: 'zh-CN', materials: ['#!inline\nm'], artifactName: 'up',
-      materialsRoot: join(deps.root, 'references'), workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
+      materialsRoots: [join(deps.root, 'references')], workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
       config: { provider: 'p', model: 'm' } as never, llm: { async complete() { return '{"title":"abcdef"}' } }, onRound: () => {},
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
@@ -422,7 +422,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
     const packs = deps.packs
     await generateDocument({
       pack: packs.get('prod-pack')!, language: 'zh-CN', materials: ['#!inline\nm'], artifactName: 'up',
-      materialsRoot: join(deps.root, 'references'), workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
+      materialsRoots: [join(deps.root, 'references')], workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
       config: { provider: 'p', model: 'm' } as never, llm: { async complete() { return '{"title":"abcdef"}' } }, onRound: () => {},
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
@@ -439,7 +439,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
     const deps = await chainDeps('revalidate')
     await generateDocument({
       pack: deps.packs.get('prod-pack')!, language: 'zh-CN', materials: ['#!inline\nm'], artifactName: 'up',
-      materialsRoot: join(deps.root, 'references'), workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
+      materialsRoots: [join(deps.root, 'references')], workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
       config: { provider: 'p', model: 'm' } as never, llm: { async complete() { return '{"title":"abcdef"}' } }, onRound: () => {},
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
@@ -456,7 +456,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
     const deps = await chainDeps('revalidate')
     await generateDocument({
       pack: deps.packs.get('prod-pack')!, language: 'zh-CN', materials: ['#!inline\nm'], artifactName: 'up',
-      materialsRoot: join(deps.root, 'references'), workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
+      materialsRoots: [join(deps.root, 'references')], workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
       config: { provider: 'p', model: 'm' } as never, llm: { async complete() { return '{"title":"abcdef"}' } }, onRound: () => {},
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
@@ -497,7 +497,7 @@ describe('doc_generate: chain inheritance and param drift', () => {
     const packs = deps.packs
     await generateDocument({
       pack: packs.get('prod-pack')!, language: 'zh-CN', materials: ['#!inline\nm'], artifactName: 'up',
-      materialsRoot: join(deps.root, 'references'), workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
+      materialsRoots: [join(deps.root, 'references')], workspaceRoot: deps.root, outputRoot: join(deps.root, 'output'),
       config: { provider: 'p', model: 'm' } as never, llm: { async complete() { return '{"title":"abcdef"}' } }, onRound: () => {},
       params: { budget: { value: 70, downFactor: 0.9, upFactor: 1.2 } },
     } as never)
