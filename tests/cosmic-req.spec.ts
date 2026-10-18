@@ -178,7 +178,7 @@ describe('cosmic-req mutation tests (guardrail-is-real)', () => {
 
   it('plan-alignment: funcId mismatch, index out of range, cfps mismatch, and missing upstream are all caught', async () => {
     const { req, plan } = await packs()
-    const wrongId = mutate(req.goldenSample, d => { d.funcId = 'USR-DEL' })
+    const wrongId = mutate(req.goldenSample, d => { d.funcId = 'KERQ-352-02' })
     expect(issueRuleIds(validateOf(req, 'zh-CN', wrongId, undefined, planContext(plan)))).toContain('req/plan-alignment')
     const outOfRange = mutate(req.goldenSample, d => { d.index = 5 })
     expect(issueRuleIds(validateOf(req, 'zh-CN', outOfRange, undefined, planContext(plan)))).toContain('req/plan-alignment')
@@ -214,7 +214,7 @@ describe('cosmic-req mutation tests (guardrail-is-real)', () => {
       mutate(req.goldenSample, d => { d.funcId = 'bad id!' }),
       mutate(req.goldenSample, d => { (d.functionalUsers as Array<{ role: string }>)[0]!.role = 'wizard' }),
       mutate(req.goldenSample, d => { d.businessRules = (d.businessRules as unknown[]).slice(0, 1) }),
-      mutate(req.goldenSample, d => { d.funcId = 'USR-DEL' }),
+      mutate(req.goldenSample, d => { d.funcId = 'KERQ-352-02' }),
     ]
     const all = drafts.flatMap(draft => [...validateOf(req, 'zh-CN', draft, undefined, ctx), ...validateOf(req, 'en-US', draft, undefined, ctx)])
     const errors = all.filter(i => i.severity === 'error')
@@ -244,7 +244,7 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
     const deps = await makeDeps(scriptedLlm([JSON.stringify(plan.goldenSample)]))
     await seedContext(deps)
     await defineDocGenerateTool(deps).execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: { value: 70, downFactor: 0.9, upFactor: 1.2 } }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
-    const wrong = mutate(req.goldenSample, d => { d.funcId = 'USR-DEL' })
+    const wrong = mutate(req.goldenSample, d => { d.funcId = 'KERQ-352-02' })
     deps.ctx.llm = scriptedLlm([JSON.stringify(wrong), JSON.stringify(req.goldenSample)])
     const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; iterations: number; rounds: Array<{ errorCount: number; promptHash?: string }> } }
@@ -264,13 +264,13 @@ describe('cosmic-req chained generation (deterministic LLM)', () => {
     } as never, { signal } as never)
 
     const withUpstream = await defineDocValidateTool(deps).execute({
-      artifactPath: 'topic-a/output/cosmic-req-USR-FAV.json', pack: 'cosmic-req', upstream: ['topic-a/output/plan.json'],
+      artifactPath: 'topic-a/output/cosmic-req-KERQ-352-01.json', pack: 'cosmic-req', upstream: ['topic-a/output/plan.json'],
     } as never, { signal } as never) as { receipt: { isValid: boolean }; hashMatches: boolean }
     expect(withUpstream.receipt.isValid).toBe(true)
     expect(withUpstream.hashMatches).toBe(true)
 
     const without = await defineDocValidateTool(deps).execute({
-      artifactPath: 'topic-a/output/cosmic-req-USR-FAV.json', pack: 'cosmic-req',
+      artifactPath: 'topic-a/output/cosmic-req-KERQ-352-01.json', pack: 'cosmic-req',
     } as never, { signal } as never) as { receipt: { isValid: boolean; rules: Array<{ id: string; status: string }> } }
     expect(without.receipt.isValid).toBe(false)
     expect(without.receipt.rules.find(r => r.ruleId === 'req/plan-alignment')?.status).toBe('fail')

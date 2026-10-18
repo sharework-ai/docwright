@@ -52,7 +52,7 @@ describe('fan-out contract: targetIndex selection', () => {
     await seedContext(deps as never)
     await defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     await expect(defineDocGenerateTool(deps as never).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', artifactName: 'req', upstream: ['topic-a/output/plan.json'], confirm: true,
-    } as never, { signal } as never)).rejects.toThrow(/missing required pack params for "cosmic-req": targetIndex.*Candidates from the upstream plan: 1\. USR-FAV \(添加收藏\); 2\. USR-DEL \(删除收藏\)/)
+    } as never, { signal } as never)).rejects.toThrow(/missing required pack params for "cosmic-req": targetIndex.*Candidates from the upstream plan: 1\. KERQ-352-01 \(添加收藏\); 2\. KERQ-352-02 \(删除收藏\)/)
   })
 
   it('auto-names per-function artifacts `<pack>-<funcId>` and reports stage coverage', async () => {
@@ -63,8 +63,8 @@ describe('fan-out contract: targetIndex selection', () => {
     await gen.execute({ pack: 'cosmic-plan', topic: 'topic-a', materials: ['#!inline\nx'], language: 'zh-CN', upstream: ['context/context.json'], params: { cfpTotal: BUDGET }, confirm: true, artifactName: 'plan' } as never, { signal } as never)
     const out = await gen.execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { artifactPath: string; coverage?: { covered: number; total: number; missing: string[] } }
-    expect(out.artifactPath.endsWith('cosmic-req-USR-FAV.json')).toBe(true)
-    expect(out.coverage).toEqual({ covered: 1, total: 2, missing: ['USR-DEL'] })
+    expect(out.artifactPath.endsWith('cosmic-req-KERQ-352-01.json')).toBe(true)
+    expect(out.coverage).toEqual({ covered: 1, total: 2, missing: ['KERQ-352-02'] })
   })
 
   it('refuses an explicit artifactName on a per-function call (naming is engine-owned)', async () => {
@@ -128,7 +128,7 @@ describe('fan-out contract: targetIndex selection', () => {
     const { req } = await packs()
     const second = JSON.parse(JSON.stringify(req.goldenSample)) as { index: number; funcId: string; desiredCfps: number }
     second.index = 2
-    second.funcId = 'USR-DEL'
+    second.funcId = 'KERQ-352-02'
     const deps = await makeDeps([JSON.stringify((await packs()).plan.goldenSample), JSON.stringify(second)])
     const gen = defineDocGenerateTool(deps as never)
     await seedContext(deps as never)
@@ -136,7 +136,7 @@ describe('fan-out contract: targetIndex selection', () => {
     const out = await gen.execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 2 }, confirm: true,
     } as never, { signal } as never) as { artifactPath: string; receipt: { isValid: boolean } }
     expect(out.receipt.isValid).toBe(true)
-    expect(out.artifactPath.endsWith('cosmic-req-USR-DEL.json')).toBe(true)
+    expect(out.artifactPath.endsWith('cosmic-req-KERQ-352-02.json')).toBe(true)
   })
 
   it('lists the candidates in pendingConfirmation when the chain head was never confirmed', async () => {
@@ -154,7 +154,7 @@ describe('fan-out contract: targetIndex selection', () => {
     } as never, { signal } as never) as { pendingConfirmation: boolean; missingRequired: string[]; candidates?: Array<{ index: number; funcId: string }> }
     expect(out.pendingConfirmation).toBe(true)
     expect(out.missingRequired).toContain('targetIndex')
-    expect(out.candidates?.map(c => c.funcId)).toEqual(['USR-FAV', 'USR-DEL'])
+    expect(out.candidates?.map(c => c.funcId)).toEqual(['KERQ-352-01', 'KERQ-352-02'])
   })
 })
 
@@ -180,9 +180,9 @@ describe('doc_chain_status: coverage accounting', () => {
     }
     expect(out.stages).toEqual(['cosmic-req', 'cosmic-func', 'cosmic-tech'])
     expect(out.functions).toHaveLength(2)
-    expect(out.functions[0]!.funcId).toBe('USR-FAV')
+    expect(out.functions[0]!.funcId).toBe('KERQ-352-01')
     expect(out.functions[0]!.l2Name).toBe('添加收藏')
-    expect(out.functions[0]!.coverage['cosmic-req']).toBe('cosmic-req-USR-FAV')
+    expect(out.functions[0]!.coverage['cosmic-req']).toBe('cosmic-req-KERQ-352-01')
     expect(out.functions[0]!.coverage['cosmic-func']).toBeNull()
     expect(out.functions[1]!.coverage['cosmic-req']).toBeNull()
     expect(out.coverage['cosmic-req']).toEqual({ covered: 1, total: 2 })
@@ -212,9 +212,9 @@ describe('doc_chain_status: coverage accounting', () => {
     const value = await tool.execute({ plan: 'topic-a/output/plan.json' } as never, { signal } as never) as unknown
     const rendered = tool.output.render({}, value) as Array<{ type: string; text: string }>
     expect(rendered[0]!.type).toBe('text')
-    expect(rendered[0]!.text).toContain('cosmic-req-USR-FAV')
+    expect(rendered[0]!.text).toContain('cosmic-req-KERQ-352-01')
     const out = await tool.execute({ plan: 'topic-a/output/plan.json' } as never, { signal } as never) as { functions: Array<{ coverage: Record<string, string | null> }> }
-    expect(out.functions[0]!.coverage['cosmic-req']).toBe('cosmic-req-USR-FAV')
+    expect(out.functions[0]!.coverage['cosmic-req']).toBe('cosmic-req-KERQ-352-01')
     // Unreadable JSON plan artifact fails loud.
     await writeFile(join(deps.ws, 'topic-a', 'output', 'broken.json'), 'not json', 'utf8')
     await expect(tool.execute({ plan: 'topic-a/output/broken.json' } as never, { signal } as never)).rejects.toThrow(/is not readable JSON/)

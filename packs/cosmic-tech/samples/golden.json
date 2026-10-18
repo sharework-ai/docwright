@@ -3,7 +3,7 @@
   "language": "zh-CN",
   "index": 1,
   "desiredCfps": 35,
-  "funcId": "USR-FAV",
+  "funcId": "KERQ-352-01",
   "diagrams": [
     "sequenceDiagram\n    autonumber\n    actor u as 注册用户\n    participant fav as 收藏服务\n    participant db as 收藏库\n    u->>fav: E 收藏请求\n    fav->>db: W 收藏记录",
     "sequenceDiagram\n    autonumber\n    actor u as 注册用户\n    participant fav as 收藏服务\n    participant db as 收藏库\n    u->>fav: E 列表请求\n    fav->>db: R 收藏记录\n    fav-->>u: X 收藏列表"

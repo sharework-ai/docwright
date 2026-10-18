@@ -102,7 +102,7 @@ async function generateFuncChain(deps: { ctx: { llm: unknown } }, func: Pack, re
   await defineDocGenerateTool(deps).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
   } as never, { signal } as never)
   deps.ctx.llm = scriptedLlm([JSON.stringify(func.goldenSample)])
-  await defineDocGenerateTool(deps).execute({ pack: 'cosmic-func', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-req-USR-FAV.json'], params: { targetIndex: 1 }, confirm: true,
+  await defineDocGenerateTool(deps).execute({ pack: 'cosmic-func', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-req-KERQ-352-01.json'], params: { targetIndex: 1 }, confirm: true,
   } as never, { signal } as never)
 }
 
@@ -162,7 +162,7 @@ describe('cosmic-tech mutation tests (guardrail-is-real)', () => {
     const { tech, func } = await packs()
     const wrongIndex = mutate(tech.goldenSample, d => { d.index = 2 })
     expect(issueRuleIds(validateOf(tech, 'zh-CN', wrongIndex, undefined, funcContext(func)))).toContain('tech/func-alignment')
-    const wrongId = mutate(tech.goldenSample, d => { d.funcId = 'USR-DEL' })
+    const wrongId = mutate(tech.goldenSample, d => { d.funcId = 'KERQ-352-02' })
     expect(issueRuleIds(validateOf(tech, 'zh-CN', wrongId, undefined, funcContext(func)))).toContain('tech/func-alignment')
     const wrongCfps = mutate(tech.goldenSample, d => { d.desiredCfps = 40 })
     expect(issueRuleIds(validateOf(tech, 'zh-CN', wrongCfps, undefined, funcContext(func)))).toContain('tech/func-alignment')
@@ -308,7 +308,7 @@ describe('cosmic-tech mutation tests (guardrail-is-real)', () => {
     const drafts = [
       mutate(tech.goldenSample, d => { delete (d.processes as Array<Record<string, unknown>>)[0]!.subProcesses }),
       mutate(tech.goldenSample, d => { d.funcId = 'bad id!' }),
-      mutate(tech.goldenSample, d => { d.funcId = 'USR-DEL' }),
+      mutate(tech.goldenSample, d => { d.funcId = 'KERQ-352-02' }),
       mutate(tech.goldenSample, d => { (d.processes as Array<{ name: string }>)[0]!.name = '收藏条目' }),
       mutate(tech.goldenSample, d => {
         const procs = d.processes as Array<{ subProcesses: Movement[] }>
@@ -332,7 +332,7 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     const deps = await makeDeps(undefined)
     await generateFuncChain(deps, func, req, plan)
     deps.ctx.llm = scriptedLlm([JSON.stringify(tech.goldenSample)])
-    const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-tech', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-func-USR-FAV.json'], params: { targetIndex: 1 }, confirm: true,
+    const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-tech', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-func-KERQ-352-01.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string; artifactHash: string }>; params?: Record<string, unknown> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.upstreamHashes).toHaveLength(1)
@@ -347,7 +347,7 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     await generateFuncChain(deps, func, req, plan)
     const wrong = mutate(tech.goldenSample, d => { d.desiredCfps = 40 })
     deps.ctx.llm = scriptedLlm([JSON.stringify(wrong), JSON.stringify(tech.goldenSample)])
-    const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-tech', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-func-USR-FAV.json'], params: { targetIndex: 1 }, confirm: true,
+    const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-tech', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-func-KERQ-352-01.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; iterations: number; rounds: Array<{ errorCount: number }> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.iterations).toBe(2)
@@ -360,17 +360,17 @@ describe('cosmic-tech chained generation (deterministic LLM)', () => {
     const deps = await makeDeps(undefined)
     await generateFuncChain(deps, func, req, plan)
     deps.ctx.llm = scriptedLlm([JSON.stringify(tech.goldenSample)])
-    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-tech', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-func-USR-FAV.json'], params: { targetIndex: 1 }, confirm: true,
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-tech', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-func-KERQ-352-01.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
 
     const withUpstream = await defineDocValidateTool(deps).execute({
-      artifactPath: 'topic-a/output/cosmic-tech-USR-FAV.json', pack: 'cosmic-tech', upstream: ['topic-a/output/cosmic-func-USR-FAV.json'],
+      artifactPath: 'topic-a/output/cosmic-tech-KERQ-352-01.json', pack: 'cosmic-tech', upstream: ['topic-a/output/cosmic-func-KERQ-352-01.json'],
     } as never, { signal } as never) as { receipt: { isValid: boolean }; hashMatches: boolean }
     expect(withUpstream.receipt.isValid).toBe(true)
     expect(withUpstream.hashMatches).toBe(true)
 
     const without = await defineDocValidateTool(deps).execute({
-      artifactPath: 'topic-a/output/cosmic-tech-USR-FAV.json', pack: 'cosmic-tech',
+      artifactPath: 'topic-a/output/cosmic-tech-KERQ-352-01.json', pack: 'cosmic-tech',
     } as never, { signal } as never) as { receipt: { isValid: boolean; rules: Array<{ id: string; status: string }> } }
     expect(without.receipt.isValid).toBe(false)
     expect(without.receipt.rules.find(r => r.ruleId === 'tech/func-alignment')?.status).toBe('fail')

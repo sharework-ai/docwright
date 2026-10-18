@@ -3,7 +3,7 @@
   "language": "zh-CN",
   "index": 1,
   "desiredCfps": 35,
-  "funcId": "USR-FAV",
+  "funcId": "KERQ-352-01",
   "diagrams": [
     "sequenceDiagram\n    autonumber\n    actor u as 注册用户\n    participant fav as 收藏服务\n    participant prod as 商品服务\n    participant price as 价格服务\n    participant notify as 通知服务\n    u->>fav: 收藏商品\n    fav-->>u: 收藏结果\n    u->>fav: 查询收藏列表\n    fav->>prod: 读取商品信息\n    prod-->>fav: 商品数据\n    fav-->>u: 收藏列表\n    price->>notify: 推送收藏降价提醒\n    notify-->>u: 降价通知"
   ],

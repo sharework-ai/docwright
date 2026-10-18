@@ -173,7 +173,7 @@ describe('cosmic-func mutation tests (guardrail-is-real)', () => {
     const { func, req } = await packs()
     const wrongIndex = mutate(func.goldenSample, d => { d.index = 2 })
     expect(issueRuleIds(validateOf(func, 'zh-CN', wrongIndex, reqContext(req)))).toContain('func/req-alignment')
-    const wrongId = mutate(func.goldenSample, d => { d.funcId = 'USR-DEL' })
+    const wrongId = mutate(func.goldenSample, d => { d.funcId = 'KERQ-352-02' })
     expect(issueRuleIds(validateOf(func, 'zh-CN', wrongId, reqContext(req)))).toContain('func/req-alignment')
     const wrongCfps = mutate(func.goldenSample, d => { d.desiredCfps = 40 })
     expect(issueRuleIds(validateOf(func, 'zh-CN', wrongCfps, reqContext(req)))).toContain('func/req-alignment')
@@ -193,7 +193,7 @@ describe('cosmic-func mutation tests (guardrail-is-real)', () => {
       mutate(func.goldenSample, d => { (d.processes as Array<{ receiver: string }>)[0]!.receiver = '注册用户' }),
       mutate(func.goldenSample, d => { (d.processes as Array<{ name: string }>)[1]!.name = '收藏商品' }),
       mutate(func.goldenSample, d => { (d.processes as Array<{ index: number }>)[2]!.index = 9 }),
-      mutate(func.goldenSample, d => { d.funcId = 'USR-DEL' }),
+      mutate(func.goldenSample, d => { d.funcId = 'KERQ-352-02' }),
     ]
     const all = drafts.flatMap(draft => [...validateOf(func, 'zh-CN', draft, ctx), ...validateOf(func, 'en-US', draft, ctx)])
     const errors = all.filter(i => i.severity === 'error')
@@ -212,7 +212,7 @@ describe('cosmic-func chained generation (deterministic LLM)', () => {
     await defineDocGenerateTool(deps).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(func.goldenSample)])
-    const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-func', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-req-USR-FAV.json'], params: { targetIndex: 1 }, confirm: true,
+    const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-func', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-req-KERQ-352-01.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; upstreamHashes: Array<{ pack: string; artifactHash: string }> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.upstreamHashes).toHaveLength(1)
@@ -229,7 +229,7 @@ describe('cosmic-func chained generation (deterministic LLM)', () => {
     } as never, { signal } as never)
     const wrong = mutate(func.goldenSample, d => { d.desiredCfps = 40 })
     deps.ctx.llm = scriptedLlm([JSON.stringify(wrong), JSON.stringify(func.goldenSample)])
-    const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-func', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-req-USR-FAV.json'], params: { targetIndex: 1 }, confirm: true,
+    const out = await defineDocGenerateTool(deps).execute({ pack: 'cosmic-func', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-req-KERQ-352-01.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never) as { receipt: { isValid: boolean; iterations: number; rounds: Array<{ errorCount: number }> } }
     expect(out.receipt.isValid).toBe(true)
     expect(out.receipt.iterations).toBe(2)
@@ -246,17 +246,17 @@ describe('cosmic-func chained generation (deterministic LLM)', () => {
     await defineDocGenerateTool(deps).execute({ pack: 'cosmic-req', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/plan.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
     deps.ctx.llm = scriptedLlm([JSON.stringify(func.goldenSample)])
-    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-func', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-req-USR-FAV.json'], params: { targetIndex: 1 }, confirm: true,
+    await defineDocGenerateTool(deps).execute({ pack: 'cosmic-func', topic: 'topic-a', materials: ['#!inline\n收藏功能需求素材'], language: 'zh-CN', upstream: ['topic-a/output/cosmic-req-KERQ-352-01.json'], params: { targetIndex: 1 }, confirm: true,
     } as never, { signal } as never)
 
     const withUpstream = await defineDocValidateTool(deps).execute({
-      artifactPath: 'topic-a/output/cosmic-func-USR-FAV.json', pack: 'cosmic-func', upstream: ['topic-a/output/cosmic-req-USR-FAV.json'],
+      artifactPath: 'topic-a/output/cosmic-func-KERQ-352-01.json', pack: 'cosmic-func', upstream: ['topic-a/output/cosmic-req-KERQ-352-01.json'],
     } as never, { signal } as never) as { receipt: { isValid: boolean }; hashMatches: boolean }
     expect(withUpstream.receipt.isValid).toBe(true)
     expect(withUpstream.hashMatches).toBe(true)
 
     const without = await defineDocValidateTool(deps).execute({
-      artifactPath: 'topic-a/output/cosmic-func-USR-FAV.json', pack: 'cosmic-func',
+      artifactPath: 'topic-a/output/cosmic-func-KERQ-352-01.json', pack: 'cosmic-func',
     } as never, { signal } as never) as { receipt: { isValid: boolean; rules: Array<{ id: string; status: string }> } }
     expect(without.receipt.isValid).toBe(false)
     expect(without.receipt.rules.find(r => r.ruleId === 'func/req-alignment')?.status).toBe('fail')
