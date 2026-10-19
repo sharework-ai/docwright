@@ -5,7 +5,7 @@ Source: functional spec at docs/designs/docwright-mvp.md. 本文件记录真正�
 ## Open
 - [ ] **param-management-ui（PROPOSAL，地基已备）** — 插件级 / pack 级参数的界面管理。事实基础：docs/designs/param-object-model.md（四层级归属、ParamSpec 属性全集、生命周期矩阵、全量清单、Config 清单、影响半径与不变量、已知差距六条——含 doc_packs 缺 min/max/enum 暴露、确认表 source 无出处维度（素材锚定 vs 模型断言不可区分，实测 cfpTotal 70/40 同表同权）、overridable 内层调整不可见——及 §9 缓解提案 A/B 与三条值来源路径收束表）。机制语义见 params-and-chain-contract.md。
 
-- [ ] **param-provenance（PROPOSAL，设计输入已备）** — 参数出处与内层调整可见性（param-object-model.md §8 差距 5/6 + §9 提案）。**提案 B（可做，成本≈0）**：装载期不变量 `overridable ⇒ confirm`（链头首调必门 → 可调参数基线必过人）+ 配套原则"`resolveBound` 数值边界型参数禁 `overridable`"（调整必撞规则，许可与校验扭结）；采纳需同步 param-object-model.md §2/§4/§7 与 params-and-chain-contract.md；`confirmPolicy: none` 例外照旧。**提案 A（挂起）**：extract-params 素材参数抽取（引文机检 quote ⊆ material + "未找到"一等结果 + required 前置拦截）。挂起理由：优先级取决于对模型能力的信任度——模型越强外层转译/自创越少，但强模型下内层偏离越静默合理、出处 schema 缺口不随能力消失；**触发条件**：真实会话再观测到"素材缺值被模型代答"造成返工，或 UI 设计确定需要出处字段时。**开放方向（不解决，另行设计）**：as-run 值记录（产物 JSON 或回执携带实际生成所用值，引擎对照 effective 记差），涉 schema/回执契约变更。
+- [ ] **param-provenance（PROPOSAL，已定案待实施）** — 参数出处与内层调整可见性（param-object-model.md §8 差距 5/6 + §9 提案）。**提案 A（extract-params，用户定稿不挂起）**：链头素材参数抽取——pack 声明抽取 schema，每个抽取值必须携带可机检引文（quote ⊆ material，无引文即未找到），"未找到"是一等结果：required 参数未找到时由前置检查在生成前拦截，请用户给出或明确认可建议值——**素材缺值被模型代答必须防止，不以模型能力提升为豁免理由**。**提案 B（可做，成本≈0）**：装载期不变量 `overridable ⇒ confirm`（链头首调必门 → 可调参数基线必过人）+ 配套原则"`resolveBound` 数值边界型参数禁 `overridable`"（调整必撞规则，许可与校验扭结）；采纳需同步 param-object-model.md §2/§4/§7 与 params-and-chain-contract.md；`confirmPolicy: none` 例外照旧。**开放方向（另行设计）**：as-run 值记录（产物 JSON 或回执携带实际生成所用值，引擎对照 effective 记差），涉 schema/回执契约变更。
 
 
 
