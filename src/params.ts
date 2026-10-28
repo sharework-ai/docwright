@@ -8,15 +8,17 @@ import { canonicalJson, type Json } from './receipt.ts'
  * fix and the available list (docs/designs/dynamic-parameters.md).
  *
  * Resolution order per declared param: explicit call override > upstream
- * receipt base (chain inheritance) > declared default > required-missing
- * fail loud > optional params without default are omitted. Required params
- * declare no default — the value must come from the caller (ask the user)
- * or from the chain head's receipt.
+ * receipt base (chain inheritance) > extracted value (doc_extract_params,
+ * quote-verified against the call's materials) > declared default >
+ * required-missing fail loud > optional params without default are omitted.
+ * Required params declare no default — the value must come from the caller
+ * (ask the user), the chain head's receipt, or a proven extraction.
  */
 export function resolveEffectiveParams(
   pack: Pack,
   overrides: Readonly<Record<string, unknown>> | undefined,
   base?: Readonly<Record<string, unknown>> | undefined,
+  extracted?: ExtractionView | undefined,
 ): Record<string, unknown> {
   const declared = pack.manifest.params ?? {}
   const names = Object.keys(declared).sort()
@@ -30,6 +32,12 @@ export function resolveEffectiveParams(
     if (base !== undefined && base[name] !== undefined) {
       assertValueMatches(spec, name, base[name], pack.manifest.name, true)
       effective[name] = base[name]
+      continue
+    }
+    const extractedValue = extracted?.values[name]
+    if (extractedValue !== undefined) {
+      assertValueMatches(spec, name, extractedValue.value, pack.manifest.name, false)
+      effective[name] = extractedValue.value
       continue
     }
     if (spec.default !== undefined) {
@@ -55,7 +63,8 @@ export function resolveEffectiveParams(
   return effective
 }
 
-function assertValueMatches(spec: ParamSpec, name: string, value: unknown, packName: string, fromReceipt: boolean): void {
+/** Shared value validation for every resolution tier (explicit / receipt / extracted / default). */
+export function assertValueMatches(spec: ParamSpec, name: string, value: unknown, packName: string, fromReceipt: boolean): void {
   const where = `pack "${packName}" param "${name}"${fromReceipt ? ' (receipt-recorded)' : ''}`
   const typeOk = spec.type === 'number'
     ? typeof value === 'number' && Number.isFinite(value)
@@ -82,6 +91,31 @@ function describeValue(value: unknown): string {
   return String(value)
 }
 
+/** A quote-verified extracted value (the engine re-checks the quote against the call's materials). */
+export interface ExtractedParamValue {
+  readonly value: Json
+  /** Verbatim material excerpt proving the value (whitespace-normalized containment). */
+  readonly quote: string
+  /** Canonical ref of the material the quote was found in. */
+  readonly ref: string
+}
+
+/** A "not found" extraction outcome; a suggestion is model-proposed and never auto-applied — endorsement goes through explicit params. */
+export interface ExtractionNotFound {
+  readonly suggestion?: Json
+  readonly rationale?: string
+}
+
+/**
+ * Extraction tier handed to resolution and preview, already re-verified
+ * against the CURRENT call's materials (changed materials invalidate
+ * unproven entries — docs/designs/params-and-chain-contract.md).
+ */
+export interface ExtractionView {
+  readonly values: Readonly<Record<string, ExtractedParamValue>>
+  readonly notFound: Readonly<Record<string, ExtractionNotFound>>
+}
+
 /** One row of the pendingConfirmation param table (docs/designs/params-and-chain-contract.md). */
 export type ParamRow = {
   readonly name: string
@@ -93,8 +127,15 @@ export type ParamRow = {
    * result (INVALID_TOOL_OUTPUT before the model ever sees the table).
    */
   readonly value?: Json
-  /** Where the effective value came from: the call, the upstream receipt, the declared default, or nothing yet. */
-  readonly source: 'explicit' | 'upstream' | 'default' | 'unset'
+  /** Where the effective value came from: the call, the upstream receipt, a proven extraction, the declared default, or nothing yet. */
+  readonly source: 'explicit' | 'upstream' | 'extracted' | 'default' | 'unset'
+  /** Present when source is "extracted": the verbatim material excerpt proving the value. */
+  readonly quote?: string
+  /** Present when source is "extracted": the canonical material ref the quote was found in. */
+  readonly extractionRef?: string
+  /** Present on an unset row whose extraction reported notFound with a model-proposed suggestion (endorse = pass it via params). */
+  readonly suggestion?: Json
+  readonly suggestionRationale?: string
   readonly required: boolean
   readonly confirm: boolean
   readonly overridable: boolean
@@ -123,6 +164,7 @@ export function previewParams(
   pack: Pack,
   overrides: Readonly<Record<string, unknown>> | undefined,
   base?: Readonly<Record<string, unknown>> | undefined,
+  extracted?: ExtractionView | undefined,
 ): ParamPreview {
   const rows: ParamRow[] = []
   const missingRequired: string[] = []
@@ -130,12 +172,20 @@ export function previewParams(
   for (const [name, spec] of Object.entries(pack.manifest.params ?? {})) {
     let value: Json | undefined
     let source: ParamRow['source']
+    let quote: string | undefined
+    let extractionRef: string | undefined
     if (overrides !== undefined && overrides[name] !== undefined) {
       value = overrides[name] as Json
       source = 'explicit'
     } else if (base !== undefined && base[name] !== undefined) {
       value = base[name] as Json
       source = 'upstream'
+    } else if (extracted?.values[name] !== undefined) {
+      const v = extracted.values[name]!
+      value = v.value
+      source = 'extracted'
+      quote = v.quote
+      extractionRef = v.ref
     } else if (spec.default !== undefined) {
       value = spec.default as Json
       source = 'default'
@@ -144,10 +194,23 @@ export function previewParams(
       source = 'unset'
       if (spec.required === true) missingRequired.push(name)
     }
+    // Only explicit values can drift against the receipt base: extracted
+    // values sit BELOW the base in the resolution order and never take
+    // effect when the base records the param.
     if (source === 'explicit' && base !== undefined && base[name] !== undefined && canonicalJson(base[name]) !== canonicalJson(value)) {
       drift.push({ name, from: base[name] as Json, to: value as Json })
     }
-    rows.push({ name, type: spec.type, ...(value === undefined ? {} : { value: value as Json }), source, required: spec.required === true, confirm: spec.confirm === true, overridable: spec.overridable === true, description: spec.description })
+    const notFound = source === 'unset' ? extracted?.notFound[name] : undefined
+    rows.push({
+      name, type: spec.type,
+      ...(value === undefined ? {} : { value: value as Json }),
+      source,
+      ...(quote === undefined ? {} : { quote }),
+      ...(extractionRef === undefined ? {} : { extractionRef }),
+      ...(notFound?.suggestion === undefined ? {} : { suggestion: notFound.suggestion }),
+      ...(notFound?.rationale === undefined ? {} : { suggestionRationale: notFound.rationale }),
+      required: spec.required === true, confirm: spec.confirm === true, overridable: spec.overridable === true, description: spec.description,
+    })
   }
   return { rows, missingRequired, drift }
 }

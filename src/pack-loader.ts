@@ -39,6 +39,16 @@ function assertParamSpec(raw: unknown, dir: string, name: string): ParamSpec {
   if (s.overridable === true && s.confirm !== true) {
     throw new Error(`${where}.overridable requires confirm: true (an adjustable param's baseline must pass the confirmation gate once; fix: add confirm: true or drop overridable)`)
   }
+  // Extraction invariant (param provenance, proposal A): an extractable
+  // param's provenance channel is the confirmation table's quote column, so
+  // it must be a confirm param. This also bans extractable fan-out addressing
+  // (required non-confirm): those never gate and never reach the table.
+  if (s.extractable === true && s.confirm !== true) {
+    throw new Error(`${where}.extractable requires confirm: true (an extracted value self-proves via the confirmation table's quote column; fix: add confirm: true or drop extractable)`)
+  }
+  if (s.extractable !== undefined && typeof s.extractable !== 'boolean') {
+    throw new Error(`${where}.extractable must be a boolean when present`)
+  }
   if (s.required === true) {
     // required + default is legal: a chain-necessary param whose default is
     // the standing value (always resolves, never confirm-gates on its own);

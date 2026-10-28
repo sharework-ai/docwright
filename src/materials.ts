@@ -147,12 +147,3 @@ export function materialAnchors(entries: readonly MaterialEntry[]): readonly Mat
     .map(({ ref, hash }) => ({ ref, hash }))
     .sort((a, b) => (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : a.hash < b.hash ? -1 : a.hash > b.hash ? 1 : 0))
 }
-
-/** Anchors for a call's refs: resolve then canonicalize (the reuse pre-check's comparison side). */
-export async function materialAnchorsOf(
-  refs: readonly string[],
-  workspaceRoot: string,
-  materialsRoots: readonly string[],
-): Promise<readonly MaterialAnchor[]> {
-  return materialAnchors(await readMaterialEntries(refs, workspaceRoot, materialsRoots))
-}

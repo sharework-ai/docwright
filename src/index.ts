@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { join } from 'node:path'
 import { Config, type Config as DocwrightConfig } from './config.ts'
 import { loadPacks } from './pack-loader.ts'
-import { defineDocChainStatusTool, defineDocGenerateTool, defineDocPacksTool, defineDocValidateTool } from './tools.ts'
+import { defineDocChainStatusTool, defineDocExtractTool, defineDocGenerateTool, defineDocPacksTool, defineDocValidateTool } from './tools.ts'
 
 /**
  * docwright — closed-loop document generation for deepseek-harness.
@@ -17,7 +17,8 @@ export { Config }
 export type { DocwrightConfig }
 export * from './pack.ts'
 export { createScoring, defaultScore, type Scoring } from './convergence.ts'
-export { resolveEffectiveParams } from './params.ts'
+export { resolveEffectiveParams, type ExtractionView } from './params.ts'
+export { readExtractionFile, writeExtractionFile, verifyExtraction, type ExtractionFile, type ExtractionRecord } from './extract.ts'
 export { DocService, generateDocument } from './doc-service.ts'
 export { runRepairLoop, type LoopExhaustReason } from './loop.ts'
 
@@ -44,6 +45,7 @@ export async function registerTools(ctx: Context, config: DocwrightConfig, built
   const deps = { packs, config, ctx }
   ctx.tools.register(defineDocPacksTool(deps))
   ctx.tools.register(defineDocGenerateTool(deps))
+  ctx.tools.register(defineDocExtractTool(deps))
   ctx.tools.register(defineDocValidateTool(deps))
   ctx.tools.register(defineDocChainStatusTool(deps))
 }

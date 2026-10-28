@@ -1,11 +1,12 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { mkdir, readFile, readdir } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { DEFAULT_CONFIRM_POLICY, DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type ConfirmPolicy, type UpstreamVersionPolicy } from './config.ts'
 import { generateDocument, getDocService, parseUpstreamArtifacts, summarizeArtifact, writeAtomic } from './doc-service.ts'
-import { materialAnchorsOf } from './materials.ts'
+import { buildExtractionFile, extractionFilePath, extractableParams, processProposals, readExtractionFile, verifyExtraction, writeExtractionFile } from './extract.ts'
+import { materialAnchors, readMaterialEntries } from './materials.ts'
 import { createLlmPort } from './llm-port.ts'
-import { previewParams, resolveEffectiveParams, type ParamDrift, type ParamRow } from './params.ts'
+import { previewParams, resolveEffectiveParams, type ExtractionView, type ParamDrift, type ParamRow } from './params.ts'
 import type { Pack } from './pack.ts'
 import { effectiveWorkspaceRoot, normalizeWindowsPath, resolveRootWithin, type SessionWorkspaceCarrier } from './paths.ts'
 import { artifactHashOf, type MaterialAnchor, type Receipt, type UpstreamAnchor } from './receipt.ts'
@@ -234,6 +235,7 @@ export function defineDocPacksTool(deps: ToolDeps) {
           required: spec.required === true,
           confirm: spec.confirm === true,
           overridable: spec.overridable === true,
+          extractable: spec.extractable === true,
         })),
       }))
     },
@@ -341,7 +343,10 @@ function sameAnchors(a: readonly UpstreamAnchor[] | undefined, b: readonly Upstr
  * file; only timestamp-default calls scan name-agnostically). A receipt from
  * another installed pack version certifies the OLD ruleset and never reuses,
  * nor does a legacy receipt without a materials manifest; a red receipt or an
- * edited artifact falls through to normal generation.
+ * edited artifact falls through to normal generation. Verified extraction
+ * values must equal the receipt's as-run params too — a re-extraction with a
+ * different value is an input change (same tier as explicit params), so the
+ * artifact is rebuilt and the new value reaches the confirmation gate.
  */
 async function findReusableArtifact(
   outputRoot: string,
@@ -349,6 +354,7 @@ async function findReusableArtifact(
   materialAnchors: readonly MaterialAnchor[],
   expectedName?: string | undefined,
   upstreamAnchors?: readonly UpstreamAnchor[] | undefined,
+  extracted?: ExtractionView | undefined,
 ): Promise<{ artifactPath: string; markdownPath: string; receipt: Receipt; summary: ReturnType<typeof summarizeArtifact> } | undefined> {
   let entries
   try {
@@ -372,6 +378,9 @@ async function findReusableArtifact(
       // Upstream freshness (chained packs): a regenerated upstream changes
       // its hash and invalidates every downstream reuse.
       if (!sameAnchors(receipt.upstreamHashes, upstreamAnchors)) continue
+      // Extraction freshness: the receipt's as-run value must match the
+      // current proven extraction (a re-extracted different value rebuilds).
+      if (extracted !== undefined && Object.entries(extracted.values).some(([name, v]) => stableStringify((receipt.params as Record<string, unknown> | undefined)?.[name]) !== stableStringify(v.value))) continue
       const artifact: unknown = JSON.parse(await readFile(join(outputRoot, entry.name), 'utf8'))
       if (receipt.artifactHash !== artifactHashOf(artifact)) continue
       return {
@@ -461,6 +470,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       + 'Artifacts land under the output root — <topic>/output/ when topic is given (topic-scoped packs REQUIRE topic: one work item, one topic directory — e.g. a requirement analysis, a functional design, and a technical design for the same work item share one topic), <workspace>/output/ otherwise; '
       + 'reuse: a green, unchanged artifact of a reuse pack that was generated from exactly this call\'s inputs (same materials manifest — refs and content hashes — and, for chained packs, hash-matching upstream anchors and the same addressed artifact name) is returned as-is (reused: true, zero LLM); a changed or added/dropped material, a regenerated upstream, an edited artifact, an explicit non-addressing param, or force: true rebuilds it. '
       + 'Pack-declared tunables can be overridden via params; required params (no default) must be provided. '
+      + 'Packs marking params extractable (see doc_packs): run doc_extract_params on the materials FIRST — extracted values carry a verbatim material quote as provenance (confirmation-table source "extracted"); a required param the materials do not state must be asked from the user, never assumed. '
       + 'Passing params that change the upstream-recorded values — or generating a pack with confirm-flagged params whose values are not yet confirmed upstream — returns a pendingConfirmation param table first: present it to the user for approval, then re-call with confirm: true (do not self-confirm a gate the user has not seen; re-passing values identical to the upstream receipt counts as inheritance and does not gate). '
       + 'maxRounds caps this call\'s loop rounds.',
     parameters: {
@@ -571,9 +581,19 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         .map(([name]) => name))
       const paramOverrideDrift = paramsProvided && overrides !== undefined
         && Object.keys(overrides).some(name => !addressingParams.has(name))
+      // Materials resolve once here: anchors for the reuse pre-check and
+      // texts for extraction-quote re-verification (generateDocument re-reads
+      // for the receipt's manifest — the double read keeps the service
+      // self-contained). An unreadable ref fails loud regardless of reuse.
+      const materialEntries = await readMaterialEntries(materials, workspaceRoot, materialsRoots)
+      const extractionFile = await readExtractionFile(extractionFilePath(outputRoot, pack.manifest.name))
+      const extracted = extractionFile !== undefined ? verifyExtraction(pack, extractionFile, materialEntries) : { values: {}, notFound: {} }
+      // A re-extracted value that differs from a reusable receipt's as-run
+      // params is an input change the anchor comparison cannot see —
+      // findReusableArtifact refuses such a match, so the new value reaches
+      // the confirmation gate like any other param change.
       if (pack.manifest.reuse === true && args.force !== true && !paramOverrideDrift) {
-        const anchors = await materialAnchorsOf(materials, workspaceRoot, materialsRoots)
-        const reused = await findReusableArtifact(outputRoot, pack, anchors, deterministicName, upstreamAnchors)
+        const reused = await findReusableArtifact(outputRoot, pack, materialAnchors(materialEntries), deterministicName, upstreamAnchors, extracted)
         if (reused !== undefined) return { ...reused, reused: true } as unknown as DocGenerateResult
       }
       // Some input must exist: materials, or the upstream artifacts of a
@@ -581,7 +601,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       if (materials.length === 0 && upstreamTexts === undefined) {
         throw new Error('materials must not be empty: provide at least one material reference (a workspace file path or #!inline text), or pass upstream artifacts for chained packs')
       }
-      const preview = previewParams(pack, overrides, paramsBase)
+      const preview = previewParams(pack, overrides, paramsBase, extracted)
       const confirmNames = Object.entries(pack.manifest.params ?? {}).filter(([, spec]) => spec.confirm === true).map(([name]) => name)
       const satisfiedUpstream = confirmNames.length > 0 && paramsBase !== undefined && confirmNames.every(name => paramsBase[name] !== undefined)
       // Gate policy: the policy decides WHETHER the gate stands; discharging
@@ -589,7 +609,10 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       // Explicit params that equal the upstream-recorded values are
       // inheritance, not a change; required non-confirm params (fan-out
       // addressing like targetIndex) are call routing and never gate
-      // (docs/designs/params-and-chain-contract.md).
+      // (docs/designs/params-and-chain-contract.md). Extracted values sit
+      // BELOW the receipt base in the resolution order, so they never
+      // override an inherited param — their change surface is the reuse
+      // pre-check (receipt.params vs extraction) plus the chain-head gate.
       const policy = resolveConfirmPolicy(args.confirmPolicy, deps.config.confirmPolicy)
       const changedOverrides = paramsProvided && (paramsBase === undefined
         || Object.entries(overrides!).some(([name, value]) => !addressingParams.has(name) && stableStringify(paramsBase[name]) !== stableStringify(value)))
@@ -646,7 +669,15 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         const listed = candidates.length > 0
           ? ` Candidates from the upstream plan: ${candidates.map(c => `${c.index}. ${c.funcId}${c.l2Name === undefined ? '' : ` (${c.l2Name})`}`).join('; ')}.`
           : ''
-        throw new Error(`missing required pack params for "${pack.manifest.name}": ${preview.missingRequired.join(', ')} (declared without defaults; cause: these values must come from the caller; fix: ask the user for the value(s) and pass them via params).${listed}`)
+        // Extraction ran but found nothing quotable: say so per param and
+        // surface the model's suggestion — the user may give the value or
+        // explicitly endorse the suggestion (never auto-applied).
+        const hints = preview.missingRequired.map(name => {
+          const nf = extracted.notFound[name]
+          if (nf?.suggestion === undefined) return name
+          return `${name} (extraction found no quotable value in the materials; suggested ${shortValue(nf.suggestion)}${nf.rationale === undefined ? '' : ` — ${nf.rationale}`}; pass it via params to endorse)`
+        })
+        throw new Error(`missing required pack params for "${pack.manifest.name}": ${hints.join(', ')} (declared without defaults; cause: these values must come from the caller; fix: ask the user for the value(s) and pass them via params).${listed}`)
       }
       if (preview.drift.length > 0) {
         const policy = pack.manifest.paramDriftPolicy ?? 'regenerate'
@@ -671,6 +702,7 @@ export function defineDocGenerateTool(deps: ToolDeps) {
         maxRounds: args.maxRounds,
         params: overrides,
         paramsBase,
+        extracted: Object.keys(extracted.values).length > 0 ? extracted : undefined,
         artifactName,
         workspaceRoot,
         outputRoot,
@@ -686,6 +718,57 @@ export function defineDocGenerateTool(deps: ToolDeps) {
       const coverage = await coverageProgress(pack, upstreamRecords, outputRoot)
       const withCoverage = coverage === undefined ? result : { ...result, coverage }
       return (upstreamWarnings === undefined ? withCoverage : { ...withCoverage, upstreamWarnings }) as unknown as DocGenerateResult
+    },
+  })
+}
+
+export function defineDocExtractTool(deps: ToolDeps) {
+  return defineTool({
+    name: 'doc_extract_params',
+    description: 'Extract pack params from materials with machine-checkable provenance, BEFORE doc_generate on packs that declare extractable params (doc_packs marks them). '
+      + 'For each extractable param propose either { value, quote } — quote MUST be a verbatim excerpt from the materials (whitespace-insensitive; the engine verifies it and refuses unproven values) — or { notFound: true }. '
+      + '"Not found" is a first-class result: NEVER invent or assume a value the materials do not literally state; a required param left notFound is intercepted before generation and must be asked from the user. '
+      + 'A suggestion (with an optional rationale) may accompany notFound for the user to endorse — it is never auto-applied; endorsing it means passing it via doc_generate params. '
+      + 'Results persist as <pack>.extracted.json next to the pack\'s artifacts; doc_generate re-verifies every quote against the generation-time materials, so changed materials invalidate unproven entries.',
+    parameters: {
+      pack: { type: 'string', required: true, description: 'Pack name whose extractable params to fill (see doc_packs, extractable: true)' },
+      materials: { type: 'array', items: { type: 'string'}, required: true, description: 'Material references to extract from — same ref semantics as doc_generate (paths relative to the active materials dir or #!inline text); extraction proves values FROM these texts, so the list must not be empty' },
+      topic: { type: 'string', description: 'Topic directory name for topic-scoped packs (same semantics as doc_generate; locates the extraction cache under <topic>/output/)' },
+      extractions: { type: 'object', additionalProperties: true, required: true, description: 'Proposed extractions keyed by param name: {"cfpTotal": {"value": {...}, "quote": "the expected CFPs is 70"}} or {"cfpTotal": {"notFound": true, "suggestion": {...}, "rationale": "..."}}. Only doc_packs-marked extractable params are accepted' },
+    },
+    output: {
+      schema: { type: 'json' },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    async execute(args: { pack: string; materials: unknown[]; topic?: string; extractions: unknown }, exec: SessionWorkspaceCarrier) {
+      const pack = resolvePack(deps, args.pack)
+      const extractable = extractableParams(pack)
+      if (extractable.length === 0) {
+        throw new Error(`pack "${pack.manifest.name}" declares no extractable params; doc_extract_params applies to packs marking params extractable: true (see doc_packs)`)
+      }
+      const refs = (args.materials as string[] | undefined) ?? []
+      if (refs.length === 0) {
+        throw new Error(`materials must not be empty: extraction proves values from the materials' own text (pass at least one reference, e.g. the requirement doc)`)
+      }
+      const workspaceRoot = effectiveWorkspaceRoot(exec, deps.config.workspaceRoot)
+      const { materialsRoots, outputRoot } = resolveScopedRoots(workspaceRoot, deps.config, pack, args.topic)
+      const entries = await readMaterialEntries(refs, workspaceRoot, materialsRoots)
+      // Shape enforcement lives at the input schema (type: 'object' — the
+      // runner rejects non-objects before the body runs), matching
+      // normalizeParams; post-schema this is a plain object.
+      const { extractions, results } = processProposals(pack, entries, args.extractions as Record<string, unknown>)
+      // Extraction usually runs before any generation — the output root may
+      // not exist yet (generateDocument mkdirs its own writes).
+      await mkdir(outputRoot, { recursive: true })
+      const path = extractionFilePath(outputRoot, pack.manifest.name)
+      await writeExtractionFile(path, buildExtractionFile(pack, entries, extractions))
+      return {
+        pack: pack.manifest.name,
+        extractionPath: path,
+        extractable: [...extractable],
+        results,
+        hint: 'Values quoted from the materials now carry provenance: doc_generate resolves them ahead of declared defaults and the confirmation table shows their quotes. Present any notFound rows to the user — a required param left notFound will be refused before generation.',
+      }
     },
   })
 }

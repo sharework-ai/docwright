@@ -44,7 +44,8 @@
       "type": "object",
       "required": true,
       "confirm": true,
-      "description": "Total CFP budget {value, downFactor, upFactor}: totalCfps must fall inside [value*downFactor, value*upFactor] (rule plan/cfp-total-band); the tech stage never totals below its planned estimate regardless of downFactor; no default — state the budget via params, downstream stages inherit it"
+      "description": "Total CFP budget {value, downFactor, upFactor}: totalCfps must fall inside [value*downFactor, value*upFactor] (rule plan/cfp-total-band); the tech stage never totals below its planned estimate regardless of downFactor; no default — state the budget via params, downstream stages inherit it; extractable: state it in the requirement doc and run doc_extract_params with a verbatim quote (e.g. quote: 'the expected CFPs is 70') — an unquoted budget must not be invented",
+      "extractable": true
     },
     "cfpPerSubProc": {
       "type": "number",

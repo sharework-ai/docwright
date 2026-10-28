@@ -324,6 +324,6 @@ describe('doc_packs: exposes declared params', () => {
     const tool = defineDocPacksTool({ packs, config: { provider: 'p', model: 'm' } as never, ctx: {} })
     const listed = await tool.execute({} as never, { signal } as never) as Array<{ name: string; params: Array<{ name: string; type: string; description: string }> }>
     const pack = listed.find(p => p.name === 'param-pack')!
-    expect(pack.params).toEqual([{ name: 'limit', type: 'number', description: 'max title length', default: 3, required: false, confirm: false, overridable: false }])
+    expect(pack.params).toEqual([{ name: 'limit', type: 'number', description: 'max title length', default: 3, required: false, confirm: false, overridable: false, extractable: false }])
   })
 })

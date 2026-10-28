@@ -1,6 +1,6 @@
 # 参数对象模型 —— 界面管理的设计地基
 
-参数体系的机制语义（门控细节、漂移策略、Mind the gap、topic 确认）以 `params-and-chain-contract.md` 为准；本文是它的对象模型补充：**参数的层级归属、属性全集、全生命周期行为矩阵、全量清单**，为"插件级 / pack 级参数的界面管理"产品设计提供事实基础。§1–§8 为现状描述，每条均有代码依据（`src/params.ts`、`src/config.ts`、`src/pack-loader.ts`、`src/tools.ts`、各 `packs/*/manifest.json`）；§9 为缓解差距的提案（设计阶段输入，非现状）。
+参数体系的机制语义（门控细节、漂移策略、Mind the gap、topic 确认）以 `params-and-chain-contract.md` 为准；本文是它的对象模型补充：**参数的层级归属、属性全集、全生命周期行为矩阵、全量清单**，为"插件级 / pack 级参数的界面管理"产品设计提供事实基础。§1–§8 为现状描述，每条均有代码依据（`src/params.ts`、`src/config.ts`、`src/pack-loader.ts`、`src/tools.ts`、各 `packs/*/manifest.json`）；§9 为参数出处/可见性的残留开放方向。
 
 ## 1. 参数的四个层级
 
@@ -21,6 +21,7 @@
 | `required` | boolean | 声明契约性（见下） | 仅 boolean |
 | `confirm` | boolean | 立门属性：未经理确认不得以该值执行 | 仅 boolean |
 | `overridable` | boolean | prompt 中渲染"素材内容可调整此参数"提示；**不放松任何校验** | 仅 boolean；**必须同时 `confirm: true`**（可调基线必过确认门）；被声明式规则数值边界引用（ParamRef）即报错（硬边界参数不可调） |
+| `extractable` | boolean | 可由 `doc_extract_params` 从素材抽取（模型提 `{value, quote}`，引擎机检引文 ⊆ 素材） | 仅 boolean；**必须同时 `confirm: true`**（抽取值的自证通道是确认表引文列，寻址参数永不立门故不可抽取） |
 | `min` / `max` | number 型专用 | 值域闭区间 | min ≤ max，须为有限数；object/string 型声明即报错 |
 | `enum` | 非 string/number 外禁用 | 取值白名单 | 非空数组、成员类型匹配、default 必须是成员 |
 
@@ -76,7 +77,7 @@
 
 | 参数 | type | default | required | confirm | 说明 |
 |---|---|---|---|---|---|
-| cfpTotal | object | — | ✓ | ✓ | 总预算 {value, downFactor, upFactor}；用户给定，门控常客 |
+| cfpTotal | object | — | ✓ | ✓ | 总预算 {value, downFactor, upFactor}；用户给定，门控常客；**extractable**（素材明示预算可带引文抽取，如 "the expected CFPs is 70"） |
 | cfpPerFunc | object | {value:30, min:15, max:45} | — | ✓ | 单功能均值目标（value 进 prompt，端点校验） |
 | cfpMin / cfpMax | object | {10,5–20} / {70,40–100} | — | ✓ | 单功能下/上限 |
 | cfpPerSubProc | number | 2.5 (1–10) | — | — | 数据移动均值，向下游传递 |
@@ -106,7 +107,7 @@
 
 ## 7. 面向界面管理的客观事实（设计输入，非设计）
 
-**读取面现状**：`doc_packs` 暴露每参数 `{name, type, description, default?, required, confirm, overridable}`——**不含 `min`/`max`/`enum`**；`receipt.params` 提供每次调用的 as-run 值（含派生 topicNo）。界面若要编辑约束（min/max/enum）需先扩展暴露面。
+**读取面现状**：`doc_packs` 暴露每参数 `{name, type, description, default?, required, confirm, overridable, extractable}`——**不含 `min`/`max`/`enum`**；`receipt.params` 提供每次调用的 as-run 值（含派生 topicNo）；确认表行在 `extracted` 档附 `quote`/`extractionRef`（引文出处），unset 行可附 `suggestion`。界面若要编辑约束（min/max/enum）需先扩展暴露面。
 
 **修改影响半径**（界面每类写操作对应的事实）：
 
@@ -128,43 +129,22 @@
 2. 参数无分组/场景标签——跨 pack 共享参数（moduleLevels、cfp* 族）在 UI 上按 pack 平铺会重复呈现（关联 scenario-chains PROPOSAL 的 `scenario` 标签）。
 3. 同链重复调用 plan 会重立 cfpTotal 门（显式 params 每次都门控）——"会话内已确认记忆"是潜在 UI 便利点，当前契约无此状态。
 4. 派生参数 topicNo 不可关闭，且会被动出现在 prompt 的参数块中（语义无作用，噪音可忽略）。
-5. 确认表的 `source` 枚举（explicit/upstream/default/unset）不含出处维度——"素材明示的显式值"与"模型断言的显式值"同表同权，机制层无法回答"这个值从哪来"。实测一例：同一会话中，素材明文给出 `cfpTotal=70`（req.md："the expected CFPs is 70"）与素材无预算、模型自创 `cfpTotal=40`（另一 topic），在确认表中均为 `explicit`，无任何区分（`previewParams` 的 source 判定只有四档，`params` 入参是无出处的平面对象）。
-6. `overridable` 的许可只进内层生成/修复 prompt（一句话提示），内层模型对参数的"调整"只物化在产物内容里——回执 `params` 与规则数值边界仍用调用级解析值，"声称的值"与"产物体现的值"可静默分叉（无门、无记录）。且被规则用作数值边界的参数一旦被调整，必然撞规则进修复循环。
+5. ~~确认表的 `source` 枚举不含出处维度~~ **已收敛（extract-params，2026-10-28）**：`source` 增 `extracted` 档，抽取值以机检引文（`quote` ⊆ 素材）自证出处，未找到是一等结果并前置拦截。仍无出处的是显式传参——显式 params 是正门（对话转译的意图通道），表中 `explicit` 行语义即"调用方（用户侧）给的值"，无需机制自证。
+6. `overridable` 的许可只进内层生成/修复 prompt（一句话提示），内层模型对参数的"调整"只物化在产物内容里——回执 `params` 与规则数值边界仍用调用级解析值，"声称的值"与"产物体现的值"可静默分叉。**基线可见性已由 `overridable ⇒ confirm` 装载期不变量收敛**（可调参数基线必过确认门）；**残留 = as-run 值记录**（见 §9 开放方向）。且被规则用作数值边界的参数不可 `overridable`（装载期强制——调整必撞规则，许可与校验不得扭结）。
 
-## 9. 缓解提案（设计阶段输入，非现状）
+## 9. 开放方向（原缓解提案已实施）
 
-两条提案分别收窄差距 5（外层显式值无出处）与差距 6（内层调整不可见）。均为机制变更方向，采纳前需按 `params-and-chain-contract.md` 的契约评审并同步其条文。
+两条提案均已实施、语义并入机制文档：**extract-params**（素材参数抽取，收窄差距 5——机制见 `params-and-chain-contract.md` 素材参数抽取节）与 **`overridable ⇒ confirm` 装载期不变量**（可调参数基线必过人，收窄差距 6 的基线可见性——见同文档参数属性节）。残留开放方向：
 
-### 提案 A：素材参数抽取步骤（extract-params）——显式值必须有出处
+### 开放方向：as-run 值记录（内层偏移的完全闭合）
 
-**结论**：在链头生成之前增加一个独立的抽取步骤：按 pack 声明的抽取 schema 从素材中提取参数值，每个抽取值必须携带可机检的素材引文；素材中没有明示的值一律输出"未找到"，禁止自创与假设。"未找到"是一等结果而非错误——required 参数未找到时由前置检查在花费生成成本之前拦截，回归"纯 required 缺值只能问人"的不变量，而不是被模型代答。
+`overridable` 的内层偏移发生在门后、生成中，回执与产物均不记录"实际生成所用值"——基线已过门（不变量），但偏移量本身仍不可见。完全闭合需让产物 JSON 或回执携带 as-run 值，由引擎对照 effective 值记差——涉及 schema 与回执契约变更，另行设计。
 
-**理由**：
+### 四条值来源路径（现状）
 
-- 现状下"读素材 → 提值 → 写进工具入参"是模型的一次不可见推理，确认表只能看到结果。独立成步后，抽取产物是一个可落盘的 workspace JSON（值 + 逐字引文 + 位置），可被回执引用、可从日志重建，与"模型可见 ⟺ 日志可重建"同构。
-- "不得自创和假设"不能只靠 prompt 承诺，必须可机检：引擎校验引文逐字出现在素材文本中（quote ⊆ material），无引文即视为未找到。对"素材暗示但未明示"的值宁可报未找到，不可代人以推断；哪些参数可抽取由 pack 作者在 manifest 中逐参数声明。
-- 解析序加一档：显式 > 上游回执 > **抽取值** > 声明 default；确认表 `source` 增加对应档位并新增引文列。门控不新增门种：confirm 参数照旧链头立门，抽取值在表中以引文自证。
-- 链路位置：抽取发生在链头（plan 之前）、扇出之前，一次抽取保护整条链；形态上宜作为独立工具/链头步骤（契合"Plugins, not loop changes"），按（素材 hash × 抽取 schema）可缓存。
-- 场景价值（COSMIC 链）：素材写了 "expected CFPs is 70" → 抽取出 70 并带引文；素材没写 → 报未找到，plan 前置检查拦截，请用户给出或明确认可模型建议值——用户无意漏掉重要信息不再被无声假定。
-
-**代价与边界**：链头多一次 LLM 调用；manifest 增加抽取声明面；只治外层显式值的出处，不覆盖差距 6 的内层调整；重生成时抽取值变化是否计入 drift，待契约评审定。
-
-### 提案 B：`overridable ⇒ confirm` 装载期不变量——可调参数的基线必须过人
-
-**结论**：装载期校验增加一条组合约束：声明 `overridable: true` 的参数必须同时 `confirm: true`，违者 fail loud。`confirmPolicy: none` 的调用（headless/CI）除外——该档位从不起门，此不变量在无人通道上不提供保证。
-
-**理由**：
-
-- 门控现状是"confirm 参数未经上游确认即立门"：链头首调必门（无论值来自 default 还是显式传参），记录后沿链继承豁免。因此该不变量保证：任何可被内层调整的参数，其基线值至少一次呈现在用户面前并被确认——"采用的值不是声称的值"从完全不可见收敛为仅剩内层偏移量不可见。
-- 配套原则（由"不放松任何校验"推出）：被规则引擎用作数值边界的参数（`resolveBound` 消费，如 `moduleLevels` 类）**不得**声明 `overridable`——内层对该类参数的调整必然撞规则进修复循环，许可与校验自相扭结。`overridable` 只对"生成目标型"参数（值是软目标而非硬边界，如角色清单、均值目标）有意义。
-- 若采纳，需同步修订 §2 的装载期校验列、§4 的 P1/P4 分界与 §7 的不变量清单（一处修订，三处引用）。
-
-**残留缺口（提案 B 不解决，列为开放方向）**：内层偏移发生在门后、生成中，回执与产物均不记录 as-run 值。完全闭合需让产物 JSON 或回执携带"实际生成所用值"，由引擎对照 effective 值记差——涉及 schema 与回执契约变更，另行设计。
-
-### 三条值来源路径的收束
-
-| 路径 | 现状 | 提案后 |
-|---|---|---|
-| 外层显式传参（模型写入工具入参） | source=explicit，出处不可见 | 提案 A：有引文出处，未找到即拦截 |
-| 回执链继承 | source=upstream，链上有据 | 不变 |
-| 内层生成调整 | 不可见、不可审计 | 提案 B：基线过门；as-run 值记录为开放方向 |
+| 路径 | 现状 |
+|---|---|
+| 外层显式传参（模型写入工具入参） | source=explicit——正门语义，值由调用方（用户侧转译）负责 |
+| 素材抽取（`doc_extract_params`） | source=extracted——引文机检自证，未找到前置拦截（含 suggestion 供用户认可） |
+| 回执链继承 | source=upstream，链上有据 |
+| 内层生成调整 | 基线过门（`overridable ⇒ confirm`）；as-run 值记录为开放方向 |

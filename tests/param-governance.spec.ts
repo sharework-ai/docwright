@@ -185,6 +185,12 @@ describe('pack loader: param attributes', () => {
     await expect(loadPacks(root, {})).rejects.toMatchObject({ message: expect.stringMatching(/bound-referenced params must not be overridable/) })
   })
 
+  it('enforces extractable ⇒ confirm (extraction self-proves via the confirmation table) and rejects non-boolean flags', async () => {
+    expect((await loadFailing({ type: 'number', default: 3, extractable: true, description: 'd' })).message).toMatch(/\.extractable requires confirm: true/)
+    expect((await loadFailing({ type: 'number', default: 3, extractable: 'yes', description: 'd' })).message).toMatch(/\.extractable must be a boolean/)
+    // cosmic-plan's cfpTotal (required+confirm+extractable) loads in other specs — the accepted path is exercised there.
+  })
+
   it('rejects object params with non-object defaults, enum, or numeric bounds', async () => {
     expect((await loadFailing({ type: 'object', default: [1], description: 'd' })).message).toMatch(/\.default must match type "object"/)
     expect((await loadFailing({ type: 'object', default: 'x', description: 'd' })).message).toMatch(/\.default must match type "object"/)

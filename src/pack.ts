@@ -72,10 +72,18 @@ export interface ParamSpec {
   readonly default?: number | string | boolean | { readonly [key: string]: Json } | undefined
   /** No default: resolution fails loud unless the call or the upstream receipt provides the value. */
   readonly required?: boolean | undefined
-  /** Materials content may adjust this param (prompt-rendered permission; the as-run value is still what validation replays). */
+  /** Materials content may adjust this param (prompt-rendered permission; the as-run value is still what validation replays). Load-time requires confirm (docs/designs/params-and-chain-contract.md). */
   readonly overridable?: boolean | undefined
   /** Included in the doc_generate confirmation gate (docs/designs/params-and-chain-contract.md). */
   readonly confirm?: boolean | undefined
+  /**
+   * The param may be extracted from materials by doc_extract_params: the
+   * model proposes {value, quote} and the engine verifies the quote is a
+   * verbatim material excerpt. Load-time requires confirm — the extraction's
+   * self-evidence channel IS the confirmation table's quote column, and a
+   * param that never gates (fan-out addressing) has no such channel.
+   */
+  readonly extractable?: boolean | undefined
   readonly enum?: readonly (number | string | boolean)[] | undefined
   /** Numeric bounds (number-typed params only); the default must satisfy them. */
   readonly min?: number | undefined
