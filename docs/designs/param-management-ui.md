@@ -24,12 +24,10 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 | 参数类 | 例 | 判定 | 理由 |
 |---|---|---|---|
 | 插件 Config | confirmPolicy、maxIterations、provider/model | **编辑** | 部署级现役行为，维护界面的核心价值 |
-| 声明且有 default | cfpPerFunc、cfpPerSubProc、topicNoPattern、funcDescMaxLength | **编辑** | 有现役值可维护；改的是声明的缺省行为，影响后续生成、不追溯已产物 |
-| 声明但无 default | cfpTotal（required+confirm+extractable） | **只读指路** | 值来源是素材抽取或对话确认（会话行为）；行内指路抽取文件现状与对话通道 |
+| 声明且有 default | cfpPerFunc、cfpPerSubProc、topicNoPattern、funcDescMaxLength | **展现 + 编辑** | 有现役值可维护；改的是声明的缺省行为，影响后续生成、不追溯已产物 |
+| 声明但无 default | cfpTotal、targetIndex | **不展现** | 界面上没有可维护的现役值：cfpTotal 的值来自素材抽取或对话确认（会话行为），targetIndex 是调用路由——都留给各自的通道 |
 | 引擎派生 | topicNo | **不展现** | 不可配置，展现即噪音（同差距 4：语义无作用） |
-| 寻址参数 | targetIndex | **不展现** | 调用路由，非配置 |
-| 调用级 / 回执 as-run | params 入参、receipt.params | 不进维护面 | 单次调用语义走对话 + 确认门；as-run 值可在参数行内作只读参考（"上次生成用的是 X"），不是维护对象 |
-| 回执 | *.receipt.json | 不可编辑 | 唯一通道是 doc_validate seal |
+| 调用级 / 回执 as-run | params 入参、receipt.params、*.receipt.json | **不展现** | 单次调用语义走对话 + 确认门；回执唯一写通道是 doc_validate seal——审计数据不进维护面 |
 
 ## manifest 信息充分性盘点
 
@@ -69,9 +67,9 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 
 `GET /api/docwright/params`（宿主栅栏之后）：
 
-- 每个 pack 的**完整 ParamSpec**（含 min/max/enum）+ consumes 图 + 服务端算好的每参数生效源/遮蔽关系（聚合视图的数据源）。
+- 每个 pack 的**完整 ParamSpec**（含 min/max/enum，仅展现有 default 的参数）+ consumes 图 + 服务端算好的每参数生效源/遮蔽关系（聚合视图的数据源）。
 - Config 生效值，每键标注来源（cordis.yml / patch 层 / 内置默认）。
-- 每个 pack 的抽取文件现状（`<pack>.extracted.json` 逐参数 status/quote/ref）与最近绿色回执的 as-run params——出处层在界面可见（"这个值从哪来"），并支撑"无 default 参数"的只读指路。
+
 
 ### 写面（v1 两类）
 
@@ -86,7 +84,7 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 
 - 会话级参数不进界面（显式 params 走对话 + 确认门；确认权属用户的本质优势不因此改变）。
 - 派生参数（topicNo）、寻址参数（targetIndex）不展现。
-- 无 default 声明参数不可编辑（只读指路：抽取文件现状 + 对话通道）。
+- 无 default 声明参数（cfpTotal、targetIndex）、派生 topicNo 不展现。
 - 回执不可编辑（唯一通道是 doc_validate seal）。
 - pack 结构编辑、多 pack 批量操作、导入导出——不做。
 - extraction 文件不从界面写（引文必须对素材机检，界面上没有素材上下文）。
