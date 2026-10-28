@@ -20,7 +20,7 @@
 | `default` | 与 `type` 匹配 | 缺省值（现役值） | 非 required 时必须匹配 type；number 型须落在 [min,max]；enum 型必须是枚举成员 |
 | `required` | boolean | 声明契约性（见下） | 仅 boolean |
 | `confirm` | boolean | 立门属性：未经理确认不得以该值执行 | 仅 boolean |
-| `overridable` | boolean | prompt 中渲染"素材内容可调整此参数"提示；**不放松任何校验** | 仅 boolean |
+| `overridable` | boolean | prompt 中渲染"素材内容可调整此参数"提示；**不放松任何校验** | 仅 boolean；**必须同时 `confirm: true`**（可调基线必过确认门）；被声明式规则数值边界引用（ParamRef）即报错（硬边界参数不可调） |
 | `min` / `max` | number 型专用 | 值域闭区间 | min ≤ max，须为有限数；object/string 型声明即报错 |
 | `enum` | 非 string/number 外禁用 | 取值白名单 | 非空数组、成员类型匹配、default 必须是成员 |
 
@@ -43,7 +43,7 @@
 
 参数类（列）：
 
-- **P1 普通带默认**：`moduleLevels`、`cfpPerSubProc`、`funcDescMaxLength`、`functionalUserRoles`
+- **P1 普通带默认**：`moduleLevels`、`cfpPerSubProc`、`funcDescMaxLength`、`functionalUserRoles`（装载期不变量下 P1 永不 `overridable`——可调属性必带 `confirm`，即属 P4）
 - **P2 纯 required**：`cfpTotal`（plan）、`targetIndex`（req/func/tech）
 - **P3 required+default 链契约**：`topicNoPattern`（context）
 - **P4 confirm 预算组**：`cfpPerFunc` / `cfpMin` / `cfpMax`（各 pack confirm）、下游 `cfpTotal` 声明（confirm 无 default）
@@ -118,7 +118,7 @@
 | 调用级传值 | 单次 | 沿回执继承；受漂移策略约束 |
 | 改回执 | **没有这个操作**——回执只能经 `doc_validate` 绿色 seal 重签（内容改变 hash 才重签），参数记录不单独可改 |
 
-**界面必须遵守的不变量**：白名单（不能创建未声明参数的值）；值校验三路统一（界面上改 default 也要过 min-max/enum 校验）；Mind the gap（object 参数只有 `value` 是生成目标，端点是校验容差——界面上两者必须视觉区分）；纯 required 缺值只能问人；确认权属于用户（agent 转呈受"不得自答"约束，**界面由本人操作，天然满足**——这是 UI 相对 agent 通道的本质优势）；结构性 manifest 改动必须伴随版本升级。
+**界面必须遵守的不变量**：白名单（不能创建未声明参数的值）；值校验三路统一（界面上改 default 也要过 min-max/enum 校验）；Mind the gap（object 参数只有 `value` 是生成目标，端点是校验容差——界面上两者必须视觉区分）；`overridable ⇒ confirm`（可调基线必过门，装载期不变量，界面同受约束；被规则边界引用的参数不可 `overridable`）；纯 required 缺值只能问人；确认权属于用户（agent 转呈受"不得自答"约束，**界面由本人操作，天然满足**——这是 UI 相对 agent 通道的本质优势）；结构性 manifest 改动必须伴随版本升级。
 
 **现状没有任何运行时写 manifest / Config 的工具**——一切修改走文件编辑 + 部署。界面管理是全新的写入面，上述不变量目前全部由装载期/调用期校验兜底，界面侧需要同等强度的前置校验（或复用同一校验函数）。
 
