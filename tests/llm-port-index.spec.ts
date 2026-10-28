@@ -51,14 +51,14 @@ describe('llm port', () => {
 })
 
 describe('plugin apply', () => {
-  it('registers all four tools against a minimal fake context', async () => {
+  it('registers all five tools against a minimal fake context', async () => {
     const { name, inject, apply } = await import('../src/index.ts')
     expect(name).toBe('docwright')
     expect(inject).toContain('tools')
     const registered: string[] = []
     const ctx = { tools: { register: (t: { name: string }) => { registered.push(t.name) } } }
     await apply(ctx as never, { provider: 'p', model: 'm' })
-    expect(registered).toEqual(['doc_packs', 'doc_generate', 'doc_validate', 'doc_chain_status'])
+    expect(registered).toEqual(['doc_packs', 'doc_generate', 'doc_extract_params', 'doc_validate', 'doc_chain_status'])
   })
 
   it('fails loud when defaultLanguage is missing from a pack', async () => {
@@ -72,6 +72,6 @@ describe('plugin apply', () => {
     const registered: string[] = []
     const ctx = { tools: { register: (t: { name: string }) => { registered.push(t.name) } } }
     await apply(ctx as never, { packsDir: '/nonexistent-docwright-packs', provider: 'p', model: 'm' })
-    expect(registered).toEqual(['doc_packs', 'doc_generate', 'doc_validate', 'doc_chain_status'])
+    expect(registered).toEqual(['doc_packs', 'doc_generate', 'doc_extract_params', 'doc_validate', 'doc_chain_status'])
   })
 })

@@ -30,6 +30,25 @@ function assertParamSpec(raw: unknown, dir: string, name: string): ParamSpec {
   for (const flag of ['required', 'overridable', 'confirm'] as const) {
     if (s[flag] !== undefined && typeof s[flag] !== 'boolean') throw new Error(`${where}.${flag} must be a boolean when present`)
   }
+  // Load-time invariant (param provenance, proposal B): an overridable param's
+  // baseline must pass the user once. The confirmation gate guarantees exactly
+  // that for confirm params (chain-head first call always gates), so
+  // overridable without confirm would make the adjustable baseline invisible.
+  // confirmPolicy "none" never gates — on that unattended lane this invariant
+  // provides no guarantee by design.
+  if (s.overridable === true && s.confirm !== true) {
+    throw new Error(`${where}.overridable requires confirm: true (an adjustable param's baseline must pass the confirmation gate once; fix: add confirm: true or drop overridable)`)
+  }
+  // Extraction invariant (param provenance, proposal A): an extractable
+  // param's provenance channel is the confirmation table's quote column, so
+  // it must be a confirm param. This also bans extractable fan-out addressing
+  // (required non-confirm): those never gate and never reach the table.
+  if (s.extractable === true && s.confirm !== true) {
+    throw new Error(`${where}.extractable requires confirm: true (an extracted value self-proves via the confirmation table's quote column; fix: add confirm: true or drop extractable)`)
+  }
+  if (s.extractable !== undefined && typeof s.extractable !== 'boolean') {
+    throw new Error(`${where}.extractable must be a boolean when present`)
+  }
   if (s.required === true) {
     // required + default is legal: a chain-necessary param whose default is
     // the standing value (always resolves, never confirm-gates on its own);
@@ -146,6 +165,12 @@ function assertBound(value: unknown, dir: string, i: number, kind: string, side:
     }
     if (spec.default === undefined && spec.required !== true) {
       throw new Error(`pack ${dir}: rules[${i}].${kind}.${side} references param "${value.param}" which has no default; bound references require a param that is always present (give it a default or mark it required)`)
+    }
+    // Bound-referenced params are consumed by resolveBound as hard validation
+    // edges; an overridable bound would let materials adjust the very rule
+    // that judges the adjustment — permission and validation must not tangle.
+    if (spec.overridable === true) {
+      throw new Error(`pack ${dir}: rules[${i}].${kind}.${side} references param "${value.param}" which is overridable; bound-referenced params must not be overridable (an adjusted bound always trips its own rule; fix: drop overridable)`)
     }
     return
   }

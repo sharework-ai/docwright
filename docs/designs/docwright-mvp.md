@@ -47,7 +47,7 @@ docwright 的差异化就在"内容合格性"这一层，由三件事组成：
 
 ## 3. 插件功能（机制层）
 
-插件导出 `name: 'docwright'`、`inject: ['tools', 'llm']`、`Config`；`apply()` 时加载全部 pack 并注册三个工具（`doc_packs` / `doc_generate` / `doc_validate`）。pack 加载失败（坏 manifest、坏规则、Config 默认语言不被支持）在 apply 期直接报错，不会带病进入会话。
+插件导出 `name: 'docwright'`、`inject: ['tools', 'llm']`、`Config`；`apply()` 时加载全部 pack 并注册五个工具（`doc_packs` / `doc_generate` / `doc_extract_params` / `doc_validate` / `doc_chain_status`）。pack 加载失败（坏 manifest、坏规则、Config 默认语言不被支持）在 apply 期直接报错，不会带病进入会话。
 
 ### 3.0 工具 `doc_packs` — 能力发现（拉式）
 
@@ -199,6 +199,17 @@ workspaceRoot/
 参数：`plan`（workspace 相对路径，须带绿色 sidecar 回执）。确定性、零 LLM。阶段链从 plan 的 pack 出发按 `consumes` 图逐层展开（内置链即 context→plan→req→func→tech；workspace 级 pack 不进入扇出——coverage 定义在 plan functions 扇出上，context 是项目级单产物）；扫描 outputRoot 下各阶段**绿色**产物（回执 `isValid` 且 pack 匹配），按 `funcId` 对齐 plan 的 `functions[]`。返回 `{ plan, stages, functions: [{ index, funcId, l2Name?, coverage: { <stage>: 产物名|null } }], coverage: { <stage>: { covered, total } }, orphaned? }`——`orphaned` 列出 funcId 不属于任何 plan 功能的绿色产物（防错挂）。agent 在收工呈现前跑一次即可全链对账（docs/designs/params-and-chain-contract.md）。
 
 **扇出契约（1:N:N:N）**：plan 整需求一份；req/func/tech 与 plan 的 functions 一一对应、份数相等，每个功能一条平行微链。`targetIndex`（req/func/tech 必填无默认）指定目标功能；req 的对齐规则额外校验 `index === targetIndex`，func/tech 经上游锚点传递保持一致。
+
+### 3.11 工具 `doc_extract_params` — 素材参数抽取（出处层）
+
+| 参数 | 类型 | 语义 |
+|---|---|---|
+| `pack` | string，必填 | pack 名；该 pack 未声明 `extractable` 参数即报错 |
+| `materials` | string[]，必填 | 抽取来源素材（引用语义同 `doc_generate`）；空列表拒绝——抽取必须从素材文本自证 |
+| `topic` | string? | 话题目录名（同 `doc_generate` 语义，定位抽取缓存在 `<topic>/output/`） |
+| `extractions` | object，必填 | 逐参数提案：`{ value, quote }`（quote 须为素材逐字子串，引擎机检）或 `{ notFound: true, suggestion?, rationale? }`（建议值过同一 spec 校验，永不自动生效） |
+
+返回 `{ pack, extractionPath, extractable, results, hint }`：`results` 逐参数给出 `extracted`（带 quote、ref）或 `notFound`（带 reason：`not proposed` / `quote not found in any material`；带建议时附 suggestion）。抽取结果持久化为 `outputRoot/<pack>.extracted.json`（pack、packVersion、素材 anchors 清单、逐参数记录），重抽取整体覆盖。`doc_generate` 对声明 extractable 参数的 pack 应先跑本工具（工具描述静态引导）；解析序中抽取值位于上游回执继承之下、声明默认值之上；确认表 `extracted` 行带引文列，required 未找到在生成前拦截。机制语义见 docs/designs/params-and-chain-contract.md"素材参数抽取"节。
 
 ## 4. Pack 契约（内容层，作者视角）
 

@@ -6,7 +6,7 @@ import type { Issue } from './issue.ts'
 import type { LlmPort } from './llm-port.ts'
 import { runRepairLoop } from './loop.ts'
 import type { Pack, RuleContext } from './pack.ts'
-import { resolveEffectiveParams } from './params.ts'
+import { resolveEffectiveParams, type ExtractionView } from './params.ts'
 import { createRuleEngine, rollupRules } from './rule-engine.ts'
 import { materialAnchors, readMaterialEntries } from './materials.ts'
 import { assembleGeneratorPrompt, estimateTokens } from './prompt.ts'
@@ -123,6 +123,8 @@ export interface GenerateInput {
   readonly params?: Readonly<Record<string, unknown>> | undefined
   /** Inherited base (upstream receipts' as-run params); explicit overrides win over it, then defaults. */
   readonly paramsBase?: Readonly<Record<string, unknown>> | undefined
+  /** Quote-verified extraction tier (doc_extract_params); resolves between the receipt base and the declared defaults. */
+  readonly extracted?: ExtractionView | undefined
   readonly artifactName: string
   readonly workspaceRoot: string
   /** Absolute root artifacts/receipts/markdown are written to (tool layer). */
@@ -203,7 +205,7 @@ export function parseUpstreamArtifacts(texts?: readonly string[] | undefined): r
 export async function generateDocument(input: GenerateInput): Promise<GenerateOutput> {
   assertSafeArtifactName(input.artifactName)
   const service = getDocService(input.pack, input.language)
-  const effectiveParams = resolveEffectiveParams(input.pack, input.params, input.paramsBase)
+  const effectiveParams = resolveEffectiveParams(input.pack, input.params, input.paramsBase, input.extracted)
   const overridableParams = Object.entries(input.pack.manifest.params ?? {})
     .filter(([, spec]) => spec.overridable === true)
     .map(([name]) => name)

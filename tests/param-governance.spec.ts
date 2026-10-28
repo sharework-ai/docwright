@@ -151,6 +151,46 @@ describe('pack loader: param attributes', () => {
     expect((await loadFailing({ type: 'number', default: 1, confirm: 'sure', description: 'd' })).message).toMatch(/\.confirm must be a boolean/)
   })
 
+  it('enforces overridable ⇒ confirm (an adjustable baseline must pass the gate once)', async () => {
+    expect((await loadFailing({ type: 'number', default: 3, overridable: true, description: 'd' })).message).toMatch(/\.overridable requires confirm: true/)
+    const root = await mkdtemp(join(tmpdir(), 'docwright-gov-ov-'))
+    const dir = join(root, 'op')
+    for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
+    await writeFile(join(dir, 'manifest.json'), JSON.stringify({
+      name: 'op', version: '1', description: 'd', languages: ['zh-CN'],
+      params: { style: { type: 'string', default: 'plain', overridable: true, confirm: true, description: 'd' } },
+    }), 'utf8')
+    await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
+    await writeFile(join(dir, 'rules', 'zh-CN.json'), '[]', 'utf8')
+    await writeFile(join(dir, 'prompts', 'zh-CN.md'), 'T {{materials}}', 'utf8')
+    await writeFile(join(dir, 'templates', 'zh-CN.hbs'), 't', 'utf8')
+    await writeFile(join(dir, 'samples', 'golden.json'), '{}', 'utf8')
+    const packs = await loadPacks(root, {})
+    expect(packs.get('op')!.manifest.params!.style!.overridable).toBe(true)
+  })
+
+  it('rejects bound references to overridable params (resolveBound consumers are hard validation edges)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'docwright-gov-bound-'))
+    const dir = join(root, 'bp')
+    for (const sub of ['rules', 'prompts', 'templates', 'samples']) await mkdir(join(dir, sub), { recursive: true })
+    await writeFile(join(dir, 'manifest.json'), JSON.stringify({
+      name: 'bp', version: '1', description: 'd', languages: ['zh-CN'],
+      params: { limit: { type: 'number', default: 9, overridable: true, confirm: true, description: 'd' } },
+    }), 'utf8')
+    await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
+    await writeFile(join(dir, 'rules', 'zh-CN.json'), JSON.stringify([{ id: 'b/max', severity: 'error', given: '$', field: 'title', kind: 'maxLength', max: { param: 'limit' }, suggestion: 's' }]), 'utf8')
+    await writeFile(join(dir, 'prompts', 'zh-CN.md'), 'T {{materials}}', 'utf8')
+    await writeFile(join(dir, 'templates', 'zh-CN.hbs'), 't', 'utf8')
+    await writeFile(join(dir, 'samples', 'golden.json'), '{}', 'utf8')
+    await expect(loadPacks(root, {})).rejects.toMatchObject({ message: expect.stringMatching(/bound-referenced params must not be overridable/) })
+  })
+
+  it('enforces extractable ⇒ confirm (extraction self-proves via the confirmation table) and rejects non-boolean flags', async () => {
+    expect((await loadFailing({ type: 'number', default: 3, extractable: true, description: 'd' })).message).toMatch(/\.extractable requires confirm: true/)
+    expect((await loadFailing({ type: 'number', default: 3, extractable: 'yes', description: 'd' })).message).toMatch(/\.extractable must be a boolean/)
+    // cosmic-plan's cfpTotal (required+confirm+extractable) loads in other specs — the accepted path is exercised there.
+  })
+
   it('rejects object params with non-object defaults, enum, or numeric bounds', async () => {
     expect((await loadFailing({ type: 'object', default: [1], description: 'd' })).message).toMatch(/\.default must match type "object"/)
     expect((await loadFailing({ type: 'object', default: 'x', description: 'd' })).message).toMatch(/\.default must match type "object"/)

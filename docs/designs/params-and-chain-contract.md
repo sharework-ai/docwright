@@ -45,10 +45,26 @@ Status: implemented（2026-10-13 定稿并当日落地：D5 参数治理 / D6 �
 | 属性 | 语义 |
 |---|---|
 | `required` | 无默认值时：未经显式 params 提供即拒绝执行；带默认值时：链级必备契约参数——默认值即现役值、永远可解析、沿回执继承，自身不确定门 |
-| `overridable` | 允许被生成输入素材（materials）的内容覆盖；覆盖必须记入回执。显式 params（对话转译/CLI）是正门，不需要任何属性许可 |
+| `overridable` | prompt 中渲染"素材内容可调整此参数"提示（内层生成许可，一句话提示；不是解析层覆盖，不放松任何校验）。显式 params（对话转译/CLI）是正门，不需要任何属性许可 |
 | `confirm` | 进执行前确认表；参数总数超过 10 时确认表只列 `confirm: true` 项 |
+| `extractable` | 可由 `doc_extract_params` 从素材抽取：模型提 `{value, quote}`，引擎机检引文后值入解析第三档。装载期必须同时 `confirm: true`（抽取值的自证通道就是确认表的引文列；扇出寻址参数永不立门故不可抽取） |
 
-解析顺序：**显式 params > 素材覆盖（仅 `overridable` 项）> 声明默认值 > required 缺失即 fail loud**。对话中用户陈述的意图由 agent 转译为显式 params——这是意图的正道；materials 散文默认无权配置 pack，防止素材内容静默改写配置。
+解析顺序：**显式 params > 上游回执继承 > 抽取值（仅 `extractable` 项，须过引文复验）> 声明默认值 > required 缺失即 fail loud**。对话中用户陈述的意图由 agent 转译为显式 params——这是意图的正道；materials 散文默认无权配置 pack，防止素材内容静默改写配置。
+
+**装载期不变量（可调参数基线必过人）**：`overridable: true` 必须同时 `confirm: true`，违者 pack 加载即报错。门控语义"confirm 参数未经上游确认即立门"由此保证：任何可被素材调整的参数，其基线值至少一次呈现在用户面前并被确认——"采用的值不是声称的值"从不透明收敛为仅剩内层偏移量不可见（as-run 值记录是开放方向）。`confirmPolicy: "none"` 的无人通道从不起门，此不变量在其上不提供保证。配套约束：被声明式规则数值边界引用（`resolveBound` 消费）的参数**禁 `overridable`**——内层调整必然撞自身规则进修复循环，许可与校验不得扭结；`overridable` 只对生成目标型参数（值是软目标而非硬边界，如角色清单、均值目标）有意义。
+
+## 素材参数抽取（extract-params）
+
+确认表的 `explicit` 档分不清"素材明示的值"与"模型断言的值"（差距：两档同表同权）。抽取步骤把"读素材 → 提值"从模型的不可见推理变成引擎可机检的证据链：
+
+- **声明面**：pack 在 ParamSpec 上声明 `extractable: true`（装载期必须同时 `confirm: true`），`doc_packs` 逐参数标注；`doc_extract_params` 只接受声明过的参数名。
+- **机检**：模型对每个抽取参数提 `{ value, quote }`，引擎校验 quote 是素材的逐字子串（两侧空白归一后包含）且值满足参数 spec；`{ notFound: true }` 可附 `suggestion`（+`rationale`，须与 suggestion 同现）——建议值过同一 spec 校验，但**永不自动生效**，用户认可的唯一通道是显式 params。
+- **未找到是一等结果**：引文不在任何素材中、模型未提出、素材没写——都记 `notFound`，不报错、不代答。required 参数 notFound 时前置检查在花费生成成本之前拦截，请用户给出或明确认可建议值（fail-loud 错误逐参数携带抽取结果与建议）。**素材缺值被模型代答必须防止，不以模型能力提升为豁免理由。**
+- **持久化与缓存**：抽取结果落 `outputRoot/<pack>.extracted.json`（pack、packVersion、素材清单 anchors、逐参数记录），重抽取整体覆盖；文件损坏/缺失 = 无抽取层（与损坏回执照常生成同语义）。
+- **消费侧复验**：`doc_generate` 解析前对**本次调用的素材**重验每条引文——素材变了/引文失配/spec 收紧（pack 升版）的值一律丢弃，落回下一档解析。抽取文件是缓存，不是契约。
+- **确认表**：`source` 增 `extracted` 档，行带 `quote` + `extractionRef`（引文自证）；unset 行可带 `suggestion`/`suggestionRationale`。门控不新增门种——extractable 必 confirm，链头首调照旧立门，抽取值在表中以引文自证，继承豁免照旧。
+- **复用对账**：复用预检额外比对抽取值与回执 as-run params——重抽取出不同值即拒绝复用，新值经链头 confirm 门到用户面前（抽取层在解析序中位于回执继承之下，故上游已记录的参数不受抽取影响；抽取值的变化面就在复用预检 + 链头门）。
+- **链路位置**：抽取发生在链头生成之前、扇出之前，一次抽取保护整条链（抽取值经链头回执 as-run params 沿链继承）。
 
 ## 确认门控
 
@@ -57,7 +73,7 @@ Status: implemented（2026-10-13 定稿并当日落地：D5 参数治理 / D6 �
 ```
 
 - 门控命中且未确认时，`doc_generate` 返回结构化 `pendingConfirmation`（附生效参数表，零 LLM 成本，不执行）；调用方带 `confirm: true` 重发同一调用即执行。
-- 确认面**只有生效参数表**：每行含生效值（尚无值的行省略 `value` 字段——显式 `undefined` 不是 lossless JSON，会令整个工具返回值被 dsh 运行时拒绝；缺失态由来源标注 `unset` 与必填缺失标记承载）、来源标注（pack 默认 / 显式传入 / 素材覆盖）、必填缺失标记、参数漂移影响预判。注入的校验规则清单与 prompt 骨架哈希不进用户视野，仅存在于工具返回值与回执（审计可重建）。
+- 确认面**只有生效参数表**：每行含生效值（尚无值的行省略 `value` 字段——显式 `undefined` 不是 lossless JSON，会令整个工具返回值被 dsh 运行时拒绝；缺失态由来源标注 `unset` 与必填缺失标记承载）、来源标注（pack 默认 / 显式传入 / 上游继承 / 抽取引文——抽取行附 `quote` 与 `extractionRef`，unset 行可附 `suggestion`/`suggestionRationale`）、必填缺失标记、参数漂移影响预判。注入的校验规则清单与 prompt 骨架哈希不进用户视野，仅存在于工具返回值与回执（审计可重建）。
 - **沿链继承**：共享参数在链头声明一次，执行后写入上游回执 as-run params；下游阶段从上游回执继承，继承不是新的参数输入，不再触发门控。全链用户交互恰一次，位置在链头。下游显式传 params 且与上游回执不一致视为改参数，重新触发门控；与回执完全一致（键序无关）视为继承回显，不立门。
 
 ### topic 确认（链首次进入）
