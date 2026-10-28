@@ -61,6 +61,12 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 
 控件全部用注入的 `ui-primitives`，几何遵守宿主 ui-radius 规范（Settings 卡片 R20 材质、输入 R12）。
 
+### 说明呈现（description）
+
+每个参数的 `description` 是**装载期必填非空**字段（缺了 pack 加载即报错），是界面说明的唯一事实源——界面不另写文案。展示形态遵循渐进披露：**参数名 + 控件是行内主流程，参数名旁一枚 `?` 图标，悬停展示完整 description**（含关联规则引用如 "rule plan/cfp-avg-band"，原样展示）；说明文字不占行内版面。pack description 是 pack 作者内容，逐字展示、不做翻译（UI 框架文案才走 locale 双语）。
+
+**Config 键的说明现状缺口**：说明只住在 `config.ts` 的 JSDoc（不进运行时），RPC 拿不到。补法与宿主惯例对齐（宿主 config-catalog 文档即从 Config schema 生成）：**给 Config schema 每键补描述**（文本取自现有 JSDoc，单一事实源随 schema 走），读面 RPC 直出——不在 UI 里硬编码文案。
+
 ## 范围（v1）
 
 ### 读面（新 RPC，零副作用）
