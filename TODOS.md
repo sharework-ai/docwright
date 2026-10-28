@@ -3,7 +3,7 @@
 Source: functional spec at docs/designs/docwright-mvp.md. 本文件记录真正待办与已完成的压缩账目（一个事实一个家；实施细节见 git 与 Implementation tracker）。
 
 ## Open
-- [ ] **param-management-ui（PROPOSAL，地基已备）** — 插件级 / pack 级参数的界面管理。事实基础：docs/designs/param-object-model.md（四层级归属、ParamSpec 属性全集（含 extractable）、生命周期矩阵、全量清单、Config 清单、影响半径与不变量、已知差距——doc_packs 缺 min/max/enum 暴露、as-run 值记录开放方向——及 §9 四条值来源路径表）。机制语义见 params-and-chain-contract.md。界面参考：~/projects/lab/dsh-market 的维护界面。
+- [ ] **param-management-ui（设计提案待评审）** — 插件级 / pack 级参数的界面管理。设计文档：docs/designs/param-management-ui.md（机制调研四件套：dsh.client 注入 / 宿主 webServer 精确路由 + requestRejection 栅栏 / cordis.patch.yml 写层先例 / dsh-market 产品原则；范围：读面 RPC 补 min/max/enum 差距 + Config patch 写 + manifest default 编辑；结构编辑/调用参数/抽取文件写明确非目标；实施切分 S1-S4）。对象模型事实基础：param-object-model.md。
 
 - [ ] **scenario-chains（PROPOSAL，挂起至触发）** — 场景链两级能力发现：manifest 增必填 `scenario` 标签 + `doc_packs` 恒定分组返回，多场景共存时模型按任务域聚焦。**触发条件：第二个真实场景包立项（或内置 pack 总数越过 ~15）**，实施切分 S1/S2 见 docs/designs/scenario-chains.md。前置已落地：同 root 重名 pack 加载期 fail loud（跨 root 覆盖为 packsDir 既定语义）。
 - [ ] **E2E-real-llm** — 真实 LLM 闭环端到端。**已观测（2026-10-12）**：多轮修复路径实证（60→100 轨迹，权重 10/error 精确对账，两轮 promptHash 各异，跨 dsh 版本回执复验 hashMatches=true）；但 glm-5.3-flash 下三种违规素材均一轮全绿（模型把 pack 规则置于素材之上，护栏按设计工作），stagnation/decline 阈值（K=D=3）在真实 LLM 下不可触达，仍由确定性单测覆盖（runbook Calibration 节）。**剩余**：换更弱模型或"规则无法满足"的 pack 观测真实停滞——价值有限，可长期挂起（原脚本已被 tmp 清理，按此描述重写）
