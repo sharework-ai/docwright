@@ -1,7 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { join } from 'node:path'
 import { Config, type Config as DocwrightConfig } from './config.ts'
+import { mountParamsRoutes, type ConnectionLike, type WebServerLike } from './http.ts'
 import { loadPacks } from './pack-loader.ts'
+import { buildParamsPayload } from './params-rpc.ts'
 import { defineDocChainStatusTool, defineDocExtractTool, defineDocGenerateTool, defineDocPacksTool, defineDocValidateTool } from './tools.ts'
 
 /**
@@ -19,6 +21,7 @@ export * from './pack.ts'
 export { createScoring, defaultScore, type Scoring } from './convergence.ts'
 export { resolveEffectiveParams, type ExtractionView } from './params.ts'
 export { readExtractionFile, writeExtractionFile, verifyExtraction, type ExtractionFile, type ExtractionRecord } from './extract.ts'
+export { buildParamsCatalog, buildConfigCatalog, paramRoles, type ParamsCatalog, type UiConfigEntry } from './params-rpc.ts'
 export { DocService, generateDocument } from './doc-service.ts'
 export { runRepairLoop, type LoopExhaustReason } from './loop.ts'
 
@@ -48,4 +51,19 @@ export async function registerTools(ctx: Context, config: DocwrightConfig, built
   ctx.tools.register(defineDocExtractTool(deps))
   ctx.tools.register(defineDocValidateTool(deps))
   ctx.tools.register(defineDocChainStatusTool(deps))
+  // Params maintenance UI (docs/designs/param-management-ui.md, S1 read
+  // side): mounts on the host webServer when the host provides one. A
+  // headless/CLI host never resolves the service, this inject stays dormant,
+  // and the tools are unaffected. Payload and connection resolve lazily per
+  // request — the connection service only exists after the host's async init.
+  ctx.inject(['webServer'], (hostCtx: Context) => {
+    const host = hostCtx as unknown as {
+      effect(fn: () => () => void, name?: string): void
+      webServer: WebServerLike
+    }
+    host.effect(() => mountParamsRoutes(host.webServer, {
+      payload: () => buildParamsPayload(packs, Config, config),
+      connection: () => (ctx as unknown as { get(name: string): unknown }).get('connection') as ConnectionLike | undefined,
+    }), 'docwright: params routes')
+  })
 }

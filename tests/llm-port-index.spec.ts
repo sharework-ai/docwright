@@ -56,21 +56,21 @@ describe('plugin apply', () => {
     expect(name).toBe('docwright')
     expect(inject).toContain('tools')
     const registered: string[] = []
-    const ctx = { tools: { register: (t: { name: string }) => { registered.push(t.name) } } }
+    const ctx = { tools: { register: (t: { name: string }) => { registered.push(t.name) } }, inject: () => {} }
     await apply(ctx as never, { provider: 'p', model: 'm' })
     expect(registered).toEqual(['doc_packs', 'doc_generate', 'doc_extract_params', 'doc_validate', 'doc_chain_status'])
   })
 
   it('fails loud when defaultLanguage is missing from a pack', async () => {
     const { apply } = await import('../src/index.ts')
-    const ctx = { tools: { register: () => {} } }
+    const ctx = { tools: { register: () => {} }, inject: () => {} }
     await expect(apply(ctx as never, { defaultLanguage: 'fr-FR' })).rejects.toThrow(/defaultLanguage "fr-FR" missing/)
   })
 
   it('tolerates a missing packsDir override; builtin packs still register', async () => {
     const { apply } = await import('../src/index.ts')
     const registered: string[] = []
-    const ctx = { tools: { register: (t: { name: string }) => { registered.push(t.name) } } }
+    const ctx = { tools: { register: (t: { name: string }) => { registered.push(t.name) } }, inject: () => {} }
     await apply(ctx as never, { packsDir: '/nonexistent-docwright-packs', provider: 'p', model: 'm' })
     expect(registered).toEqual(['doc_packs', 'doc_generate', 'doc_extract_params', 'doc_validate', 'doc_chain_status'])
   })
