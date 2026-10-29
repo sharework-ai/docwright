@@ -8,13 +8,14 @@ import type { Pack } from './pack.ts'
  * docs/designs/param-management-ui.md). Two classes of write, each with its
  * persistence owner:
  *
- * - Config edits go through the HOST settings service
- *   (`ctx.settings.describe()/update()`): the host projects the plugin's
- *   Config schema into a form namespace keyed by the profile entry, persists
- *   edits into the profile patch, and applies them to the live Config
- *   reference without a remount. This module only locates the docwright
- *   namespace and forwards the merge — persistence, revision conflict
- *   detection, and secret redaction stay the host's job.
+ * - Config edits go through the HOST config editor
+ *   (`ctx.configEditor.edit()`): the host writes the merged config into the
+ *   profile patch under a file lock, runs Loader reconciliation, and the
+ *   plugin re-composes with the new config — persistence, conflict
+ *   detection, and reload stay the host's job. (The settings FORM service
+ *   was the first choice but projects only `.volatile()` schema fields,
+ *   whose value semantics would infect every config read here; the editor's
+ *   entry-level edit keeps plain config values.)
  * - Pack-param default edits rewrite the pack's manifest.json directly
  *   (packs are not profile entries — the host has no channel for them).
  *   The proposed manifest must pass the exact load-time validation before
@@ -25,44 +26,33 @@ import type { Pack } from './pack.ts'
  *   under the spec it started with — the swap only affects new calls.
  */
 
-/** The slice of the host settings service this module consumes. */
-export interface SettingsServiceLike {
-  describe(options?: { redactSecrets?: boolean }): Promise<SettingsDescriptorLike[]> | SettingsDescriptorLike[]
-  update(ns: string, patch: object, expectedRevision?: number): Promise<void>
+/** The slice of the host config editor this module consumes. */
+export interface ConfigEditorLike {
+  entries(): readonly ConfigEntryLike[]
+  edit(entry: ConfigEntryLike, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>): Promise<void>
 }
 
-export interface SettingsDescriptorLike {
-  /** Unique profile entry id the form is keyed by. */
-  ns: string
-  /** The entry's plugins (package names) — how docwright locates its own form. */
-  plugins?: readonly { name?: string }[] | readonly string[]
-  revision?: number
+export interface ConfigEntryLike {
+  readonly options?: { readonly id?: unknown; readonly name?: unknown; readonly config?: Record<string, unknown> } | undefined
 }
 
-/** Plugin package name the Config form is located by. */
+/** Plugin package name the docwright profile entry is located by. */
 export const PLUGIN_PACKAGE_NAME = '@sharework-ai/dsh-docwright'
 
-function descriptorPlugins(descriptor: SettingsDescriptorLike): readonly string[] {
-  if (Array.isArray(descriptor.plugins)) {
-    return descriptor.plugins.map(p => (typeof p === 'string' ? p : p.name ?? ''))
-  }
-  return []
-}
-
-/** Locate the docwright form namespace; loud when the host serves none (older host) or the entry is missing. */
-export function findOwnNamespace(descriptors: readonly SettingsDescriptorLike[]): { ns: string; revision?: number } {
-  const own = descriptors.find(d => descriptorPlugins(d).includes(PLUGIN_PACKAGE_NAME))
-    ?? descriptors.find(d => descriptorPlugins(d).some(name => name.endsWith('/dsh-docwright')))
+/** Locate the docwright profile entry; loud when the host serves no editor or the entry is missing. */
+export function findOwnEntry(entries: readonly ConfigEntryLike[]): ConfigEntryLike {
+  const own = entries.find(e => e.options?.name === PLUGIN_PACKAGE_NAME)
+    ?? entries.find(e => typeof e.options?.name === 'string' && e.options.name.endsWith('/dsh-docwright'))
   if (own === undefined) {
-    throw new Error('no settings form for docwright: the host settings service did not list this plugin (cause: the service derives forms from active profile entries and docwright has no editable entry here; fix: configure docwright via cordis.yml)')
+    throw new Error('no profile entry for docwright: the host config editor did not list this plugin (cause: the entry composes the running plugin and must be in the active profile; fix: configure docwright via cordis.yml or the profile patch)')
   }
-  return { ns: own.ns, ...(own.revision === undefined ? {} : { revision: own.revision }) }
+  return own
 }
 
-/** Merge a Config patch through the host settings service. */
-export async function updateConfigViaHost(settings: SettingsServiceLike, patch: Record<string, unknown>): Promise<void> {
-  const own = findOwnNamespace(await settings.describe())
-  await settings.update(own.ns, patch, own.revision)
+/** Merge a Config patch through the host config editor (profile patch write + Loader reconciliation). */
+export async function updateConfigViaEditor(editor: ConfigEditorLike, patch: Record<string, unknown>): Promise<void> {
+  const entry = findOwnEntry(editor.entries())
+  await editor.edit(entry, (current) => ({ ...current, ...patch }))
 }
 
 /**

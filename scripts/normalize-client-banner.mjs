@@ -7,8 +7,7 @@
 import fs from 'node:fs'
 
 const file = 'client/client.js'
-const name = JSON.parse(fs.readFileSync('package.json', 'utf8')).name
-const clientPkg = 'docwright-params'
+const clientPkg = JSON.parse(fs.readFileSync('package.json', 'utf8')).name
 const required = `window.__ModuleLoader__.load({ id: ${JSON.stringify(clientPkg)}, factory: (require) => {`
 let code = fs.readFileSync(file, 'utf8')
 if (code.startsWith(required)) {
@@ -25,6 +24,5 @@ if (code.startsWith(required)) {
 } else {
   throw new Error(`client/client.js does not start with the loader banner; got: ${code.slice(0, 80)}`)
 }
-void name
 fs.writeFileSync(file, code)
 console.log('client banner normalized')

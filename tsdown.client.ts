@@ -7,7 +7,13 @@
  */
 import { defineConfig } from 'tsdown'
 
-const id = 'docwright-params'
+// The loader id MUST equal the package name: the host composes the boot
+// graph per package (dsh-market contract — its normalize script reads
+// package.json name for exactly this reason).
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+const id = (JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'package.json'), 'utf8')) as { name: string }).name
 
 /** Only the loader module table entries this bundle requires. */
 const CLIENT_EXTERNALS = ['react', 'react/jsx-runtime', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives']

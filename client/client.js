@@ -1,4 +1,4 @@
-window.__ModuleLoader__.load({ id: "docwright-params", factory: (require) => {
+window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (require) => {
 
 		var module = { exports: {} };
 		var exports = module.exports;
@@ -582,17 +582,26 @@ window.__ModuleLoader__.load({ id: "docwright-params", factory: (require) => {
 		//#endregion
 		//#region src/client/index.tsx
 		/**
-		* docwright params UI client half: registers a "Docwright params" settings
-		* section rendering the maintenance views (shared-param groups with
-		* effective-source resolution, per-pack flat view, plugin Config form).
-		* Built by tsdown into the __ModuleLoader__ factory bundle at client/client.js;
-		* externals resolve through the loader's module table.
+		* docwright params UI client half: registers the params maintenance views on
+		* the two seats the 0.1.7+ slot contract offers third-party bundles —
+		* `settings.plugins.tab` (a tab beside 通用/模型/内置插件 in the Settings
+		* dialog) and `plugins.bundle.config` (the configuration card on the
+		* bundle's own Plugins page). Both seats are reached through `slots.inject`,
+		* which waits for the slot to exist: a host that never declares one never
+		* runs its registration (dsh-market's detection pattern — no version
+		* strings). The old `settings.section` seat is NOT registered: 0.2.1's
+		* declaration table rejects it ("slot is not declared") and the section
+		* never renders.
 		*
-		* Containment follows dsh-market's lesson: a throw inside the host's client
-		* bootstrap takes the whole app down, so mounting is wrapped and a failure
-		* costs this section for the session, never the shell.
+		* Built by tsdown into the __ModuleLoader__ factory bundle at client/client.js;
+		* externals resolve through the loader's module table. Containment follows
+		* dsh-market's lesson: a throw inside the host's client bootstrap takes the
+		* whole app down, so each mounting is wrapped and a failure costs this
+		* section for the session, never the shell.
 		*/
 		const NS = "docwright-params";
+		/** The bundle's package name — the key `plugins.bundle.config` is contracted to. */
+		const PACKAGE_NAME = "@sharework-ai/dsh-docwright";
 		/** Primitives this bundle requires that older hosts may lack. */
 		const REQUIRED_PRIMITIVES = [
 			"Button",
@@ -624,17 +633,31 @@ window.__ModuleLoader__.load({ id: "docwright-params", factory: (require) => {
 			ctx.locale.subscribe(() => {
 				lang = ctx.locale.getSnapshot().active === "zh" ? "zh" : "en";
 			});
-			const off = ctx.slots.register({
-				name: "settings.section",
-				id: NS,
-				order: 45,
-				label: () => lang === "zh" ? "Docwright 参数" : "Docwright params",
-				locale: NS,
-				inject: () => ({ lang })
-			}, () => (0, react.createElement)(ParamsSection, { lang }));
-			ctx.effect(() => () => {
-				if (typeof off === "function") off();
-			}, "docwright: params section");
+			const label = () => lang === "zh" ? "Docwright 参数" : "Docwright params";
+			ctx.slots.inject("settings.plugins.tab", () => {
+				const off = ctx.slots.register({
+					name: "settings.plugins.tab",
+					id: NS,
+					order: 60,
+					label,
+					locale: NS,
+					inject: () => ({ lang })
+				}, () => (0, react.createElement)(ParamsSection, { lang }));
+				ctx.effect(() => () => {
+					if (typeof off === "function") off();
+				}, "docwright: settings tab");
+			});
+			ctx.slots.inject("plugins.bundle.config", () => {
+				const off = ctx.slots.register({
+					name: "plugins.bundle.config",
+					key: PACKAGE_NAME,
+					locale: NS,
+					inject: () => ({ lang })
+				}, (owner = {}) => owner.view === "summary" ? null : (0, react.createElement)(ParamsSection, { lang }));
+				ctx.effect(() => () => {
+					if (typeof off === "function") off();
+				}, "docwright: bundle config card");
+			});
 		}
 		//#endregion
 		exports.apply = apply;

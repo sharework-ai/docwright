@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { findOwnNamespace, setPackParamDefault, updateConfigViaHost } from '../src/params-writes.ts'
-import type { SettingsDescriptorLike, SettingsServiceLike } from '../src/params-writes.ts'
+import { findOwnEntry, setPackParamDefault, updateConfigViaEditor } from '../src/params-writes.ts'
+import type { ConfigEditorLike, ConfigEntryLike } from '../src/params-writes.ts'
 import { loadPacks } from '../src/pack-loader.ts'
 
 const B70 = { value: 70, downFactor: 0.9, upFactor: 1.2 }
@@ -38,33 +38,35 @@ async function writeDeps() {
   }
 }
 
-describe('findOwnNamespace', () => {
-  it('locates docwright by exact package name and suffix, with revision', () => {
-    const a: SettingsDescriptorLike = { ns: 'e1', plugins: [{ name: '@sharework-ai/dsh-docwright' }], revision: 4 }
-    expect(findOwnNamespace([a])).toEqual({ ns: 'e1', revision: 4 })
-    const b: SettingsDescriptorLike = { ns: 'e2', plugins: ['x/y', 'sharework-ai/dsh-docwright'] }
-    expect(findOwnNamespace([b]).ns).toBe('e2')
+describe('findOwnEntry', () => {
+  it('locates docwright by exact package name and suffix', () => {
+    const a: ConfigEntryLike = { options: { id: 'docwright', name: '@sharework-ai/dsh-docwright' } }
+    expect(findOwnEntry([a])).toBe(a)
+    const b: ConfigEntryLike = { options: { id: 'dw', name: 'x/dsh-docwright' } }
+    expect(findOwnEntry([b])).toBe(b)
   })
 
-  it('fails loud when no descriptor serves docwright', () => {
-    expect(() => findOwnNamespace([{ ns: 'e', plugins: ['other'] }])).toThrow(/no settings form for docwright/)
-    expect(() => findOwnNamespace([])).toThrow(/no settings form for docwright/)
-    expect(() => findOwnNamespace([{ ns: 'e', plugins: 'weird' as never }])).toThrow(/no settings form for docwright/)
+  it('fails loud when no entry serves docwright', () => {
+    expect(() => findOwnEntry([{ options: { name: 'other' } }])).toThrow(/no profile entry for docwright/)
+    expect(() => findOwnEntry([])).toThrow(/no profile entry for docwright/)
+    expect(() => findOwnEntry([{}])).toThrow(/no profile entry for docwright/)
   })
 })
 
-describe('updateConfigViaHost', () => {
-  it('describes, locates the namespace, and merges with the revision', async () => {
-    const calls: Array<{ ns: string; patch: object; revision?: number }> = []
-    const settings: SettingsServiceLike = {
-      describe: () => [{ ns: 'own', plugins: ['@sharework-ai/dsh-docwright'], revision: 7 }],
-      update: (ns, patch, expectedRevision) => {
-        calls.push({ ns, patch, ...(expectedRevision === undefined ? {} : { revision: expectedRevision }) })
+describe('updateConfigViaEditor', () => {
+  it('locates the entry and merges the patch over the current config', async () => {
+    const entry: ConfigEntryLike = { options: { id: 'docwright', name: '@sharework-ai/dsh-docwright', config: { maxIterations: 5 } } }
+    const calls: Array<{ patch: object }> = []
+    const editor: ConfigEditorLike = {
+      entries: () => [entry],
+      edit: (e, change) => {
+        expect(e).toBe(entry)
+        calls.push({ patch: change(e.options?.config ?? {}, {}) })
         return Promise.resolve()
       },
     }
-    await updateConfigViaHost(settings, { confirmPolicy: 'strict' })
-    expect(calls).toEqual([{ ns: 'own', patch: { confirmPolicy: 'strict' }, revision: 7 }])
+    await updateConfigViaEditor(editor, { confirmPolicy: 'strict' })
+    expect(calls).toEqual([{ patch: { maxIterations: 5, confirmPolicy: 'strict' } }])
   })
 })
 

@@ -87,7 +87,8 @@ describe('buildParamsCatalog', () => {
     const catalog = buildParamsCatalog(packs)
     const cfpPerFunc = catalog.groups.find(g => g.name === 'cfpPerFunc')!
     expect(cfpPerFunc.sources).toEqual(['cosmic-plan'])
-    expect(cfpPerFunc.declarations.map(d => d.pack)).toEqual(['cosmic-func', 'cosmic-plan', 'cosmic-req', 'cosmic-tech'])
+    // Source (cosmic-plan) now leads the row; shadowed packs follow alphabetically.
+    expect(cfpPerFunc.declarations.map(d => d.pack)).toEqual(['cosmic-plan', 'cosmic-func', 'cosmic-req', 'cosmic-tech'])
     const pattern = catalog.groups.find(g => g.name === 'topicNoPattern')!
     expect(pattern.sources).toEqual(['cosmic-context'])
     // cfpTotal (required, no default) and topicNo (derived, no default) never appear.
@@ -237,8 +238,8 @@ describe('registerTools wiring', () => {
       tools: { register: (t: { name: string }) => { registered.push(t.name) } },
       inject(deps: string[], cb: (hostCtx: unknown) => void) { if (deps.includes('webServer')) cb(hostCtx) },
       get(name: string) {
-        return name === 'settings'
-          ? { describe: () => [], update: () => Promise.resolve() }
+        return name === 'configEditor'
+          ? { entries: () => [], edit: () => Promise.resolve() }
           : undefined
       },
     }
@@ -253,11 +254,12 @@ describe('registerTools wiring', () => {
       inject(deps: string[], cb: (hostCtx: unknown) => void) { if (deps.includes('webServer')) cb(hostCtx) },
       get() { return undefined },
     }
+    void bareCtx
     await registerTools(bareCtx as never, { workspaceRoot: '/w' } as never, packsRoot)
     const resNoSettings = fakeResMaker()
     await handlers[1]!({ method: 'POST', headers: { origin: 'https://h', host: 'h' }, async *[Symbol.asyncIterator]() { yield Buffer.from('{"patch":{}}') } }, resNoSettings)
     expect(resNoSettings.statusCode).toBe(422)
-    expect(JSON.parse(resNoSettings.body).error).toContain('settings service is not available')
+    expect(JSON.parse(resNoSettings.body).error).toContain('config editor is not available')
     const first = handlers.length
     await registerTools(ctx as never, { workspaceRoot: '/w' } as never, packsRoot)
     expect(registered).toHaveLength(5)
@@ -269,9 +271,9 @@ describe('registerTools wiring', () => {
     const configPost = { method: 'POST', headers: { origin: 'https://h', host: 'h' }, async *[Symbol.asyncIterator]() { yield Buffer.from('{"patch":{"maxIterations":4}}') } }
     const resConfig = fakeResMaker()
     await configRoute!(configPost, resConfig)
-    // The fake settings service lists no docwright form: the proxy surfaces the locator error.
+    // The fake editor lists no docwright entry: the proxy surfaces the locator error.
     expect(resConfig.statusCode).toBe(422)
-    expect(JSON.parse(resConfig.body).error).toContain('no settings form for docwright')
+    expect(JSON.parse(resConfig.body).error).toContain('no profile entry for docwright')
     // The pack-param closure is wired through to the write channel (unknown pack → loud 422).
     const paramPost = { method: 'POST', headers: { origin: 'https://h', host: 'h' }, async *[Symbol.asyncIterator]() { yield Buffer.from('{"pack":"ghost","param":"x","value":1}') } }
     const resParam = fakeResMaker()

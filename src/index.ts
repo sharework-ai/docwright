@@ -4,7 +4,7 @@ import { Config, type Config as DocwrightConfig } from './config.ts'
 import { mountParamsRoutes, type ConnectionLike, type WebServerLike, type WriteChannels } from './http.ts'
 import { loadPacks } from './pack-loader.ts'
 import { buildParamsPayload } from './params-rpc.ts'
-import { setPackParamDefault, updateConfigViaHost, type SettingsServiceLike } from './params-writes.ts'
+import { setPackParamDefault, updateConfigViaEditor, type ConfigEditorLike } from './params-writes.ts'
 import { defineDocChainStatusTool, defineDocExtractTool, defineDocGenerateTool, defineDocPacksTool, defineDocValidateTool } from './tools.ts'
 
 /**
@@ -65,20 +65,19 @@ export async function registerTools(ctx: Context, config: DocwrightConfig, built
       effect(fn: () => () => void, name?: string): void
       webServer: WebServerLike
     }
-    // Config writes proxy the HOST settings service (describe/update over the
-    // plugin's profile entry — patch persistence, revision conflicts, and
-    // hot reload stay the host's). The service is resolved lazily per call
-    // for the same async-init reason as the connection gate; a host without
-    // it surfaces a clear error from the write route instead.
-    const settingsOf = (): SettingsServiceLike => {
-      const service = (ctx as unknown as { get(name: string): unknown }).get('settings') as SettingsServiceLike | undefined
-      if (service === undefined || typeof service.describe !== 'function' || typeof service.update !== 'function') {
-        throw new Error('the host settings service is not available (cause: this dsh does not expose settings forms; fix: configure docwright via cordis.yml)')
+    // Config writes proxy the HOST config editor (entry-level edit into the
+    // profile patch + Loader reconciliation). Resolved lazily per call for
+    // the same async-init reason as the connection gate; a host without the
+    // service surfaces a clear error from the write route instead.
+    const editorOf = (): ConfigEditorLike => {
+      const editor = (ctx as unknown as { get(name: string): unknown }).get('configEditor') as ConfigEditorLike | undefined
+      if (editor === undefined || typeof editor.edit !== 'function' || typeof editor.entries !== 'function') {
+        throw new Error('the host config editor is not available (cause: this dsh does not expose profile patch editing; fix: configure docwright via cordis.yml)')
       }
-      return service
+      return editor
     }
     const writes: WriteChannels = {
-      updateConfig: patch => updateConfigViaHost(settingsOf(), patch),
+      updateConfig: patch => updateConfigViaEditor(editorOf(), patch),
       setPackParamDefault: (pack, param, value) => setPackParamDefault({
         packs,
         builtinRoot,

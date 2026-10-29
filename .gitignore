@@ -6,3 +6,4 @@ coverage/
 .env
 *.receipt.json
 dist/
+.gstack/

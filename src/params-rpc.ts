@@ -163,7 +163,11 @@ export function buildParamsCatalog(packs: ReadonlyMap<string, Pack>): ParamsCata
     })
   }
   const groups: UiParamGroup[] = [...byName.keys()].sort().map(name => {
-    const declarations = byName.get(name)!.sort((a, b) => (a.pack < b.pack ? -1 : 1))
+    // The governing declaration leads the row; shadowed ones follow.
+    const declarations = byName.get(name)!.sort((a, b) => {
+      if (a.role !== b.role) return a.role === 'source' ? -1 : 1
+      return a.pack < b.pack ? -1 : 1
+    })
     return {
       name,
       sources: declarations.filter(d => d.role === 'source').map(d => d.pack),
