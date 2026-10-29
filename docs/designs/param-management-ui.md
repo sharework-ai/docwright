@@ -1,6 +1,6 @@
 # 参数维护界面（param-management-ui）
 
-Status: PROPOSAL（设计提案待评审；实施时翻 IMPLEMENTED 并按现状改写）
+Status: IMPLEMENTED（v1 全量落地 2026-10-29：读面 RPC + 写通道 + dsh web 客户端三视图 + 真实宿主 browse 验收；实施修正见下）
 
 参数体系的机制语义与对象模型见 `params-and-chain-contract.md`、`param-object-model.md`（四层级、属性全集、生命周期矩阵、不变量、写操作影响半径）；本文只管界面：**在 dsh web 里读参数、改参数**，而不是让用户去读文件。
 
@@ -95,6 +95,13 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 - pack 结构编辑、多 pack 批量操作、导入导出——不做。
 - extraction 文件不从界面写（引文必须对素材机检，界面上没有素材上下文）。
 - `doc_packs` 保持模型面精简，不补 min/max/enum（差距 1 由界面专用 RPC 关闭）。
+
+## 实施修正（真实宿主验收驱动，与调研假设的差异）
+
+1. **Loader id = 包名**：宿主按包名组合 boot 图并从文件头嗅探 `window.__ModuleLoader__.load({ id: "<包名>"`——硬编码自命名 id 使整个 client half 加载失败（"could not load"）。bundle 产物 id 必须等于 package.json name。
+2. **席位**：0.2.1 拒绝第三方 `settings.section` 注册（槽位声明表检查）。实际席位是 `settings.plugins.tab`（设置 → 内置插件 section 内的 tab）与 `plugins.bundle.config`（插件详情页配置卡片），均经 `slots.inject` 探测（未声明的宿主不运行注册）。
+3. **Config 写通道落定 configEditor**：宿主 settings 表单服务只投影 `.volatile()` schema 字段且 volatile 值是 live 引用（会感染所有 config 读取）——改代理 `ctx.configEditor.edit()`（entry 级合并写入 profile patch，宿主文件锁 + Loader 重组）。实测 UI 保存 → patch 落盘 → payload origin=configured → 引擎读新值全通。
+4. **热替换**：pack manifest default 编辑后重载 pack 并**原地清空重填同一个 Map 实例**（工具与 RPC 共享该实例）——下一次 doc_generate 即用新 spec，无需重启；进行中的调用持旧 Pack 对象按其开始时的 spec 完成。
 
 ## 开放问题
 
