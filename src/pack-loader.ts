@@ -81,7 +81,8 @@ function assertParamSpec(raw: unknown, dir: string, name: string): ParamSpec {
   return s as ParamSpec
 }
 
-function assertManifest(raw: unknown, dir: string): PackManifest {
+/** Manifest validation, exported for the params-UI write channel (S3): a proposed manifest must pass the exact load-time gate before it touches disk. */
+export function assertManifest(raw: unknown, dir: string): PackManifest {
   if (typeof raw !== 'object' || raw === null) throw new Error(`pack ${dir}: manifest.json must be an object`)
   const m = raw as Partial<PackManifest>
   if (typeof m.name !== 'string' || m.name.length === 0) throw new Error(`pack ${dir}: manifest.name must be a non-empty string`)

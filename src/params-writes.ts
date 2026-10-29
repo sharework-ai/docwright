@@ -1,0 +1,119 @@
+import { readFile, rename, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { assertManifest } from './pack-loader.ts'
+import type { Pack } from './pack.ts'
+
+/**
+ * Write channels for the params maintenance UI (S3 of
+ * docs/designs/param-management-ui.md). Two classes of write, each with its
+ * persistence owner:
+ *
+ * - Config edits go through the HOST settings service
+ *   (`ctx.settings.describe()/update()`): the host projects the plugin's
+ *   Config schema into a form namespace keyed by the profile entry, persists
+ *   edits into the profile patch, and applies them to the live Config
+ *   reference without a remount. This module only locates the docwright
+ *   namespace and forwards the merge — persistence, revision conflict
+ *   detection, and secret redaction stay the host's job.
+ * - Pack-param default edits rewrite the pack's manifest.json directly
+ *   (packs are not profile entries — the host has no channel for them).
+ *   The proposed manifest must pass the exact load-time validation before
+ *   it touches disk, the write is atomic, and the loaded pack map is
+ *   hot-swapped IN PLACE (clear + re-fill of the same Map instance the
+ *   tools hold) so the next doc_generate sees the new default without a
+ *   restart. A concurrent generation keeps its old Pack object and finishes
+ *   under the spec it started with — the swap only affects new calls.
+ */
+
+/** The slice of the host settings service this module consumes. */
+export interface SettingsServiceLike {
+  describe(options?: { redactSecrets?: boolean }): Promise<SettingsDescriptorLike[]> | SettingsDescriptorLike[]
+  update(ns: string, patch: object, expectedRevision?: number): Promise<void>
+}
+
+export interface SettingsDescriptorLike {
+  /** Unique profile entry id the form is keyed by. */
+  ns: string
+  /** The entry's plugins (package names) — how docwright locates its own form. */
+  plugins?: readonly { name?: string }[] | readonly string[]
+  revision?: number
+}
+
+/** Plugin package name the Config form is located by. */
+export const PLUGIN_PACKAGE_NAME = '@sharework-ai/dsh-docwright'
+
+function descriptorPlugins(descriptor: SettingsDescriptorLike): readonly string[] {
+  if (Array.isArray(descriptor.plugins)) {
+    return descriptor.plugins.map(p => (typeof p === 'string' ? p : p.name ?? ''))
+  }
+  return []
+}
+
+/** Locate the docwright form namespace; loud when the host serves none (older host) or the entry is missing. */
+export function findOwnNamespace(descriptors: readonly SettingsDescriptorLike[]): { ns: string; revision?: number } {
+  const own = descriptors.find(d => descriptorPlugins(d).includes(PLUGIN_PACKAGE_NAME))
+    ?? descriptors.find(d => descriptorPlugins(d).some(name => name.endsWith('/dsh-docwright')))
+  if (own === undefined) {
+    throw new Error('no settings form for docwright: the host settings service did not list this plugin (cause: the service derives forms from active profile entries and docwright has no editable entry here; fix: configure docwright via cordis.yml)')
+  }
+  return { ns: own.ns, ...(own.revision === undefined ? {} : { revision: own.revision }) }
+}
+
+/** Merge a Config patch through the host settings service. */
+export async function updateConfigViaHost(settings: SettingsServiceLike, patch: Record<string, unknown>): Promise<void> {
+  const own = findOwnNamespace(await settings.describe())
+  await settings.update(own.ns, patch, own.revision)
+}
+
+/**
+ * Set one pack param's default: validate at load strength, write atomically,
+ * hot-swap the pack map in place. `value` replaces `params.<name>.default`;
+ * the param must already declare one (the UI's inclusion criterion —
+ * structural manifest changes are a pack-author job with a version bump).
+ */
+export async function setPackParamDefault(deps: {
+  packs: Map<string, Pack>
+  /** Config root the builtin packs load from (to rebuild the full map). */
+  builtinRoot: string
+  extraPacksDir?: string | undefined
+  loadPacks: (builtinRoot: string, dirs: { extra?: readonly string[] | undefined }) => Promise<ReadonlyMap<string, Pack>>
+}, packName: string, paramName: string, value: unknown): Promise<void> {
+  const pack = deps.packs.get(packName)
+  if (pack === undefined) {
+    throw new Error(`unknown pack "${packName}" (available: ${[...deps.packs.keys()].sort().join(', ')}); nothing was written`)
+  }
+  const spec = pack.manifest.params?.[paramName]
+  if (spec === undefined || spec.default === undefined) {
+    throw new Error(`pack "${packName}" param "${paramName}" does not declare a default (the UI maintains declared defaults only; a structural manifest change is a pack-author edit with a version bump); nothing was written`)
+  }
+  const manifestPath = join(pack.dir, 'manifest.json')
+  const raw = await readFile(manifestPath, 'utf8')
+  let manifest: Record<string, unknown>
+  try {
+    manifest = JSON.parse(raw) as Record<string, unknown>
+  } catch (error) {
+    throw new Error(`pack "${packName}" manifest.json is not valid JSON (${(error as Error).message}); fix the file first; nothing was written`)
+  }
+  const params = manifest.params as Record<string, unknown> | undefined
+  if (typeof params !== 'object' || params === null || Array.isArray(params) || !(paramName in params) || typeof params[paramName] !== 'object' || params[paramName] === null) {
+    throw new Error(`pack "${packName}" manifest no longer declares params.${paramName}; nothing was written`)
+  }
+  const nextParams: Record<string, unknown> = { ...params }
+  nextParams[paramName] = { ...(params[paramName] as Record<string, unknown>), default: value }
+  const nextManifest = { ...manifest, params: nextParams }
+  // The EXACT load-time gate: a manifest the loader would reject never
+  // reaches disk (misconfiguration fails loud, not at the next boot).
+  assertManifest(nextManifest, pack.dir)
+  await writeFile(`${manifestPath}.tmp`, `${JSON.stringify(nextManifest, null, 2)}\n`, 'utf8')
+  await rename(`${manifestPath}.tmp`, manifestPath)
+  // Hot-swap: reload every root and refill the SAME Map instance the tools
+  // hold, so resolvePack and the RPC payload see the new spec immediately.
+  let reloaded: ReadonlyMap<string, Pack>
+  try {
+    reloaded = await deps.loadPacks(deps.builtinRoot, { extra: deps.extraPacksDir === undefined ? undefined : [deps.extraPacksDir] })
+  } catch (error) {
+    throw new Error(`manifest written, but reloading packs failed: ${(error as Error).message}; fix or revert ${manifestPath} — the running tools still hold the previous spec until a successful reload`)
+  }
+  deps.packs.clear()
+  for (const [name, loaded] of reloaded) deps.packs.set(name, loaded)
+}

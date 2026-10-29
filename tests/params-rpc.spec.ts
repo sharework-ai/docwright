@@ -236,16 +236,171 @@ describe('registerTools wiring', () => {
     const ctx = {
       tools: { register: (t: { name: string }) => { registered.push(t.name) } },
       inject(deps: string[], cb: (hostCtx: unknown) => void) { if (deps.includes('webServer')) cb(hostCtx) },
+      get(name: string) {
+        return name === 'settings'
+          ? { describe: () => [], update: () => Promise.resolve() }
+          : undefined
+      },
+    }
+    const fakeResMaker = () => {
+      const res = { statusCode: 0, body: '', writeHead(s: number) { res.statusCode = s }, end(b: string) { res.body = b } }
+      return res
+    }
+    // A host WITHOUT a settings service: the config write names the cause and
+    // the fix (422), never a TypeError from an undefined service.
+    const bareCtx = {
+      tools: { register: () => {} },
+      inject(deps: string[], cb: (hostCtx: unknown) => void) { if (deps.includes('webServer')) cb(hostCtx) },
       get() { return undefined },
     }
+    await registerTools(bareCtx as never, { workspaceRoot: '/w' } as never, packsRoot)
+    const resNoSettings = fakeResMaker()
+    await handlers[1]!({ method: 'POST', headers: { origin: 'https://h', host: 'h' }, async *[Symbol.asyncIterator]() { yield Buffer.from('{"patch":{}}') } }, resNoSettings)
+    expect(resNoSettings.statusCode).toBe(422)
+    expect(JSON.parse(resNoSettings.body).error).toContain('settings service is not available')
+    const first = handlers.length
     await registerTools(ctx as never, { workspaceRoot: '/w' } as never, packsRoot)
     expect(registered).toHaveLength(5)
-    expect(handlers).toHaveLength(1)
-    const res = { statusCode: 0, body: '', writeHead(s: number) { res.statusCode = s }, end(b: string) { res.body = b } }
-    await handlers[0]!({}, res)
+    // Three routes since S3: the read catalog plus the two write channels (×2 mounts now).
+    expect(handlers.length - first).toBe(3)
+    const [read, configRoute, paramRoute] = handlers.slice(first)
+    const res = fakeResMaker()
+    await read!({}, res)
+    const configPost = { method: 'POST', headers: { origin: 'https://h', host: 'h' }, async *[Symbol.asyncIterator]() { yield Buffer.from('{"patch":{"maxIterations":4}}') } }
+    const resConfig = fakeResMaker()
+    await configRoute!(configPost, resConfig)
+    // The fake settings service lists no docwright form: the proxy surfaces the locator error.
+    expect(resConfig.statusCode).toBe(422)
+    expect(JSON.parse(resConfig.body).error).toContain('no settings form for docwright')
+    // The pack-param closure is wired through to the write channel (unknown pack → loud 422).
+    const paramPost = { method: 'POST', headers: { origin: 'https://h', host: 'h' }, async *[Symbol.asyncIterator]() { yield Buffer.from('{"pack":"ghost","param":"x","value":1}') } }
+    const resParam = fakeResMaker()
+    await paramRoute!(paramPost, resParam)
+    expect(resParam.statusCode).toBe(422)
+    expect(JSON.parse(resParam.body).error).toContain('unknown pack "ghost"')
     const payload = JSON.parse(res.body) as { packs: { name: string }[]; config: { key: string }[] }
     expect(res.statusCode).toBe(200)
     expect(payload.packs.map(p => p.name)).toContain('cosmic-plan')
     expect(payload.config.find(e => e.key === 'confirmPolicy')).toBeDefined()
+  })
+})
+
+describe('POST write routes', () => {
+  function fakeServer() {
+    const routes: Array<{ path: string; handler: (req: unknown, res: unknown) => Promise<void> | void }> = []
+    const webServer: WebServerLike = { register: route => { routes.push(route as never); return () => {} } }
+    return { webServer, routes }
+  }
+  const fakeRes = () => {
+    const res = { statusCode: 0, headers: {} as Record<string, string>, body: '' }
+    const typed = res as unknown as { writeHead: (s: number, h: Record<string, string>) => void; end: (b: string) => void }
+    typed.writeHead = (status, headers) => { res.statusCode = status; res.headers = headers }
+    typed.end = body => { res.body = body }
+    return { res, typed }
+  }
+  const req = (method: string, origin?: string, host?: string, body?: string) => ({
+    method,
+    headers: { ...(origin === undefined ? {} : { origin }), ...(host === undefined ? {} : { host }), ...(body === undefined ? {} : { 'content-length': String(body.length) }) },
+    async *[Symbol.asyncIterator]() { if (body !== undefined) yield Buffer.from(body) },
+  })
+
+  it('mounts all three routes when writes are provided', () => {
+    const { webServer, routes } = fakeServer()
+    mountParamsRoutes(webServer, { payload: () => ({}), writes: { updateConfig: () => Promise.resolve(), setPackParamDefault: () => Promise.resolve() } })
+    expect(routes.map(r => r.path)).toEqual(['/api/docwright/params', '/api/docwright/config', '/api/docwright/pack-param'])
+  })
+
+  it('forwards valid bodies to the config channel and reports failures as 422 with the message', async () => {
+    const { webServer, routes } = fakeServer()
+    const got: unknown[] = []
+    mountParamsRoutes(webServer, {
+      payload: () => ({}),
+      writes: { updateConfig: patch => { got.push(patch); return Promise.resolve() }, setPackParamDefault: () => Promise.resolve() },
+    })
+    const config = routes.find(r => r.path === '/api/docwright/config')!
+    const ok = fakeRes()
+    await config.handler(req('POST', 'https://h', 'h', JSON.stringify({ patch: { maxIterations: 3 } })), ok.typed as never)
+    expect(ok.res.statusCode).toBe(200)
+    expect(got).toEqual([{ maxIterations: 3 }])
+    const bad = fakeRes()
+    await config.handler(req('POST', 'https://h', 'h', JSON.stringify({ patch: 'nope' })), bad.typed as never)
+    expect(bad.res.statusCode).toBe(422)
+    expect(JSON.parse(bad.res.body).error).toContain('patch')
+  })
+
+  it('enforces the gate, method, origin, and body limits before the handler', async () => {
+    const { webServer, routes } = fakeServer()
+    let called = 0
+    mountParamsRoutes(webServer, {
+      payload: () => ({}),
+      connection: () => ({ requestRejection: () => 403 }),
+      writes: { updateConfig: () => { called += 1; return Promise.resolve() }, setPackParamDefault: () => Promise.resolve() },
+    })
+    const config = routes.find(r => r.path === '/api/docwright/config')!
+    const gated = fakeRes()
+    await config.handler(req('POST', 'https://h', 'h', '{"patch":{}}'), gated.typed as never)
+    expect(gated.res.statusCode).toBe(403)
+    expect(called).toBe(0)
+    const { webServer: ws2, routes: r2 } = fakeServer()
+    mountParamsRoutes(ws2, { payload: () => ({}), writes: { updateConfig: () => { called += 1; return Promise.resolve() }, setPackParamDefault: () => Promise.resolve() } })
+    const c2 = r2.find(r => r.path === '/api/docwright/config')!
+    const wrongMethod = fakeRes()
+    await c2.handler(req('GET', 'https://h', 'h'), wrongMethod.typed as never)
+    expect(wrongMethod.res.statusCode).toBe(403)
+    const crossSite = fakeRes()
+    await c2.handler(req('POST', 'https://evil', 'h', '{"patch":{}}'), crossSite.typed as never)
+    expect(crossSite.res.statusCode).toBe(403)
+    const badJson = fakeRes()
+    await c2.handler(req('POST', 'https://h', 'h', '{oops'), badJson.typed as never)
+    expect(badJson.res.statusCode).toBe(400)
+    const malformedOrigin = fakeRes()
+    await c2.handler(req('POST', 'http://[', 'h', '{"patch":{}}'), malformedOrigin.typed as never)
+    expect(malformedOrigin.res.statusCode).toBe(403)
+    expect(called).toBe(0)
+  })
+
+  it('fails closed at 403 when the host gate itself throws', async () => {
+    const { webServer, routes } = fakeServer()
+    mountParamsRoutes(webServer, {
+      payload: () => ({ ok: 1 }),
+      connection: () => ({ requestRejection: () => { throw new Error('gate bug') } }),
+    })
+    const read = routes.find(r => r.path === '/api/docwright/params')!
+    const res = fakeRes()
+    await read.handler({}, res.typed as never)
+    expect(res.res.statusCode).toBe(403)
+  })
+
+  it('refuses a value-less pack-param body and disposes all three routes together', async () => {
+    const { webServer, routes } = fakeServer()
+    mountParamsRoutes(webServer, {
+      payload: () => ({}),
+      writes: { updateConfig: () => Promise.resolve(), setPackParamDefault: () => Promise.resolve() },
+    })
+    const param = routes.find(r => r.path === '/api/docwright/pack-param')!
+    const missing = fakeRes()
+    await param.handler(req('POST', 'https://h', 'h', JSON.stringify({ pack: 'wp', param: 'limit' })), missing.typed as never)
+    expect(missing.res.statusCode).toBe(422)
+    expect(JSON.parse(missing.res.body).error).toContain('body.value is required')
+    const dispose = mountParamsRoutes(webServer, { payload: () => ({}), writes: { updateConfig: () => Promise.resolve(), setPackParamDefault: () => Promise.resolve() } })
+    expect(webServer.register).toBeDefined()
+    dispose()
+  })
+
+  it('routes pack-param bodies to the write channel with both names', async () => {
+    const { webServer, routes } = fakeServer()
+    const got: Array<[string, string, unknown]> = []
+    mountParamsRoutes(webServer, {
+      payload: () => ({}),
+      writes: { updateConfig: () => Promise.resolve(), setPackParamDefault: (p, n, v) => { got.push([p, n, v]); return Promise.resolve() } },
+    })
+    const param = routes.find(r => r.path === '/api/docwright/pack-param')!
+    const ok = fakeRes()
+    await param.handler(req('POST', 'https://h', 'h', JSON.stringify({ pack: 'wp', param: 'limit', value: 7 })), ok.typed as never)
+    expect(ok.res.statusCode).toBe(200)
+    expect(got).toEqual([['wp', 'limit', 7]])
+    const missing = fakeRes()
+    await param.handler(req('POST', 'https://h', 'h', JSON.stringify({ pack: 'wp' })), missing.typed as never)
+    expect(missing.res.statusCode).toBe(422)
   })
 })
