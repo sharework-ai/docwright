@@ -1,6 +1,6 @@
 # 参数维护界面（param-management-ui）
 
-Status: PROPOSAL（设计提案待评审；实施时翻 IMPLEMENTED 并按现状改写）
+Status: IMPLEMENTED（v1 全量落地 2026-10-29：读面 RPC + 写通道 + dsh web 客户端三视图 + 真实宿主 browse 验收；实施修正见下）
 
 参数体系的机制语义与对象模型见 `params-and-chain-contract.md`、`param-object-model.md`（四层级、属性全集、生命周期矩阵、不变量、写操作影响半径）；本文只管界面：**在 dsh web 里读参数、改参数**，而不是让用户去读文件。
 
@@ -14,7 +14,7 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 
 1. **客户端注入**：package.json 声明 `dsh.client: { platform: 'web', inject: [...] }` + `exports['./client']`；宿主 `ctx.clientModules` 扫描组合 boot 图，浏览器侧 `window.__ModuleLoader__.load({id, factory})` 加载。注入 `@deepseek-ai/dsh-client-ui-settings`（Settings 区块）、`ui-slots`（槽位注册：声明即授权，冲突加载期报错）、`ui-primitives`/`ui-theme`（控件与圆角/材质规范，见宿主 docs/ui-radius.md）、`dsh-client-locale`。
 2. **服务端 HTTP 面**：cordis 插件经 `ctx.effect()` 在宿主 webServer 上挂**精确路由**（disposer 收线，进程内零常驻）。鉴权复用宿主 `connection.requestRejection`（Host/Origin 栅栏 + 浏览器登录）与 trusted-hosts 白名单；mutating 路由强制 same-origin + 有界 JSON body。**docwright 现在是纯工具插件，需要新增这个服务端 HTTP 面。**
-3. **写配置的先例**：dsh-market 热开关写 profile 的 `cordis.patch.yml`（官方 patch 层）——HMR ~1s 重组、重启后保留、手改行显示 badge、坏 patch 不被弄得更坏。docwright Config 编辑走同一层（**不直接改 cordis.yml**），天然获得"界面改的"与"手改的"可区分性。
+3. **写通道（调研后修订）**：宿主有原生 **`settings` 服务**（dsh-market `installMarketSettings` 实证）：服务端 `ctx.inject(['settings'])` → `settings.register(namespace, schema, { base })` 返回 scope（`.get()`/`.watch()`），宿主持久化并热生效；客户端 Plugins 页按 `settings.plugin.item` 槽位派发**插件自绘卡片**（"a plugin that ships a browser half owns its own card"），表单用宿主 `SettingsForm`/`settings*Field` 原语。**Config 编辑走这条宿主命名空间通道（替代原拟的 cordis.patch.yml 手写层）**——零文件写、watch 即时生效、与宿主配置页同构。引擎侧配一层 live 解析（cordis.yml < settings 命名空间 < 调用参数）。`cordis.patch.yml` 降级为 fallback 参考（宿主无 settings 服务时）。**pack manifest default 编辑无宿主通道**——仍走自定义 POST + 服务端不变量复跑。
 4. **产品原则**（dsh-market AGENTS.md 全文适用）：自然（从意图出发，不要求用户先懂 pack/manifest/patch 模型）、好理解（说人话、报错三件事：发生了什么/为什么/怎么办）、面向普通用户（默认值就是产品；常态安静罕见打扰；能撤销就别问；每个动作有即时反应和明确落点；系统复杂度由系统吸收）。
 
 ## 参数纳入判据（什么才进维护界面）
@@ -96,11 +96,18 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 - extraction 文件不从界面写（引文必须对素材机检，界面上没有素材上下文）。
 - `doc_packs` 保持模型面精简，不补 min/max/enum（差距 1 由界面专用 RPC 关闭）。
 
+## 实施修正（真实宿主验收驱动，与调研假设的差异）
+
+1. **Loader id = 包名**：宿主按包名组合 boot 图并从文件头嗅探 `window.__ModuleLoader__.load({ id: "<包名>"`——硬编码自命名 id 使整个 client half 加载失败（"could not load"）。bundle 产物 id 必须等于 package.json name。
+2. **席位**：0.2.1 拒绝第三方 `settings.section` 注册（槽位声明表检查）。实际席位是 `settings.plugins.tab`（设置 → 内置插件 section 内的 tab）与 `plugins.bundle.config`（插件详情页配置卡片），均经 `slots.inject` 探测（未声明的宿主不运行注册）。
+3. **Config 写通道落定 configEditor**：宿主 settings 表单服务只投影 `.volatile()` schema 字段且 volatile 值是 live 引用（会感染所有 config 读取）——改代理 `ctx.configEditor.edit()`（entry 级合并写入 profile patch，宿主文件锁 + Loader 重组）。实测 UI 保存 → patch 落盘 → payload origin=configured → 引擎读新值全通。
+4. **热替换**：pack manifest default 编辑后重载 pack 并**原地清空重填同一个 Map 实例**（工具与 RPC 共享该实例）——下一次 doc_generate 即用新 spec，无需重启；进行中的调用持旧 Pack 对象按其开始时的 spec 完成。
+
 ## 开放问题
 
 1. **入口位置**：Settings 内一个 "Docwright" 区块（v1 建议）vs 独立侧边栏行。多场景共存后再议侧边栏。
 2. **default 编辑后是否顺手升版**：默认不（升版使全部旧回执失效，是 pack 作者的显式动作）；若用户改了 default 又想强制重生成，界面提示可用 force 生成或手动升版。
-3. **profile 目录定位**：写 cordis.patch.yml 需要知道 profile 目录——dsh-market 经 profileContext/home-paths 解析；docwright 从宿主 ctx 能否直接拿到（待实施时查 host 服务，不行则复制 dsh-market 的解析逻辑）。
+3. ~~profile 目录定位~~ **已消解**：宿主 settings 通道不需要定位 patch 文件；pack manifest 写仍需 packsDir 定位（pack.dir 已在 Pack 对象上）。
 4. **客户端构建线**：dsh-market 用 rolldown 打 client.js；docwright 现为 tsdown Node 包。需补 client 构建（tsdown.client 配置 + `dsh.client` 字段 + `exports['./client']`），对齐宿主注入格式（`__ModuleLoader__.load`）。
 
 ## 实施切分

@@ -11,6 +11,7 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./client": "./client/client.js",
     "./pack": {
       "types": "./lib/pack.d.ts",
       "default": "./lib/pack.js"
@@ -40,6 +41,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
     }
   },
   "engines": {
@@ -58,6 +67,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.0.1-rc.1",
     "@deepseek-ai/dsh-llm": "link:../deepseek-harness/packages/llm/llm",
     "@deepseek-ai/dsh-scope": "link:../deepseek-harness/packages/core/scope",
     "@deepseek-ai/dsh-session": "link:../deepseek-harness/packages/core/session",
@@ -66,18 +76,22 @@
     "@deepseek-ai/dsh-util-values": "link:../deepseek-harness/packages/util/values",
     "@deepseek-ai/schemastery": "link:../deepseek-harness/vendor/schemastery",
     "@types/node": "^24.0.0",
+    "@types/react": "^18.3.31",
     "@vitest/coverage-v8": "^3.2.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tsdown": "^0.12.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
   },
   "scripts": {
-    "build": "tsc -b tsconfig.json && tsdown",
-    "typecheck": "tsc -b tsconfig.json --emitDeclarationOnly false --noEmit",
+    "build": "tsc -b tsconfig.json && tsdown && pnpm run build:client",
+    "typecheck": "tsc -b tsconfig.json && tsc -p tsconfig.client.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "spike:convergence": "node --import tsx/esm spike/convergence.ts",
-    "smoke:host": "node --import tsx/esm scripts/host-smoke.ts"
+    "smoke:host": "node --import tsx/esm scripts/host-smoke.ts",
+    "build:client": "tsdown -c tsdown.client.ts && node scripts/normalize-client-banner.mjs"
   }
 }
