@@ -96,12 +96,42 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 - extraction 文件不从界面写（引文必须对素材机检，界面上没有素材上下文）。
 - `doc_packs` 保持模型面精简，不补 min/max/enum（差距 1 由界面专用 RPC 关闭）。
 
-## 实施修正（真实宿主验收驱动，与调研假设的差异）
+## 宿主契约（0.2.1-rc.2 实测确认）
 
-1. **Loader id = 包名**：宿主按包名组合 boot 图并从文件头嗅探 `window.__ModuleLoader__.load({ id: "<包名>"`——硬编码自命名 id 使整个 client half 加载失败（"could not load"）。bundle 产物 id 必须等于 package.json name。
-2. **席位**：0.2.1 拒绝第三方 `settings.section` 注册（槽位声明表检查）。实际席位是 `settings.plugins.tab`（设置 → 内置插件 section 内的 tab）与 `plugins.bundle.config`（插件详情页配置卡片），均经 `slots.inject` 探测（未声明的宿主不运行注册）。
-3. **Config 写通道落定 configEditor**：宿主 settings 表单服务只投影 `.volatile()` schema 字段且 volatile 值是 live 引用（会感染所有 config 读取）——改代理 `ctx.configEditor.edit()`（entry 级合并写入 profile patch，宿主文件锁 + Loader 重组）。实测 UI 保存 → patch 落盘 → payload origin=configured → 引擎读新值全通。
-4. **热替换**：pack manifest default 编辑后重载 pack 并**原地清空重填同一个 Map 实例**（工具与 RPC 共享该实例）——下一次 doc_generate 即用新 spec，无需重启；进行中的调用持旧 Pack 对象按其开始时的 spec 完成。
+本界面赖以工作的 dsh web 宿主契约，逐条实测验证过；实施新席位或升级宿主时以此为准。
+
+### Boot 与加载
+
+- **Loader id = 包名**：宿主按包名组合 boot 图，并从 bundle 文件头嗅探 `window.__ModuleLoader__.load({ id: "<包名>"`。client.js 的 loader id 必须精确等于 package.json `name`（构建脚本从 package.json 读取，不手写）；不符的症状是整个 client half 加载失败（"could not load <pkg>"），宿主照常运行。
+- **客户端注入声明**：`package.json` 的 `dsh.client: { platform: 'web', inject: [...] }` + `exports['./client']`；`inject` 是 factory 到达顺序边（依赖包先物化）。外部模块只有 loader module table 里存在的才能 require（react / react-dom / `@deepseek-ai/dsh-client-ui-primitives` 为平台 seed）；require 表外模块 = 运行时必炸。
+- **遏制模式**：宿主 client bootstrap 里一个插件 factory 抛错会拖垮整个 shell——apply() 必须 try/catch 包裹全部注册，失败代价是本插件本会话缺席，绝非应用白屏。
+
+### 槽位席位
+
+- **0.2.1 拒绝第三方 `settings.section` 注册**（ui-slots"声明即授权"：槽位必须已在注册方的声明表中，违者加载期抛 "slot is not declared"）。
+- **第三方正席**：`settings.plugins.tab`（设置 → 内置插件 section 内的 tab，`id`/`order`/`label`）与 `plugins.bundle.config`（插件详情页配置卡片，`key` = 包名；`view: 'summary'` 时返回 null——列表行不渲染卡片）。
+- **探测式注册**：席位一律经 `ctx.slots.inject(槽位名, () => register(...))`——inject 等待槽位存在，未声明该槽位的宿主永不运行注册（无版本号判断、无报错）。
+
+### HTTP 面
+
+- **exact 路由越过宿主栅栏**：`webServer.register({ kind: 'exact' })` 精确匹配优先于宿主 `/api` 前缀栅栏——插件路由收不到宿主的 Host/Origin/登录检查，必须自接：每请求惰性读 `connection.requestRejection`。
+- **栅栏调用契约**：`gate.call(connection, request)` 必须以服务为 `this`（宿主实现依赖之）；gate 抛错 = 未放行，fail-closed 403（dsh-market #603 同款）。`connection` 服务在宿主异步 init 后才存在，挂载时读不到属正常，惰性解析。
+- **mutating 路由**：强制 same-origin（Origin 必须匹配 Host）+ 有界 JSON body；错误以 `{ error: "问题 + 原因 + 怎么办" }` 应答。
+
+### 写通道
+
+- **settings 表单服务只投影 volatile**：`ctx.settings.describe()` 经 `volatileForm` 过滤——只有 schema `.volatile()` 标注的字段进表单；且 volatile 字段的运行时值是 live 引用（`Volatile<T>`），采用即感染所有 config 读取。要 plain config 的 entry 级编辑，用 **`ctx.configEditor.edit(entry, change)`**：宿主文件锁下合并写入 profile patch（cordis.patch.yml）+ Loader 重组，插件以新 config 重挂载。
+- **profile entry 定位**：`configEditor.entries()` 逐 entry 按 `options.name === 包名` 匹配。
+
+### schemastery meta 形状（读面 RPC 的解析依据）
+
+- 子节点在 `schema.dict`（object 型），`meta.description` / `meta.default` 承载描述与默认；union 的成员值在 **`node.list[].value`**——`toJSON()` 投影里的 `uid`/`refs` 是序列化伪装，运行时实体没有。
+- `.description()` 进 meta 即宿主 config-catalog 文档的同一事实源；`.volatile()` 不用（见上）。
+
+### 引擎侧
+
+- **pack Map 原地热替换**：pack manifest default 编辑后重载全部 pack root，**原地清空重填同一个 Map 实例**（工具 deps 与 RPC payload 共享该实例）——下一次 doc_generate 即用新 spec，无需重启；进行中的调用持旧 Pack 对象，按其开始时的 spec 完成，一致性更好。
+- **pack 写盘前置校验**：提议 manifest 必须先过与装载期同一套 `assertManifest`（导出自 pack-loader），坏 manifest 永不落盘；写盘原子（tmp+rename）；重载失败响错并指明回滚路径。
 
 ## 开放问题
 

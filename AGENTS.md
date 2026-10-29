@@ -84,6 +84,19 @@ Gotchas learned the hard way:
 - One real LLM round is 10-90s; poll `$B text` in a sleep loop (20s ticks)
   and grep for the expected reply markers (tool-call names, `reused`,
   `pendingConfirmation`, error strings) instead of fixed sleeps.
+- React-controlled inputs ignore plain `fill` (the framework's value tracker
+  drops the change): drive selects/inputs with the native setter after
+  resetting the tracker, then dispatch a bubbling event —
+  `const t = el._valueTracker; if (t) t.setValue(oldValue);
+   Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(el, newValue);
+   el.dispatchEvent(new Event('change', { bubbles: true }))`. A save button
+  that stays disabled after a fill means the React state never moved.
+- The Settings dialog lives in the account menu (更多 → 设置); the docwright
+  params tab is inside Settings → 内置插件 (settings.plugins.tab seat), and
+  the params card also renders on the bundle's own Plugins page
+  (plugins.bundle.config seat). Server-side effects are asserted on DISK and
+  via in-page `fetch('/api/docwright/...')` (the browser session carries the
+  login the host gate requires; plain curl answers 401).
 - Verify engine-level effects on DISK, not only in the UI: receipts under
   `context/` and `<topic>/output/*.receipt.json` show `materials` manifests,
   `isValid`, `packVersion`, `upstreamHashes`; a reused call must leave the
