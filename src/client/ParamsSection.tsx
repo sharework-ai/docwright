@@ -58,7 +58,7 @@ const actions: CSSProperties = {
 /** The "?" affordance with the author's description on hover. */
 function DescriptionHint(props: { text: string }) {
   return h(Tooltip, {
-    label: { content: props.text }, side: 'bottom', maxWidth: 360,
+    label: props.text, side: 'bottom', maxWidth: 360,
     children: h('span', { className: `${NS}-hint`, style: hint, 'aria-label': props.text }, '?'),
   })
 }

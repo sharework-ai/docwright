@@ -51,9 +51,11 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     className?: string | undefined
   }): ReactElement
 
-  export type TooltipLabel = string | { content: string; shortcut?: string[] }
+  // 0.2.1 renders `label` verbatim as the tooltip text — an object here
+  // throws React #31 (object is not a valid child) and the host tears the
+  // whole slot entry down until reload. Plain strings only.
   export function Tooltip(props: {
-    label: TooltipLabel
+    label: string
     side?: 'top' | 'bottom' | 'left' | 'right'
     delayMs?: number
     maxWidth?: number

@@ -91,6 +91,12 @@ Gotchas learned the hard way:
    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(el, newValue);
    el.dispatchEvent(new Event('change', { bubbles: true }))`. A save button
   that stays disabled after a fill means the React state never moved.
+- Host primitives take 0.2.1 prop shapes: `Tooltip`'s `label` is a plain
+  STRING (rendered verbatim). Passing `{ content }` (the 0.1.0-rc.6 shape
+  dsh-market's typings suggest) throws React #31 and the host tears the
+  whole slot entry down until a hard reload ("slot entry crashed" in the
+  console). A slot that vanishes after an interaction = check console for
+  React errors before re-driving the UI.
 - The Settings dialog lives in the account menu (更多 → 设置); the docwright
   params tab is inside Settings → 内置插件 (settings.plugins.tab seat), and
   the params card also renders on the bundle's own Plugins page

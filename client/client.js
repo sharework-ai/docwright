@@ -233,7 +233,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 		/** The "?" affordance with the author's description on hover. */
 		function DescriptionHint(props) {
 			return (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Tooltip, {
-				label: { content: props.text },
+				label: props.text,
 				side: "bottom",
 				maxWidth: 360,
 				children: (0, react.createElement)("span", {

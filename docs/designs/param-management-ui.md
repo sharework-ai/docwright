@@ -111,6 +111,7 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 - **0.2.1 拒绝第三方 `settings.section` 注册**（ui-slots"声明即授权"：槽位必须已在注册方的声明表中，违者加载期抛 "slot is not declared"）。
 - **第三方正席**：`settings.plugins.tab`（设置 → 内置插件 section 内的 tab，`id`/`order`/`label`）与 `plugins.bundle.config`（插件详情页配置卡片，`key` = 包名；`view: 'summary'` 时返回 null——列表行不渲染卡片）。
 - **探测式注册**：席位一律经 `ctx.slots.inject(槽位名, () => register(...))`——inject 等待槽位存在，未声明该槽位的宿主永不运行注册（无版本号判断、无报错）。
+- **宿主原语按 0.2.1 形状传参**：`Tooltip` 的 `label` 是纯字符串（直接作为文本渲染）——传 `{ content }` 对象即 React #31（object 不是合法 child），且宿主会把**整个 slot entry 拆除直到刷新**（"slot entry crashed"）。第三方包自带的原语类型声明可能来自旧版本（dsh-market 针对 0.1.0-rc.6），ambient 声明须对照当前宿主源码，不照抄。slot entry 崩溃的恢复手段是 Ctrl+R（宿主按 entry 拆除，不自动重挂）。
 
 ### HTTP 面
 
