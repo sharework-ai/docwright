@@ -295,6 +295,7 @@ function PacksView(props: { payload: ParamsPayload; t: Translate; lang: 'zh' | '
         h('span', { style: nameStyle }, p.name),
         h(Pill, {}, `v${p.version}`),
         h(Pill, {}, p.scope === 'workspace' ? t('scopeWorkspace') : t('scopeTopic')),
+        h(Pill, {}, p.origin.kind === 'builtin' ? t('originBuiltin') : fill(t('originPacksDir'), { root: p.origin.root })),
         p.paramDriftPolicy !== undefined ? h(Pill, {}, `${t('driftPolicy')}: ${p.paramDriftPolicy}`) : null),
       h('div', { style: { ...desc, marginBottom: '4px' } satisfies CSSProperties }, props.resolveText(p.description)),
       p.consumes.length > 0 ? h('div', { style: muted }, `${t('consumed')}: ${p.consumes.join(', ')}`) : null,

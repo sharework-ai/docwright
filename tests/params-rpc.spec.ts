@@ -101,6 +101,8 @@ describe('buildParamsCatalog', () => {
     // cfpTotal (required, no default) is excluded from the plan's own list too.
     expect(plan.params.map(p => p.name)).not.toContain('cfpTotal')
     expect(plan.params.map(p => p.name)).toContain('cfpPerFunc')
+    // Pack provenance rides the payload: the UI shows where an edit will land.
+    expect(plan.origin).toEqual({ kind: 'builtin', root: packsRoot })
   })
 })
 

@@ -108,6 +108,8 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			sources: "effective source",
 			scopeWorkspace: "workspace",
 			scopeTopic: "topic",
+			originBuiltin: "built-in",
+			originPacksDir: "packsDir: {root}",
 			consumed: "upstream",
 			driftPolicy: "param drift",
 			min: "min",
@@ -163,6 +165,8 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			sources: "生效源",
 			scopeWorkspace: "工作区级",
 			scopeTopic: "话题级",
+			originBuiltin: "内置",
+			originPacksDir: "自定义目录：{root}",
 			consumed: "上游",
 			driftPolicy: "参数漂移",
 			min: "下限",
@@ -586,7 +590,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			return (0, react.createElement)("div", null, payload.packs.map((p) => (0, react.createElement)("div", {
 				key: p.name,
 				style: card
-			}, (0, react.createElement)("div", { style: packHead }, (0, react.createElement)("span", { style: nameStyle }, p.name), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `v${p.version}`), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, p.scope === "workspace" ? t("scopeWorkspace") : t("scopeTopic")), p.paramDriftPolicy !== void 0 ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("driftPolicy")}: ${p.paramDriftPolicy}`) : null), (0, react.createElement)("div", { style: {
+			}, (0, react.createElement)("div", { style: packHead }, (0, react.createElement)("span", { style: nameStyle }, p.name), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `v${p.version}`), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, p.scope === "workspace" ? t("scopeWorkspace") : t("scopeTopic")), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, p.origin.kind === "builtin" ? t("originBuiltin") : fill(t("originPacksDir"), { root: p.origin.root })), p.paramDriftPolicy !== void 0 ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("driftPolicy")}: ${p.paramDriftPolicy}`) : null), (0, react.createElement)("div", { style: {
 				...desc,
 				marginBottom: "4px"
 			} }, props.resolveText(p.description)), p.consumes.length > 0 ? (0, react.createElement)("div", { style: muted }, `${t("consumed")}: ${p.consumes.join(", ")}`) : null, (0, react.createElement)("div", { style: { marginTop: "6px" } }, p.params.length === 0 ? (0, react.createElement)("p", { style: muted }, t("empty")) : p.params.map((d) => (0, react.createElement)(PackDeclRow, {

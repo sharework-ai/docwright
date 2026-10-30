@@ -170,4 +170,13 @@ export interface Pack {
   readonly goldenSample: unknown
   /** Working directory the pack was loaded from (diagnostics). */
   readonly dir: string
+  /**
+   * Which root the pack was loaded from (params-UI provenance + write-path
+   * routing): 'builtin' packages ship inside the plugin, 'packsDir' packs
+   * come from the config's extra root (a same-name override or a custom
+   * pack). A pack-param default edit must persist to `dir` — which IS the
+   * origin's pack directory — so provenance is display-only for correctness
+   * and load-bearing for user trust ("where will my edit land?").
+   */
+  readonly origin: { readonly kind: 'builtin' | 'packsDir'; readonly root: string }
 }

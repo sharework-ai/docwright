@@ -84,6 +84,25 @@ describe('pack loader', () => {
     expect(packs.get('cosmic-plan')?.manifest.version).toBe('9.9.9')
   })
 
+  it('records load origin per pack (builtin root vs packsDir root)', async () => {
+    const builtin = await loadPacks(packsRoot, {})
+    const plan = builtin.get('cosmic-plan')!
+    expect(plan.origin).toEqual({ kind: 'builtin', root: packsRoot })
+    expect(plan.dir).toBe(join(packsRoot, 'cosmic-plan'))
+
+    const root = await mkdtemp(join(tmpdir(), 'docwright-origin-'))
+    const { cp } = await import('node:fs/promises')
+    await cp(join(packsRoot, 'cosmic-context'), join(root, 'cosmic-context'), { recursive: true })
+    const merged = await loadPacks(packsRoot, { extra: [root] })
+    const custom = merged.get('cosmic-context')!
+    // The winner is the packsDir copy — its origin must say so, so the params
+    // UI can show where an edit will land and the write channel can be audited.
+    expect(custom.origin).toEqual({ kind: 'packsDir', root })
+    expect(custom.dir).toBe(join(root, 'cosmic-context'))
+    // Non-overridden builtin packs keep the builtin origin in the same map.
+    expect(merged.get('cosmic-plan')!.origin).toEqual({ kind: 'builtin', root: packsRoot })
+  })
+
   it('fails loud when two packs within one root declare the same name', async () => {
     const { cp } = await import('node:fs/promises')
     const root = await mkdtemp(join(tmpdir(), 'docwright-dup-root-'))

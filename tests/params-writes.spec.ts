@@ -87,6 +87,22 @@ describe('setPackParamDefault', () => {
     await rm(root, { recursive: true, force: true })
   })
 
+  it('persists a packsDir pack edit to the packsDir manifest, never the builtin root', async () => {
+    // The write lands in pack.dir — the root the pack was LOADED from — so a
+    // packsDir pack (e.g. <workspace>/.docwright/packs/) is edited in place.
+    const builtinRoot = await mkdtemp(join(tmpdir(), 'docwright-writes-builtin-'))
+    const extraRoot = await mkdtemp(join(tmpdir(), 'docwright-writes-extra-'))
+    await packFixture(extraRoot)
+    const packs = new Map(await loadPacks(builtinRoot, { extra: [extraRoot] }))
+    const deps = { packs, builtinRoot, extraPacksDir: extraRoot, loadPacks: (r: string, d: { extra?: readonly string[] | undefined }) => loadPacks(r, d) }
+    await setPackParamDefault(deps, 'wp', 'limit', 11)
+    const onDisk = JSON.parse(await readFile(join(extraRoot, 'wp', 'manifest.json'), 'utf8')) as { params: { limit: { default: number } } }
+    expect(onDisk.params.limit.default).toBe(11)
+    expect(packs.get('wp')!.origin).toEqual({ kind: 'packsDir', root: extraRoot })
+    await rm(builtinRoot, { recursive: true, force: true })
+    await rm(extraRoot, { recursive: true, force: true })
+  })
+
   it('refuses to write when the manifest is corrupt or the param vanished, and reports reload failures', async () => {
     const { root, packs, deps } = await writeDeps()
     await writeFile(join(root, 'wp', 'manifest.json'), '{corrupt', 'utf8')

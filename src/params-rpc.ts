@@ -101,6 +101,8 @@ export interface UiPackEntry {
   readonly scope: 'workspace' | 'topic'
   readonly consumes: readonly string[]
   readonly paramDriftPolicy?: string
+  /** Where the pack was loaded from — the UI shows it so an edit's destination is never a surprise (write lands in the same root's manifest.json). */
+  readonly origin: { readonly kind: 'builtin' | 'packsDir'; readonly root: string }
   readonly params: readonly UiParamDeclaration[]
 }
 
@@ -163,6 +165,7 @@ export function buildParamsCatalog(packs: ReadonlyMap<string, Pack>): ParamsCata
       scope: pack.manifest.scope,
       consumes: [...pack.manifest.consumes],
       ...(pack.manifest.paramDriftPolicy === undefined ? {} : { paramDriftPolicy: pack.manifest.paramDriftPolicy }),
+      origin: pack.origin,
       params,
     })
   }

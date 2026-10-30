@@ -285,7 +285,8 @@ async function loadFunctionRules(dir: string): Promise<{ rules: readonly Functio
   return { rules, sourceHash: sha256(source), score: score as ScoreFn | undefined }
 }
 
-async function loadOnePack(dir: string): Promise<Pack> {
+/** Loads one pack's assets; `origin` is attached by loadPacks (it owns the root context). */
+async function loadOnePack(dir: string): Promise<Omit<Pack, 'origin'>> {
   const manifest = assertManifest(JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')), dir)
   const schema = JSON.parse(await readFile(join(dir, 'schema.json'), 'utf8')) as Record<string, unknown>
 
@@ -325,7 +326,8 @@ async function listPackRoots(root: string): Promise<readonly string[]> {
 export async function loadPacks(builtinRoot: string, dirs: RawPackDirs): Promise<ReadonlyMap<string, Pack>> {
   const roots = [builtinRoot, ...(dirs.extra ?? [])]
   const packs = new Map<string, Pack>()
-  for (const root of roots) {
+  for (const [rootIndex, root] of roots.entries()) {
+    const origin = { kind: rootIndex === 0 ? 'builtin' : 'packsDir', root } as const
     const seen = new Map<string, string>()
     for (const dir of await listPackRoots(root)) {
       const pack = await loadOnePack(dir)
@@ -334,7 +336,7 @@ export async function loadPacks(builtinRoot: string, dirs: RawPackDirs): Promise
         throw new Error(`duplicate pack name "${pack.manifest.name}" within ${root}: both ${clash} and ${dir} declare it; rename or remove one. (An extra packsDir overriding a same-name builtin pack is intended merge semantics, but packs within one root must have unique names.)`)
       }
       seen.set(pack.manifest.name, dir)
-      packs.set(pack.manifest.name, pack)
+      packs.set(pack.manifest.name, { ...pack, origin })
     }
   }
   return packs

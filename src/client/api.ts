@@ -48,6 +48,7 @@ export interface UiPackEntry {
   scope: 'workspace' | 'topic'
   consumes: readonly string[]
   paramDriftPolicy?: string
+  origin: { kind: 'builtin' | 'packsDir'; root: string }
   params: readonly UiParamDeclaration[]
 }
 
