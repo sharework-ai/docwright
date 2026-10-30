@@ -1,6 +1,6 @@
 {
   "name": "cosmic-plan",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "COSMIC function-point estimation plan: given one requirement and the green project context, plan which modules to add or modify — each changed leaf module becomes one function with hierarchical names and estimated CFPs (consumes a green cosmic-context artifact; requires topic — one requirement per topic).",
   "consumes": [
     "cosmic-context"
@@ -56,7 +56,6 @@
     },
     "moduleLevels": {
       "type": "number",
-      "default": 2,
       "min": 1,
       "max": 3,
       "description": "Depth of the module tree (1-3) as declared by the upstream cosmic-context artifact: drives l2Name/l3Name requiredness (rule plan/name-hierarchy); inherited from the context receipt"
@@ -67,7 +66,6 @@
     },
     "topicNoPattern": {
       "type": "string",
-      "default": "^([A-Za-z][A-Za-z0-9]*[-_ ]?[0-9]+)",
       "description": "Regex (first capture group, else whole match) extracting the requirement number from the topic name, e.g. topic 'KERQ-352 收藏夹' → KERQ-352; the engine injects the match as the derived param topicNo — funcId = <topicNo>-<NN> (rule plan/func-id-numbering) and per-function artifacts are named <artifactPrefix>-<topicNo>-<NN>; no match degrades gracefully (rule skips, naming falls back)"
     }
   },

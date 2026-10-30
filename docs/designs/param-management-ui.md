@@ -49,6 +49,8 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
    - 同名不同 spec 合法（机制不强制一致）→ 聚合行并列展示各 pack spec 差异，编辑前明确落在哪个 pack。
 3. **pack 视图（切换）**：按 pack 平铺（pack 名/版本/description/参数表/paramDriftPolicy 等行为开关），供 pack 作者、排障与"配置某个 pack"的编辑视角使用。**编辑权跟生效源走，不跟视图走**：source 声明在两个视图都渲染编辑钮（写的是同一个 manifest 字段）；shadowed 声明一律只读且值以删除线弱化 + 明确标注"由 X 管理——此处声明不生效"——那值在链上永不生效（回执继承盖过它），原样展示会让它看起来像现役值。参数视图的组卡片把组级不变量只渲染一次（组头：参数名 + flags + 悬停说明；值行：生效源 pack + 人性化投影"目标 60（容差带 30–90）" + 编辑；组尾一句话列出其余声明 pack），shadowed 逐卡片重复的渲染（N 份相同文本 + 误导性死值）已废弃。改链头 default 不级联改写下游 manifest——下游声明是 pack 作者的独立事实（同名不同 spec 合法），解析层本就不读它。
 
+**与声明最佳实践的衔接**：删除线的死值本不该存在——按继承参数声明最佳实践（`params-and-chain-contract.md`：链上被继承的声明不填 default；default 仅作链式 pack 独立使用时的兜底），内置 cosmic 链的继承声明已全部清理（req/func/tech 0.6.1/0.5.1、plan 0.6.1、context-sync 0.1.1）。清理后 Pack 视图对链共享参数只显示生效源一行的活值；"由 X 管理"的删除线形态仅对第三方带 default 的继承声明出现，作为最佳实践的纠偏提示。
+
 ### 控件映射（type → 控件）
 
 | ParamSpec.type | 控件 | 约束呈现 |
