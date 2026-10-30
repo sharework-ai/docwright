@@ -30,7 +30,7 @@ A sub-process is the next refinement of a functional process, and each sub-proce
 
 ## COSMIC data-movement legality (violations are rejected)
 
-1. Each process's movement sequence must be exactly one of three patterns: `ERX` (Entry-Read-eXit, query), `EW` (Entry-Write, persistence), `EX` (Entry-eXit, forwarding/interaction). Other sequences (e.g. `EWRX`, `ERWX`, repeated `RR`) tend to be rejected in review.
+1. Each process's movement sequence must match the effective param `movementSequencePattern` (by default only three shapes are allowed: `ERX` (Entry-Read-eXit, query), `EW` (Entry-Write, persistence), `EX` (Entry-eXit, forwarding/interaction)). Other sequences (e.g. `EWRX`, `ERWX`, repeated `RR`) tend to be rejected in review.
 2. No two movements within one process may share the exact type + data group + data properties combination.
 3. When one process would need multiple read/write rounds, split it into several processes, each matching the patterns above.
 

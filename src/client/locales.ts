@@ -61,6 +61,7 @@ export const en = {
   'err.paramVanished': 'params.{param} no longer exists in the manifest (the file may have been edited concurrently); nothing was written. Refresh and retry.',
   'err.manifestInvalid': 'The proposed manifest failed the load-time validation; nothing was written. Fix the value per the detail below.',
   'err.reloadFailed': 'The manifest was written, but reloading the packs failed. Fix or revert {path}; until a reload succeeds the running tools keep the previous spec.',
+  'err.patternParamInvalid': 'The new value for {param} is not a valid regex (it drives a validation rule); nothing was written. Fix the expression, or set the empty string to disable the check.',
 }
 
 export const zh: Record<string, string> = {
@@ -122,6 +123,7 @@ export const zh: Record<string, string> = {
   'err.paramVanished': 'manifest 中已不存在参数 {param}（文件可能被同时编辑过），未写入任何内容。请刷新后重试。',
   'err.manifestInvalid': '提议的 manifest 未通过装载期校验，未写入任何内容。请按下方详情修正数值。',
   'err.reloadFailed': 'manifest 已写入，但重新装载 pack 失败。请修复或还原 {path}；在装载成功前，运行中的工具仍持旧 spec。',
+  'err.patternParamInvalid': '参数 {param} 的新值不是合法正则表达式（它驱动一条校验规则），未写入任何内容。请修正表达式，或置空字符串以停用该检查。',
 }
 
 export function translate(dict: Record<string, unknown>): Translate {

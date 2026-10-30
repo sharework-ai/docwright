@@ -1,6 +1,6 @@
 {
   "name": "cosmic-tech",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": {
     "zh": "COSMIC 技术分解：把每个功能过程分解为 2-3 个子过程——数据移动（E/X/R/W）——并给出精确 CFP 计数与计划估算核对（不得低于计划值），从绿色的 cosmic-func 产物细化而来（requires topic——每话题一条需求）。",
     "en": "COSMIC technical breakdown: decomposes each functional process into 2-3 subprocesses — data movements (E/X/R/W) — with exact CFP counts checked against the plan estimate (never below it), refined from a green cosmic-func artifact (requires topic — one requirement per topic)."
@@ -75,6 +75,22 @@
       "description": {
         "zh": "目标功能在上游 plan functions 数组中的 1 起始位置；无默认值——缺失时从列出的候选中选择",
         "en": "1-based position of the target function in the upstream plan functions array; no default — pick from the candidates listed when missing"
+      }
+    },
+    "movementSequencePattern": {
+      "type": "string",
+      "default": "^(ERX|EW|EX)$",
+      "description": {
+        "zh": "每个功能过程的数据移动序列（按顺序拼接的 dataMovementType，如 ERX）必须匹配的正则（rule tech/movement-pattern）：默认只允许 ERX（查询）/EW（落库）/EX（转发交互）三种评审安全模式——合法序列形状写在 (…|…) 内，增删即可；置空字符串停用该检查。装载期与保存时都校验正则可编译",
+        "en": "Regex every process's data-movement sequence (dataMovementType values joined in order, e.g. ERX) must match (rule tech/movement-pattern): the default allows only the review-safe shapes ERX (query) / EW (persist) / EX (forward) — edit the alternatives inside (…|…); set it to the empty string to disable the check. Compile-checked at load and on save"
+      }
+    },
+    "subprocessDescPattern": {
+      "type": "string",
+      "default": "^(?:(?!计算|转化|转换|拆分|日志|解析|编码|缓存|临时|筛选|排序).)*$",
+      "description": {
+        "zh": "每个子过程描述必须匹配的正则（rule tech/subprocess-desc-keywords，warning 级）：默认排除技术实现字眼（计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序）——描述应写清什么数据在移动，实现方式留给详细设计；排除词写在 (?!…|…) 内；置空字符串停用该检查",
+        "en": "Regex every subprocess description must match (rule tech/subprocess-desc-keywords, warning): the default excludes technical-implementation words — describe what data moves, leave the how to detailed design; edit the list inside (?!…|…); set it to the empty string to disable the check"
       }
     }
   },

@@ -18,7 +18,7 @@ import { truncateSnapshot } from './issue.ts'
 
 function compileRule(rule: DeclarativeRule): CompiledRule {
   let re: RegExp | undefined
-  if (rule.kind === 'pattern') {
+  if (rule.kind === 'pattern' && !isParamRef(rule.pattern)) {
     try {
       re = new RegExp(rule.pattern)
     } catch (error) {
@@ -50,6 +50,28 @@ function resolveBound(value: number | ParamRef, params: Readonly<Record<string, 
   return resolved
 }
 
+/**
+ * Resolve a pattern rule's regex at check time: a literal compiles once at
+ * engine creation, a param reference resolves per call (the user may retune
+ * it between calls). Semantics for referenced patterns (docs/designs/
+ * param-object-model.md): empty string = the check is off, a non-empty
+ * string must compile (invalid regex fails loud, never silently passes) and
+ * the field value must match it (mustMatch of the rule applies as usual).
+ */
+function resolvePatternRe(rule: DeclarativeRule & { kind: 'pattern' }, params: Readonly<Record<string, unknown>> | undefined): RegExp | undefined {
+  if (!isParamRef(rule.pattern)) return undefined
+  const source = params?.[rule.pattern.param]
+  if (typeof source !== 'string') {
+    throw new Error(`rule ${rule.id}: param "${rule.pattern.param}" did not resolve to a string; effective params are incomplete (defaults guarantee completeness — this indicates a bug)`)
+  }
+  if (source === '') return undefined
+  try {
+    return new RegExp(source)
+  } catch (error) {
+    throw new Error(`rule ${rule.id}: param "${rule.pattern.param}" is not a valid regex "${source}": ${(error as Error).message}`)
+  }
+}
+
 function checkField(compiled: CompiledRule, item: unknown, index: number, params: Readonly<Record<string, unknown>> | undefined): Issue | undefined {
   const rule = compiled.rule
   const obj = item as Record<string, unknown> | null
@@ -73,9 +95,12 @@ function checkField(compiled: CompiledRule, item: unknown, index: number, params
       return hit === undefined ? undefined : { ruleId: rule.id, severity: rule.severity, jsonPath: at, message: `forbidden keyword "${hit}"`, ...(snapshot === undefined ? {} : { snapshot }), suggestion: rule.suggestion }
     }
     case 'pattern': {
+      const re = compiled.re ?? resolvePatternRe(rule, params)
+      if (re === undefined) return undefined
       const text = typeof value === 'string' ? value : ''
-      const matches = compiled.re!.test(text)
-      return matches === rule.mustMatch ? undefined : { ruleId: rule.id, severity: rule.severity, jsonPath: at, message: `pattern "${rule.pattern}" ${rule.mustMatch ? 'not matched' : 'matched (forbidden)'}`, ...(snapshot === undefined ? {} : { snapshot }), suggestion: rule.suggestion }
+      const source = isParamRef(rule.pattern) ? `param ${rule.pattern.param}` : `"${rule.pattern}"`
+      const matches = re.test(text)
+      return matches === rule.mustMatch ? undefined : { ruleId: rule.id, severity: rule.severity, jsonPath: at, message: `pattern ${source} ${rule.mustMatch ? 'not matched' : 'matched (forbidden)'}`, ...(snapshot === undefined ? {} : { snapshot }), suggestion: rule.suggestion }
     }
   }
 }

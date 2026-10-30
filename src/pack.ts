@@ -8,12 +8,12 @@ import type { LocalizedText } from './description.ts'
  * Decided at the /autoplan final gate (UC2) after the spectral-core probe.
  */
 
-/** Declarative rule families; each targets one field across an array scope. Numeric bounds may reference pack params. */
+/** Declarative rule families; each targets one field across an array scope. Numeric bounds and pattern sources may reference pack params. */
 export type DeclarativeRule =
   | { id: string; severity: Severity; given: string; field: string; kind: 'minLength'; min: number | ParamRef; suggestion: string }
   | { id: string; severity: Severity; given: string; field: string; kind: 'maxLength'; max: number | ParamRef; suggestion: string }
   | { id: string; severity: Severity; given: string; field: string; kind: 'forbiddenKeywords'; keywords: readonly string[]; suggestion: string }
-  | { id: string; severity: Severity; given: string; field: string; kind: 'pattern'; pattern: string; mustMatch: boolean; suggestion: string }
+  | { id: string; severity: Severity; given: string; field: string; kind: 'pattern'; pattern: string | ParamRef; mustMatch: boolean; suggestion: string }
 
 /**
  * Execution context handed to function rules as an optional second argument:

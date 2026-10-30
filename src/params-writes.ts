@@ -2,6 +2,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { CodedError } from './coded-error.ts'
 import { assertManifest } from './pack-loader.ts'
+import { isParamRef } from './pack.ts'
 import type { Pack } from './pack.ts'
 
 /**
@@ -92,6 +93,25 @@ export async function setPackParamDefault(deps: {
   const nextParams: Record<string, unknown> = { ...params }
   nextParams[paramName] = { ...(params[paramName] as Record<string, unknown>), default: value }
   const nextManifest = { ...manifest, params: nextParams }
+  // Pattern-referenced params (declarative rules compile their regex from the
+  // value) must stay valid: a non-empty string has to compile, an empty
+  // string disables the check. assertManifest cannot see the rule files, so
+  // this guard runs against the LOADED pack's rules — the same gate the
+  // loader applies, just before disk instead of at the reload.
+  for (const rules of pack.rules.values()) {
+    for (const rule of rules) {
+      if (rule.kind !== 'pattern' || !isParamRef(rule.pattern) || rule.pattern.param !== paramName) continue
+      if (value === '') continue
+      if (typeof value !== 'string') {
+        throw new CodedError('patternParamInvalid', `param "${paramName}" drives rule "${rule.id}" and must be a string (regex source); nothing was written`, { params: { param: paramName } })
+      }
+      try {
+        void new RegExp(value)
+      } catch (error) {
+        throw new CodedError('patternParamInvalid', `param "${paramName}" drives rule "${rule.id}" and the proposed value is not a valid regex: ${(error as Error).message}; nothing was written`, { params: { param: paramName }, detail: (error as Error).message })
+      }
+    }
+  }
   // The EXACT load-time gate: a manifest the loader would reject never
   // reaches disk (misconfiguration fails loud, not at the next boot). The
   // loader's message stays the `message` (tests + logs match on it) and rides

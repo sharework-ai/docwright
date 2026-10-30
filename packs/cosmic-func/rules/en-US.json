@@ -1,12 +1,13 @@
 [
   {
-    "id": "func/process-name-forbidden-keywords",
+    "id": "func/process-name-forbidden",
     "severity": "error",
     "given": "$.processes[*]",
     "field": "name",
-    "kind": "forbiddenKeywords",
-    "keywords": ["进行", "执行", "异常处理", "设计", "校验", "conduct", "execute"],
-    "suggestion": "Process names must not contain design/implementation words (进行, 执行, 异常处理, 设计, 校验, conduct, execute): name processes as business object + business action (e.g. \"collect item\"), and move validation and exception branches into the process description instead of the name."
+    "kind": "pattern",
+    "pattern": { "param": "processNameForbiddenPattern" },
+    "mustMatch": true,
+    "suggestion": "Process name failed the naming regex (effective param processNameForbiddenPattern; by default it excludes design/implementation words like 进行, 执行, 异常处理, 设计, 校验, conduct, execute; set the param to an empty string to disable this check): name processes as business object + business action (e.g. \"collect item\"), and move validation and exception branches into the process description instead of the name."
   },
   {
     "id": "func/process-name-suffix",
@@ -14,35 +15,38 @@
     "given": "$.processes[*]",
     "field": "name",
     "kind": "pattern",
-    "pattern": "(处理|过程|闭环|流程|管理|等等|待定|TBD|etc\\.)$",
-    "mustMatch": false,
-    "suggestion": "Process names should not end with a generic word (处理/过程/闭环/流程/管理) or a placeholder marker (等等/待定/TBD/etc.): use a concrete business object + action, e.g. \"collect item\" rather than \"favorites management\"."
+    "pattern": { "param": "processNameSuffixPattern" },
+    "mustMatch": true,
+    "suggestion": "Process name failed the naming regex (effective param processNameSuffixPattern; by default it rejects names ending with a generic word (处理/过程/闭环/流程/管理) or a placeholder marker (等等/待定/TBD/etc.); set the param to an empty string to disable this check): use a concrete business object + action, e.g. \"collect item\" rather than \"favorites management\"."
   },
   {
-    "id": "func/process-name-warning-keywords",
+    "id": "func/process-name-technical",
     "severity": "warning",
     "given": "$.processes[*]",
     "field": "name",
-    "kind": "forbiddenKeywords",
-    "keywords": ["计算", "转化", "转换", "拆分", "日志", "解析", "编码", "缓存", "临时", "筛选", "排序"],
-    "suggestion": "Process names should avoid technical-implementation words (计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序): those belong to tech-stage subprocesses; keep process names at the business level."
+    "kind": "pattern",
+    "pattern": { "param": "processNameTechnicalPattern" },
+    "mustMatch": true,
+    "suggestion": "Process name failed the naming regex (effective param processNameTechnicalPattern; by default it excludes technical-implementation words like 计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序; set the param to an empty string to disable this check): those belong to tech-stage subprocesses; keep process names at the business level."
   },
   {
-    "id": "func/originator-forbidden-keywords",
+    "id": "func/originator-forbidden",
     "severity": "error",
     "given": "$.processes[*]",
     "field": "originator",
-    "kind": "forbiddenKeywords",
-    "keywords": ["数据库", "文件存储"],
-    "suggestion": "The originator must not be a storage facility (数据库/文件存储): functional users are business roles (people, external systems, devices); storage is an implementation vehicle and cannot originate a process. Name the real business originator."
+    "kind": "pattern",
+    "pattern": { "param": "functionalUserPattern" },
+    "mustMatch": true,
+    "suggestion": "The originator failed the functional-user regex (effective param functionalUserPattern; by default it excludes storage-facility words like 数据库/文件存储; set the param to an empty string to disable this check): functional users are business roles (people, external systems, devices); storage is an implementation vehicle and cannot originate a process. Name the real business originator."
   },
   {
-    "id": "func/receiver-forbidden-keywords",
+    "id": "func/receiver-forbidden",
     "severity": "error",
     "given": "$.processes[*]",
     "field": "receiver",
-    "kind": "forbiddenKeywords",
-    "keywords": ["数据库", "文件存储"],
-    "suggestion": "The receiver must not be a storage facility (数据库/文件存储): functional users are business roles (people, external systems, devices); storage is an implementation vehicle and cannot receive a process result. Name the real business receiver."
+    "kind": "pattern",
+    "pattern": { "param": "functionalUserPattern" },
+    "mustMatch": true,
+    "suggestion": "The receiver failed the functional-user regex (effective param functionalUserPattern; by default it excludes storage-facility words like 数据库/文件存储; set the param to an empty string to disable this check): functional users are business roles (people, external systems, devices); storage is an implementation vehicle and cannot receive a process result. Name the real business receiver."
   }
 ]
