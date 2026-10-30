@@ -290,7 +290,6 @@ function PackDeclRow(props: { d: UiParamDeclaration; t: Translate; lang: 'zh' | 
 function PacksView(props: { payload: ParamsPayload; t: Translate; lang: 'zh' | 'en'; resolveText: (value: unknown) => string; onSaved: () => void }) {
   const { payload, t } = props
   return h('div', null,
-    h('p', { style: muted }, t('packsEditNote')),
     payload.packs.map((p: UiPackEntry) => h('div', { key: p.name, style: card },
       h('div', { style: packHead },
         h('span', { style: nameStyle }, p.name),
