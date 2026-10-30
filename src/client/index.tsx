@@ -26,7 +26,7 @@ const NS = 'docwright-params'
 const PACKAGE_NAME = '@sharework-ai/dsh-docwright'
 
 /** Primitives this bundle requires that older hosts may lack. */
-const REQUIRED_PRIMITIVES = ['Button', 'Input', 'Pill', 'SegmentedTabs', 'Switch', 'Tooltip'] as const
+const REQUIRED_PRIMITIVES = ['Button', 'Input', 'Pill', 'SegmentedTabs', 'Switch'] as const
 
 export function missingPrimitives(mod: Record<string, unknown>): string[] {
   return REQUIRED_PRIMITIVES.filter(name => mod[name] === undefined)

@@ -3,13 +3,20 @@
  * shared-param groups (the aggregation with effective-source resolution),
  * per-pack flat view, and the plugin Config form. Controls map from the
  * ParamSpec type (number → numeric input, enum → select, boolean → switch,
- * object → JSON-per-value with endpoints read-only); every row carries a
- * hover tooltip with the author's description. Writes go through the
+ * object → JSON-per-value with endpoints read-only); every parameter shows
+ * its author's description inline beneath the name. Writes go through the
  * plugin's own routes (src/http.ts), never the conversation.
+ *
+ * Typography follows the host conversation body, not ad-hoc sizes: one
+ * family and size for all running text (`--dsw-font-family` +
+ * `--dsh-content-font-size`, 24px+delta line height, so the user's font-size
+ * preference applies here too); hierarchy comes from weight and the host's
+ * label grays (`--dsw-alias-label-secondary`), never from font size. Only
+ * identifiers and values (param names, enum members, JSON) sit in the host
+ * code face (`--dsh-font-family-code`).
  */
 import { createElement as h, useCallback, useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
-import { Button, Input, Pill, SegmentedTabs, Switch, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Input, Pill, SegmentedTabs, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import { fetchParams, saveConfigPatch, savePackParam } from './api.ts'
 import type { ParamsPayload, UiConfigEntry, UiPackEntry, UiParamDeclaration } from './api.ts'
 import { en, translate, zh } from './locales.ts'
@@ -19,6 +26,18 @@ const NS = 'docwright-params'
 
 import type { CSSProperties } from 'react'
 
+/** The conversation body's family and size — the one measure for all running
+ * text in this section. */
+const baseText: CSSProperties = {
+  fontFamily: 'var(--dsw-font-family, inherit)',
+  fontSize: 'var(--dsh-content-font-size, 14px)',
+  lineHeight: 'calc(24px + var(--dsh-content-font-delta, 0px))',
+}
+/** Host code face for identifiers and values only (names, enums, JSON). */
+const codeFont = 'var(--dsh-font-family-code, ui-monospace, SFMono-Regular, Menlo, monospace)'
+/** The host's first muted gray (real theme token; the old --dsw-alias-text-*
+ * names never existed upstream and always fell through to full-strength). */
+const secondary = 'var(--dsw-alias-label-secondary, inherit)'
 const row: CSSProperties = {
   display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0',
 }
@@ -26,30 +45,26 @@ const rowHead: CSSProperties = {
   display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap', minWidth: 0,
 }
 const nameStyle: CSSProperties = {
-  fontWeight: 600, fontFamily: 'var(--dsw-font-mono, monospace)',
+  fontWeight: 600, fontFamily: codeFont,
 }
 const desc: CSSProperties = {
-  color: 'var(--dsw-alias-text-secondary, inherit)', marginTop: '2px',
-  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+  color: secondary, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
 }
 const valueStyle: CSSProperties = {
-  fontFamily: 'var(--dsw-font-mono, monospace)',
+  fontFamily: codeFont,
 }
 const muted: CSSProperties = {
-  color: 'var(--dsw-alias-text-secondary, inherit)',
+  color: secondary,
 }
 const group: CSSProperties = {
-  border: '0.5px solid var(--dsw-alias-border-l4, var(--dsw-alias-settings-card-stroke, transparent))',
+  border: '0.5px solid var(--dsw-alias-border-l4, transparent)',
   borderRadius: 'var(--dsw-radius-xl, 20px)',
-  background: 'var(--dsw-alias-bg-layer-2, var(--dsw-alias-settings-card-fill, transparent))',
+  background: 'var(--dsw-alias-bg-layer-2, transparent)',
   padding: '12px 16px', marginBottom: '12px',
 }
 const card: CSSProperties = { ...group }
-const hint: CSSProperties = {
-  cursor: 'help', color: 'var(--dsw-alias-text-secondary, inherit)', border: '1px solid currentColor',
-  borderRadius: '50%', width: '15px', height: '15px', fontSize: '10px', lineHeight: '13px',
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  userSelect: 'none',
+const sourceLine: CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px',
 }
 const inputStyle: CSSProperties = {
   width: '160px',
@@ -58,12 +73,10 @@ const actions: CSSProperties = {
   display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px',
 }
 
-/** The "?" affordance with the author's description on hover. */
-function DescriptionHint(props: { text: string }) {
-  return h(Tooltip, {
-    label: props.text, side: 'bottom', maxWidth: 360,
-    children: h('span', { className: `${NS}-hint`, style: hint, 'aria-label': props.text }, '?'),
-  })
+/** The author's description, inline beneath the parameter name — the primary
+ * explanation stays in view instead of hiding behind a hover. */
+function DescriptionLine(props: { text: string }) {
+  return h('div', { className: `${NS}-desc`, style: { ...desc, marginTop: '2px' } }, props.text)
 }
 
 /** Fill a {key}-templated locale string. */
@@ -100,14 +113,15 @@ function FlagPills(props: { d: UiParamDeclaration; t: Translate }) {
     flags.map(f => h(Pill, { key: f }, f)))
 }
 
-/** Constraint summary under the value: range, choices, and the Mind-the-gap note for object bands. */
+/** Constraint summary under the value: declared range and choices. Object
+ * bands carry no note — the human projection ("target 60, band 30-90")
+ * already says what value and endpoints mean, uniformly for every band. */
 function ConstraintLine(props: { d: UiParamDeclaration; t: Translate }) {
   const { d, t } = props
   const bits: string[] = []
   if (d.enumValues !== undefined) bits.push(`${t('choices')}: ${d.enumValues.join(' / ')}`)
   if (d.min !== undefined) bits.push(`${t('min')} ${d.min}`)
   if (d.max !== undefined) bits.push(`${t('max')} ${d.max}`)
-  if (d.type === 'object') bits.push(t('objectBandNote'))
   return bits.length === 0 ? null : h('div', { style: muted }, bits.join(' · '))
 }
 
@@ -144,7 +158,7 @@ function ValueRow(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() =>
   const { d, t } = props
   if (d.role === 'shadowed') {
     return h('div', { style: rowHead },
-      h('span', { style: { ...valueStyle, color: 'var(--dsw-alias-text-secondary, inherit)', textDecoration: 'line-through' } satisfies CSSProperties }, displayDefault(d, t)),
+      h('span', { style: { ...valueStyle, color: secondary, textDecoration: 'line-through' } satisfies CSSProperties }, displayDefault(d, t)),
       h(Pill, {}, fill(t('shadowedByNote'), { pack: d.shadowedBy ?? '' })))
   }
   return h(EditSeat, { d, t, onSaved: props.onSaved })
@@ -197,33 +211,33 @@ function EditSeat(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() =>
     h('div', { style: actions },
       h(Button, { size: 'sm', disabled: busy, onClick: () => void save() }, busy ? t('saving') : t('save')),
       h(Button, { size: 'sm', variant: 'ghost', disabled: busy, onClick: () => setEditing(false) }, t('cancel')),
-      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-text-critical, crimson)', } satisfies CSSProperties }, error) : null))
+      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-state-error-primary, crimson)', } satisfies CSSProperties }, error) : null))
 }
 
 /**
- * One aggregated parameter group = ONE card: header carries the name and
- * every group-level invariant (flags, hover description, Mind-the-gap
- * note), one governing row carries the effective value and the edit seat,
- * and the shadowed declarations collapse into a single sentence — their
- * values never take effect (the receipt base outranks them), so rendering
- * them per-card repeated the same text N times and showed misleading
- * never-applied numbers.
+ * One aggregated parameter group = ONE card, top to bottom: name + flags,
+ * the author's description in the muted gray, the effective source on its
+ * own line (what governs is a fact of its own — not a prefix of the value
+ * row), the effective value and its edit seat on the next, then declared
+ * constraints. The shadowed declarations collapse into a single sentence —
+ * their values never take effect (the receipt base outranks them), so
+ * rendering them per-card repeated the same text N times and showed
+ * misleading never-applied numbers.
  */
 function ParamGroupCard(props: { name: string; declarations: readonly UiParamDeclaration[]; t: Translate; onSaved: () => void }) {
   const { name, declarations, t } = props
   const governing = declarations.find(d => d.role === 'source') ?? declarations[0]!
   const shadowed = declarations.filter(d => d !== governing)
-  const governingPack = h(Pill, {}, governing.pack)
   return h('div', { style: group },
     h('div', { style: rowHead },
       h('span', { style: nameStyle }, name),
-      h(FlagPills, { d: governing, t }),
-      h(DescriptionHint, { text: governing.description })),
-    h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' } satisfies CSSProperties },
+      h(FlagPills, { d: governing, t })),
+    h(DescriptionLine, { text: governing.description }),
+    h('div', { style: sourceLine },
       h('span', { style: muted }, `${t('sources')}:`),
-      governingPack,
-      h(ValueRow, { d: governing, t, onSaved: props.onSaved })),
-    h('div', { style: { marginTop: '4px' } },
+      h(Pill, {}, governing.pack)),
+    h(ValueRow, { d: governing, t, onSaved: props.onSaved }),
+    h('div', { style: { marginTop: '2px' } },
       h(ConstraintLine, { d: governing, t })),
     shadowed.length > 0
       ? h('div', { style: { ...muted, marginTop: '4px' } satisfies CSSProperties },
@@ -245,10 +259,10 @@ function PackDeclRow(props: { d: UiParamDeclaration; t: Translate; onSaved: () =
     h('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 } satisfies CSSProperties },
       h('div', { style: rowHead },
         h('span', { style: nameStyle }, d.name),
-        h(FlagPills, { d, t }),
-        h(DescriptionHint, { text: d.description })),
+        h(FlagPills, { d, t })),
+      h(DescriptionLine, { text: d.description }),
       h(ValueRow, { d, t, onSaved: props.onSaved }),
-      h('div', { style: { marginTop: '4px' } },
+      h('div', { style: { marginTop: '2px' } },
         h(ConstraintLine, { d, t }))))
 }
 
@@ -312,8 +326,8 @@ function ConfigView(props: { payload: ParamsPayload; t: Translate; onSaved: () =
       h('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 } satisfies CSSProperties },
         h('div', { style: rowHead },
           h('span', { style: nameStyle }, e.key),
-          e.description !== undefined ? h(DescriptionHint, { text: e.description }) : null,
           h(Pill, {}, e.origin === 'configured' ? t('configured') : e.value === undefined ? t('unset') : t('inherited'))),
+        e.description !== undefined ? h(DescriptionLine, { text: e.description }) : null,
         control,
         e.origin === 'default' && e.default !== undefined && String(e.default) !== String(e.value ?? '')
           ? h('div', { style: muted }, `${t('inherited')}: ${String(e.default)}`)
@@ -360,7 +374,7 @@ function ConfigView(props: { payload: ParamsPayload; t: Translate; onSaved: () =
     h('div', { style: actions },
       h(Button, { size: 'sm', disabled: !dirty || busy, onClick: () => void saveAll() }, busy ? t('saving') : t('saveConfig')),
       done && !dirty ? h('span', { style: muted }, t('saved')) : null,
-      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-text-critical, crimson)', } satisfies CSSProperties }, error) : null))
+      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-state-error-primary, crimson)', } satisfies CSSProperties }, error) : null))
 }
 
 /** The section: one fetch, three views. */
@@ -377,20 +391,20 @@ export function ParamsSection(props: { lang: string }) {
   }, [])
   useEffect(() => { refresh() }, [refresh])
   if (error !== undefined) {
-    return h('div', null,
-      h('p', { style: { color: 'var(--dsw-alias-text-critical, crimson)' } }, t('loadFailed')),
+    return h('div', { style: baseText },
+      h('p', { style: { color: 'var(--dsw-alias-state-error-primary, crimson)' } }, t('loadFailed')),
       h('p', { style: muted }, error),
       h(Button, { size: 'sm', onClick: refresh }, t('retry')))
   }
-  if (payload === undefined) return h('p', { style: muted }, t('loading'))
+  if (payload === undefined) return h('p', { style: { ...baseText, ...muted } }, t('loading'))
   const tabs = [
     { value: 'groups', label: t('viewGroups'), id: `${NS}-groups`, panelId: `${NS}-groups-panel` },
     { value: 'packs', label: t('viewPacks'), id: `${NS}-packs`, panelId: `${NS}-packs-panel` },
     { value: 'config', label: t('viewConfig'), id: `${NS}-config`, panelId: `${NS}-config-panel` },
   ] as const
-  return h('div', { className: `${NS}-section` },
-    h('h3', { style: { margin: '0 0 4px' } }, t('title')),
-    h('p', { style: muted }, t('intro')),
+  return h('div', { className: `${NS}-section`, style: baseText },
+    h('h3', { style: { margin: '0 0 4px', ...baseText, fontWeight: 600 } }, t('title')),
+    h('p', { style: { ...muted, margin: '0 0 8px' } }, t('intro')),
     h('div', { style: { margin: '8px 0 12px' } },
       h(SegmentedTabs, { items: [...tabs], value: view, onChange: v => setView(v as 'groups' | 'packs' | 'config'), label: t('title') })),
     view === 'groups' ? h(GroupsView, { payload, t, onSaved: refresh }) : null,
