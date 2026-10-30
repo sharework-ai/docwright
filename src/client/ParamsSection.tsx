@@ -117,22 +117,24 @@ function validateDraft(d: UiParamDeclaration, text: string): string | undefined 
   return undefined
 }
 
-/** One editable pack-param declaration; shadowed rows render the manager link instead of a control. */
-function PackParamItem(props: { d: UiParamDeclaration; t: Translate; onSaved: () => void }) {
+/** One pack-param declaration. Editable only from the parameter view's governing row; shadowed and read-only rows render the value without a control. */
+function PackParamItem(props: { d: UiParamDeclaration; t: Translate; onSaved: () => void; readOnly?: boolean }) {
   const { d, t } = props
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
-  if (d.role === 'shadowed') {
+  if (props.readOnly || d.role === 'shadowed') {
     return h('div', { className: `${NS}-row`, style: row },
       h('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 } satisfies CSSProperties },
         h('div', { style: rowHead },
           h('span', { style: nameStyle }, d.name),
-          h(Pill, {}, `${t('governedBy')} ${d.shadowedBy}`),
+          d.role === 'shadowed' ? h(Pill, {}, `${t('governedBy')} ${d.shadowedBy}`) : null,
           h(DescriptionHint, { text: d.description })),
-        h('div', { style: desc }, JSON.stringify(d.default)),
-        h(ConstraintLine, { d, t })))
+        h('div', { style: desc }, typeof d.default === 'object' ? JSON.stringify(d.default) : String(d.default)),
+        h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } satisfies CSSProperties },
+          h(ConstraintLine, { d, t }),
+          h(FlagPills, { d, t }))))
   }
   const start = () => {
     setDraft(d.type === 'object' ? JSON.stringify(d.default, null, 2) : String(d.default))
@@ -201,7 +203,9 @@ function GroupsView(props: { payload: ParamsPayload; t: Translate; onSaved: () =
 /** Per-pack flat view (pack-author / troubleshooting perspective). */
 function PacksView(props: { payload: ParamsPayload; t: Translate; onSaved: () => void }) {
   const { payload, t } = props
-  return h('div', null, payload.packs.map((p: UiPackEntry) => h('div', { key: p.name, style: card },
+  return h('div', null,
+    h('p', { style: muted }, t('packsReadOnly')),
+    payload.packs.map((p: UiPackEntry) => h('div', { key: p.name, style: card },
     h('div', { style: rowHead },
       h('span', { style: nameStyle }, p.name),
       h(Pill, {}, `v${p.version}`),
@@ -212,7 +216,7 @@ function PacksView(props: { payload: ParamsPayload; t: Translate; onSaved: () =>
     h('div', { style: { marginTop: '6px' } },
       p.params.length === 0
         ? h('p', { style: muted }, t('empty'))
-        : p.params.map(d => h(PackParamItem, { key: d.name, d, t, onSaved: props.onSaved }))))))
+        : p.params.map(d => h(PackParamItem, { key: d.name, d, t, onSaved: props.onSaved, readOnly: true }))))))
 }
 
 /** Config form: top-level keys as rows, oscillation.* folded under Advanced. */
