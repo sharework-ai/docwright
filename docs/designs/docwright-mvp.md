@@ -230,14 +230,14 @@ packs/<name>/
 
 ### 4.2 声明式规则（四族）
 
-每条规则：`{ id, severity: error|warning|info, given, field, kind, ..., suggestion }`。`given` 支持 `$`（根对象）与 `$.<arrayField>[*]`（数组逐项），其余路径加载期报错。minLength/maxLength 的数值边界可写 `{ "param": "<声明的数字参数>" }` 引用 pack 参数（按次解析，未声明的引用加载期报错）。
+每条规则：`{ id, severity: error|warning|info, given, field, kind, ..., suggestion }`。`given` 支持 `$`（根对象）与 `$.<arrayField>[*]`（数组逐项），其余路径加载期报错。minLength/maxLength 的数值边界与 pattern 的正则源都可写 `{ "param": "<声明的参数>" }` 引用 pack 参数（数值边界引 number 型、pattern 引 string 型；按次解析，未声明的引用加载期报错；被引参数不可 `overridable`，非空 default 须可编译）。
 
 | kind | 载荷 | 语义 |
 |---|---|---|
 | `minLength` | `min` | 字符串长度下限 |
 | `maxLength` | `max` | 字符串长度上限 |
 | `forbiddenKeywords` | `keywords[]` | 命中任一关键字即违规 |
-| `pattern` | `pattern`, `mustMatch` | 正则须匹配（或不匹配） |
+| `pattern` | `pattern`（字面量或 `{ param }`）, `mustMatch` | 正则须匹配（或不匹配）；引用参数时置空即不检查，设置则字段值必须匹配 |
 
 ### 4.3 函数规则（`rules/functions.js`）
 
