@@ -1,6 +1,6 @@
 {
   "name": "@sharework-ai/dsh-docwright",
-  "description": "Closed-loop AI document generation for deepseek-harness: domain rule packs + replayable validation receipts",
+  "description": "Document generation for deepseek-harness: quality packs (schema + rules), a validation repair loop, chained scenarios, params with a confirmation gate, replayable receipts, and a pack authoring skill",
   "version": "0.4.0",
   "type": "module",
   "license": "MIT",
