@@ -23,11 +23,13 @@ import { pathToFileURL } from 'node:url'
 
 const PROFILE = 'docwright-smoke'
 const EXPECTED_TOOLS = ['doc_generate', 'doc_validate', 'doc_packs', 'doc_chain_status']
+const AUTHORING_SKILL = 'docwright-pack-authoring'
 
 /** Minimal structural view of the booted host surface the smoke needs. */
 interface SmokeHost {
   tools: { schemas(): readonly { name: string }[] }
   fiber: { dispose(): Promise<void> }
+  skills?: { list(): Promise<Array<{ name: string; invocation?: { modelInvocable?: boolean } }>> }
 }
 
 function fail(message: string): never {
@@ -122,13 +124,30 @@ try {
   fail(`profile boot failed: ${(error as Error).message}`)
 }
 
-// 5. Assert the three docwright tools registered in the live host, then dispose.
+// 5. Assert the docwright tools registered in the live host, then the
+//    pack-authoring skill (docs/designs/pack-authoring.md), then dispose.
 const registered = new Set(host.tools.schemas().map(schema => schema.name))
 const missing = EXPECTED_TOOLS.filter(name => !registered.has(name))
-await dispose().catch(error => console.error(`host-smoke: dispose warning: ${(error as Error).message}`))
 if (missing.length > 0) {
+  await dispose().catch(error => console.error(`host-smoke: dispose warning: ${(error as Error).message}`))
   fail(`tools missing after boot: ${missing.join(', ')} (registered: ${[...registered].sort().join(', ')})`)
 }
-console.log(`host-smoke: PASS — ${EXPECTED_TOOLS.join(', ')} registered in a live ${PROFILE} host`)
+console.log(`host-smoke: tools registered — ${EXPECTED_TOOLS.join(', ')}`)
+if (host.skills?.list === undefined) {
+  await dispose().catch(error => console.error(`host-smoke: dispose warning: ${(error as Error).message}`))
+  fail('the booted host exposes no skills service; the pack-authoring skill cannot be verified')
+}
+const skills = await host.skills.list()
+const skill = skills.find(entry => entry.name === AUTHORING_SKILL)
+if (skill === undefined) {
+  await dispose().catch(error => console.error(`host-smoke: dispose warning: ${(error as Error).message}`))
+  fail(`skill ${AUTHORING_SKILL} missing after boot (skills: ${skills.map(entry => entry.name).sort().join(', ')})`)
+}
+if (skill.invocation?.modelInvocable !== true) {
+  await dispose().catch(error => console.error(`host-smoke: dispose warning: ${(error as Error).message}`))
+  fail(`skill ${AUTHORING_SKILL} is not model-invocable`)
+}
+await dispose().catch(error => console.error(`host-smoke: dispose warning: ${(error as Error).message}`))
+console.log(`host-smoke: PASS — ${EXPECTED_TOOLS.join(', ')} + skill ${AUTHORING_SKILL} registered in a live ${PROFILE} host`)
 
 if (!keep) rmSync(root, { recursive: true, force: true })

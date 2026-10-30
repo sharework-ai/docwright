@@ -211,6 +211,13 @@ workspaceRoot/
 
 返回 `{ pack, extractionPath, extractable, results, hint }`：`results` 逐参数给出 `extracted`（带 quote、ref）或 `notFound`（带 reason：`not proposed` / `quote not found in any material`；带建议时附 suggestion）。抽取结果持久化为 `outputRoot/<pack>.extracted.json`（pack、packVersion、素材 anchors 清单、逐参数记录），重抽取整体覆盖。`doc_generate` 对声明 extractable 参数的 pack 应先跑本工具（工具描述静态引导）；解析序中抽取值位于上游回执继承之下、声明默认值之上；确认表 `extracted` 行带引文列，required 未找到在生成前拦截。机制语义见 docs/designs/params-and-chain-contract.md"素材参数抽取"节。
 
+### 3.12 Pack authoring 面（技能 + `pack:check`）
+
+插件的模型面同时教"用 pack"与"造 pack"（docs/designs/pack-authoring.md）：
+
+- **运行时技能 `docwright-pack-authoring`**：apply 期读随包 guide `guides/pack-authoring.md`（九阶段 playbook，自包含——不引用仓库侧 docs），经 `ctx.inject(['skills'], ...)` 可选注入（无 skills 服务的宿主休眠）在宿主技能注册表注册；guide 文件缺失 apply fail loud。`doc_packs` 描述含一句静态邀请：无 pack 覆盖所需文档类型时加载该技能。
+- **`pnpm run pack:check -- <packs-dir> [--with <root>]...`**（authoring 验证梯子第 1-2 层）：对目标根跑真实装载门，随后逐 pack 逐语言用真实 DocService 验证 golden 全绿——生效参数经 `resolveEffectiveParams` 解析（声明默认 + 可选 `samples/golden.params.json`，服务 golden 验证的 required 无默认参数取值），链式 pack 以 consumed pack 的 golden 样本为 upstream（consumed 不在检查根时报错并指路 `--with`）；输出体检单（规则清单/严重度分布/参数表）。`checkPacks` / `renderPackCheckReport` / `loadPacks` / `assertManifest` 已从包入口导出，供编程复用；与装载门同源，零第二套校验逻辑。宿主冒烟（`smoke:host`）断言技能已在真实宿主注册且 model-invocable。
+
 ## 4. Pack 契约（内容层，作者视角）
 
 ### 4.1 目录结构

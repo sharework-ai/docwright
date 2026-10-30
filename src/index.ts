@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { join } from 'node:path'
+import { AUTHORING_SKILL_NAME, readAuthoringGuide, registerAuthoringSkill, type SkillsHostContext } from './authoring-skill.ts'
 import { Config, type Config as DocwrightConfig } from './config.ts'
 import { mountParamsRoutes, type ConnectionLike, type WebServerLike, type WriteChannels } from './http.ts'
 import { loadPacks } from './pack-loader.ts'
@@ -19,12 +20,15 @@ export const inject = ['tools', 'llm']
 export { Config }
 export type { DocwrightConfig }
 export * from './pack.ts'
+export { AUTHORING_SKILL_NAME, AUTHORING_SKILL_DESCRIPTION, AUTHORING_SKILL_WHEN_TO_USE } from './authoring-skill.ts'
 export { createScoring, defaultScore, type Scoring } from './convergence.ts'
 export { resolveEffectiveParams, type ExtractionView } from './params.ts'
 export { readExtractionFile, writeExtractionFile, verifyExtraction, type ExtractionFile, type ExtractionRecord } from './extract.ts'
 export { buildParamsCatalog, buildConfigCatalog, paramRoles, type ParamsCatalog, type UiConfigEntry } from './params-rpc.ts'
 export { DocService, generateDocument } from './doc-service.ts'
 export { runRepairLoop, type LoopExhaustReason } from './loop.ts'
+export { loadPacks, assertManifest } from './pack-loader.ts'
+export { checkPacks, renderPackCheckReport, type PackCheckReport, type PackCheckEntry } from './pack-check.ts'
 
 export async function apply(ctx: Context, config: DocwrightConfig): Promise<void> {
   await registerTools(ctx, config, join(import.meta.dirname, '..', 'packs'))
@@ -34,8 +38,11 @@ export async function apply(ctx: Context, config: DocwrightConfig): Promise<void
  * Pack loading is apply-time (decision #9): load failures — bad manifest,
  * broken ruleset, missing Config-default language — fail loud here.
  * Split from {@link apply} so the packs root is injectable for tests.
+ * `guidesRoot` defaults to the sibling of the packs root (shipped layout)
+ * and is injectable for tests; its guide feeds the pack-authoring skill
+ * (docs/designs/pack-authoring.md).
  */
-export async function registerTools(ctx: Context, config: DocwrightConfig, builtinRoot: string): Promise<void> {
+export async function registerTools(ctx: Context, config: DocwrightConfig, builtinRoot: string, guidesRoot: string = join(builtinRoot, '..', 'guides')): Promise<void> {
   // Mutable copy: the params-UI write channel hot-swaps THIS instance in
   // place (clear + refill) so the tools and the RPC payload see a new pack
   // manifest default without a restart; Map satisfies every ReadonlyMap dep.
@@ -55,6 +62,13 @@ export async function registerTools(ctx: Context, config: DocwrightConfig, built
   ctx.tools.register(defineDocExtractTool(deps))
   ctx.tools.register(defineDocValidateTool(deps))
   ctx.tools.register(defineDocChainStatusTool(deps))
+  // Pack-authoring skill (docs/designs/pack-authoring.md): the model face
+  // teaches authoring, not only consuming. The guide is read eagerly — a
+  // broken package fails loud even on hosts where the skill stays dormant.
+  const guide = await readAuthoringGuide(guidesRoot)
+  ctx.inject(['skills'], (skillsCtx: Context) => {
+    registerAuthoringSkill(skillsCtx as unknown as SkillsHostContext, guidesRoot, guide)
+  })
   // Params maintenance UI (docs/designs/param-management-ui.md): mounts on
   // the host webServer when the host provides one. A headless/CLI host never
   // resolves the service, this inject stays dormant, and the tools are
