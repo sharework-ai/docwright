@@ -78,7 +78,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			loading: "Loading parameters…",
 			loadFailed: "Could not load the parameters.",
 			retry: "Retry",
-			empty: "No parameters declared.",
+			empty: "No parameters with declared defaults.",
 			sources: "effective source",
 			governedBy: "managed by",
 			scopeWorkspace: "workspace",
@@ -124,7 +124,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			loading: "正在载入参数…",
 			loadFailed: "参数载入失败。",
 			retry: "重试",
-			empty: "没有声明任何参数。",
+			empty: "没有声明任何带默认值的参数。",
 			sources: "生效源",
 			governedBy: "由以下管理",
 			scopeWorkspace: "工作区级",
@@ -193,24 +193,16 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 		};
 		const nameStyle = {
 			fontWeight: 600,
-			fontSize: "13px",
 			fontFamily: "var(--dsw-font-mono, monospace)"
 		};
 		const desc = {
 			color: "var(--dsw-alias-text-secondary, inherit)",
-			fontSize: "12px",
 			marginTop: "2px",
 			whiteSpace: "pre-wrap",
 			wordBreak: "break-word"
 		};
-		const valueStyle = {
-			fontSize: "13px",
-			fontFamily: "var(--dsw-font-mono, monospace)"
-		};
-		const muted = {
-			color: "var(--dsw-alias-text-secondary, inherit)",
-			fontSize: "12px"
-		};
+		const valueStyle = { fontFamily: "var(--dsw-font-mono, monospace)" };
+		const muted = { color: "var(--dsw-alias-text-secondary, inherit)" };
 		const group = {
 			border: "0.5px solid var(--dsw-alias-border-l4, var(--dsw-alias-settings-card-stroke, transparent))",
 			borderRadius: "var(--dsw-radius-xl, 20px)",
@@ -234,10 +226,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			flexShrink: 0,
 			userSelect: "none"
 		};
-		const inputStyle = {
-			width: "160px",
-			fontSize: "13px"
-		};
+		const inputStyle = { width: "160px" };
 		const actions = {
 			display: "flex",
 			gap: "8px",
@@ -281,11 +270,12 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			});
 			return JSON.stringify(d.default);
 		}
-		/** Flags that change what a value means, rendered as quiet pills. */
+		/** Value-semantics flags, rendered as quiet pills. The confirm gate flag is
+		* deliberately absent: it says nothing about maintaining the default (and is
+		* not editable here), so it only confused readers. */
 		function FlagPills(props) {
 			const { d, t } = props;
 			const flags = [];
-			if (d.confirm) flags.push(t("confirmed"));
 			if (d.extractable) flags.push(t("extractable"));
 			if (d.overridable) flags.push(t("overridable"));
 			return flags.length === 0 ? null : (0, react.createElement)("div", { style: {
@@ -414,10 +404,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				variant: "ghost",
 				disabled: busy,
 				onClick: () => setEditing(false)
-			}, t("cancel")), error !== void 0 ? (0, react.createElement)("span", { style: {
-				color: "var(--dsw-alias-text-critical, crimson)",
-				fontSize: "12px"
-			} }, error) : null));
+			}, t("cancel")), error !== void 0 ? (0, react.createElement)("span", { style: { color: "var(--dsw-alias-text-critical, crimson)" } }, error) : null));
 		}
 		/**
 		* One aggregated parameter group = ONE card: header carries the name and
@@ -603,10 +590,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				size: "sm",
 				disabled: !dirty || busy,
 				onClick: () => void saveAll()
-			}, busy ? t("saving") : t("saveConfig")), done && !dirty ? (0, react.createElement)("span", { style: muted }, t("saved")) : null, error !== void 0 ? (0, react.createElement)("span", { style: {
-				color: "var(--dsw-alias-text-critical, crimson)",
-				fontSize: "12px"
-			} }, error) : null));
+			}, busy ? t("saving") : t("saveConfig")), done && !dirty ? (0, react.createElement)("span", { style: muted }, t("saved")) : null, error !== void 0 ? (0, react.createElement)("span", { style: { color: "var(--dsw-alias-text-critical, crimson)" } }, error) : null));
 		}
 		/** The section: one fetch, three views. */
 		function ParamsSection(props) {

@@ -13,7 +13,7 @@
     "cfpPerFunc": {
       "type": "object",
       "default": {
-        "value": 30,
+        "value": 28,
         "min": 15,
         "max": 45
       },
