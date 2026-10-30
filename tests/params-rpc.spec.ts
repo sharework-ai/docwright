@@ -87,15 +87,16 @@ describe('buildParamsCatalog', () => {
     const catalog = buildParamsCatalog(packs)
     const cfpPerFunc = catalog.groups.find(g => g.name === 'cfpPerFunc')!
     expect(cfpPerFunc.sources).toEqual(['cosmic-plan'])
-    // Source (cosmic-plan) now leads the row; shadowed packs follow alphabetically.
-    expect(cfpPerFunc.declarations.map(d => d.pack)).toEqual(['cosmic-plan', 'cosmic-func', 'cosmic-req', 'cosmic-tech'])
+    // Downstream packs declare these inheritance-only (no default) — the
+    // catalog lists default-carrying declarations, so only the source appears.
+    expect(cfpPerFunc.declarations.map(d => d.pack)).toEqual(['cosmic-plan'])
     const pattern = catalog.groups.find(g => g.name === 'topicNoPattern')!
     expect(pattern.sources).toEqual(['cosmic-context'])
     // cfpTotal (required, no default) and topicNo (derived, no default) never appear.
     expect(catalog.groups.map(g => g.name)).not.toContain('cfpTotal')
     expect(catalog.groups.map(g => g.name)).not.toContain('topicNo')
     const plan = catalog.packs.find(p => p.name === 'cosmic-plan')!
-    expect(plan.version).toBe('0.6.0')
+    expect(plan.version).toBe('0.6.1')
     // cfpTotal (required, no default) is excluded from the plan's own list too.
     expect(plan.params.map(p => p.name)).not.toContain('cfpTotal')
     expect(plan.params.map(p => p.name)).toContain('cfpPerFunc')

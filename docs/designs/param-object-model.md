@@ -73,22 +73,22 @@
 | topicNoPattern | string | `^([A-Za-z][A-Za-z0-9]*[-_ ]?[0-9]+)` | ✓ | — | 链契约（P3）：从 topic 名提取编号，沿链继承 |
 | moduleLevels | number | 2 (1–3) | — | — | 模块树深度，产物规则校验，与 plan 共享 |
 
-**cosmic-plan v0.6.0**（topic / reuse / consumes context / `materialsRoot: input`）
+**cosmic-plan v0.6.1**（topic / reuse / consumes context / `materialsRoot: input`）
 
 | 参数 | type | default | required | confirm | 说明 |
 |---|---|---|---|---|---|
 | cfpTotal | object | — | ✓ | ✓ | 总预算 {value, downFactor, upFactor}；用户给定，门控常客；**extractable**（素材明示预算可带引文抽取，如 "the expected CFPs is 70"） |
-| cfpPerFunc | object | {value:30, min:15, max:45} | — | ✓ | 单功能均值目标（value 进 prompt，端点校验） |
+| cfpPerFunc | object | {value:30, min:15, max:45} | — | ✓ | 单功能均值目标（value 进 prompt，端点校验）；cfp* 族的链头声明（唯一生效的 default） |
 | cfpMin / cfpMax | object | {10,5–20} / {70,40–100} | — | ✓ | 单功能下/上限 |
 | cfpPerSubProc | number | 2.5 (1–10) | — | — | 数据移动均值，向下游传递 |
-| moduleLevels | number | 2 (1–3) | — | — | 与 context 共享（继承） |
-| topicNoPattern / topicNo | string | 同 context / — | — | — | 继承 + 派生（P3/P5） |
+| moduleLevels | number | — | — | — | 纯继承声明（现役值来自 context 回执；0.6.1 起不填 default） |
+| topicNoPattern / topicNo | string | — / — | — | — | 继承（pattern 现役值来自 context，0.6.1 起不填 default）+ 派生（P3/P5） |
 
-**cosmic-req v0.6.0 / cosmic-func v0.5.0 / cosmic-tech v0.5.0**（topic / reuse / 逐上游链式）
+**cosmic-req v0.6.1 / cosmic-func v0.5.1 / cosmic-tech v0.5.1**（topic / reuse / 逐上游链式）
 
-共同参数：`cfpTotal`（confirm，继承）、`cfpPerFunc`/`cfpMin`/`cfpMax`（confirm，继承）、`cfpPerSubProc`、`topicNoPattern`/`topicNo`、`targetIndex`（**number，required，min 1——寻址参数**）。req 专属：`functionalUserRoles`（string 逗号清单）、`funcDescMaxLength`（number 100–2000，default 500）、`cfpsPerRule`（number 10–100，default 30）。
+共同参数：`cfpTotal`（confirm，继承）、`cfpPerFunc`/`cfpMin`/`cfpMax`（confirm，**纯继承声明，无 default**——0.6.1/0.5.1 起，现役值来自 plan 回执）、`cfpPerSubProc`（纯继承）、`topicNoPattern`/`topicNo`（纯继承）、`targetIndex`（**number，required，min 1——寻址参数**）。req 专属：`functionalUserRoles`（string 逗号清单）、`funcDescMaxLength`（number 100–2000，default 500）、`cfpsPerRule`（number 10–100，default 30）。
 
-**cosmic-context-sync v0.1.0**（workspace / 不复用）：仅 `moduleLevels`。
+**cosmic-context-sync v0.1.1**（workspace / 不复用）：仅 `moduleLevels`（纯继承声明，无 default）。
 
 ## 6. 插件 Config 全量清单
 

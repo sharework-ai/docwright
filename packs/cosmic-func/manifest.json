@@ -1,6 +1,6 @@
 {
   "name": "cosmic-func",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "COSMIC functional-process design for one function: decomposes the function into functional processes (originator, receiver, origination event) refined from a green cosmic-req artifact (requires topic — one requirement per topic).",
   "consumes": [
     "cosmic-req"
@@ -12,31 +12,16 @@
   "params": {
     "cfpPerFunc": {
       "type": "object",
-      "default": {
-        "value": 30,
-        "min": 15,
-        "max": 45
-      },
       "confirm": true,
       "description": "Per-function CFP budget {value, min, max}; inherited from the upstream receipt and re-recorded for the chain"
     },
     "cfpMin": {
       "type": "object",
-      "default": {
-        "value": 10,
-        "min": 5,
-        "max": 20
-      },
       "confirm": true,
       "description": "Per-function CFP floor {value, min, max}: value bounds any single estimatedCfps from below (rule plan/cfp-func-range); inherited from the upstream receipt and re-recorded for the chain"
     },
     "cfpMax": {
       "type": "object",
-      "default": {
-        "value": 70,
-        "min": 40,
-        "max": 100
-      },
       "confirm": true,
       "description": "Per-function CFP ceiling {value, min, max}: value bounds any single estimatedCfps from above — a module larger than this must be split into several module functions (rule plan/cfp-func-range); inherited from the upstream receipt and re-recorded for the chain"
     },
@@ -46,7 +31,6 @@
     },
     "topicNoPattern": {
       "type": "string",
-      "default": "^([A-Za-z][A-Za-z0-9]*[-_ ]?[0-9]+)",
       "description": "Regex (first capture group, else whole match) extracting the requirement number from the topic name, e.g. topic 'KERQ-352 收藏夹' → KERQ-352"
     },
     "cfpTotal": {
@@ -56,7 +40,6 @@
     },
     "cfpPerSubProc": {
       "type": "number",
-      "default": 2.5,
       "min": 1,
       "max": 10,
       "description": "Average CFP per data movement; sizing guidance carried down the chain"
