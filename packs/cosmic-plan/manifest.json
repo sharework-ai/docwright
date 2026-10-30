@@ -33,9 +33,9 @@
     "cfpMax": {
       "type": "object",
       "default": {
-        "value": 70,
-        "min": 40,
-        "max": 100
+        "value": 60,
+        "min": 30,
+        "max": 90
       },
       "confirm": true,
       "description": "Per-function CFP ceiling {value, min, max}: value bounds any single estimatedCfps from above — a module larger than this must be split into several module functions (rule plan/cfp-func-range); [min, max] validates the declared ceiling itself"

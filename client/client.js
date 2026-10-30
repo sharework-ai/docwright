@@ -72,7 +72,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			nav: "Docwright params",
 			title: "Docwright parameters",
 			intro: "Declared defaults and plugin configuration. Session values (confirmations, extractions) live in the conversation, not here.",
-			viewGroups: "Shared params",
+			viewGroups: "Parameters",
 			viewPacks: "Packs",
 			viewConfig: "Plugin settings",
 			loading: "Loading parameters…",
@@ -107,13 +107,14 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			invalidNumber: "Not a valid number.",
 			notEditable: "No declared default — nothing to maintain here. Values come from the conversation (confirmation gate or extraction).",
 			advanced: "Advanced",
-			objectBandNote: "value is the generation target; the other keys are validation tolerance (read-only)."
+			objectBandNote: "value is the generation target; the other keys are validation tolerance (read-only).",
+			packsReadOnly: "Browse-only view — to edit a default, use the governing row in the Parameters view (it applies along the chain)."
 		};
 		const zh = {
 			nav: "Docwright 参数",
 			title: "Docwright 参数",
 			intro: "这里维护声明的默认值与插件配置。会话中的值（确认、素材抽取）在对话里，不在这里。",
-			viewGroups: "共享参数",
+			viewGroups: "参数",
 			viewPacks: "Pack",
 			viewConfig: "插件设置",
 			loading: "正在载入参数…",
@@ -148,7 +149,8 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			invalidNumber: "不是合法数字。",
 			notEditable: "没有声明默认值——这里没有可维护的现役值。它的值来自对话（确认门或素材抽取）。",
 			advanced: "高级",
-			objectBandNote: "value 是生成目标；其余键是校验容差（只读）。"
+			objectBandNote: "value 是生成目标；其余键是校验容差（只读）。",
+			packsReadOnly: "此视图仅供浏览——修改默认值请到「参数」视图的生效源行（改那里沿链生效）。"
 		};
 		function translate(dict) {
 			return (key) => {
@@ -283,14 +285,14 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				return;
 			}
 		}
-		/** One editable pack-param declaration; shadowed rows render the manager link instead of a control. */
+		/** One pack-param declaration. Editable only from the parameter view's governing row; shadowed and read-only rows render the value without a control. */
 		function PackParamItem(props) {
 			const { d, t } = props;
 			const [editing, setEditing] = (0, react.useState)(false);
 			const [draft, setDraft] = (0, react.useState)("");
 			const [busy, setBusy] = (0, react.useState)(false);
 			const [error, setError] = (0, react.useState)(void 0);
-			if (d.role === "shadowed") return (0, react.createElement)("div", {
+			if (props.readOnly || d.role === "shadowed") return (0, react.createElement)("div", {
 				className: `${NS$1}-row`,
 				style: row
 			}, (0, react.createElement)("div", { style: {
@@ -298,10 +300,17 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				flexDirection: "column",
 				flex: 1,
 				minWidth: 0
-			} }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, d.name), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("governedBy")} ${d.shadowedBy}`), (0, react.createElement)(DescriptionHint, { text: d.description })), (0, react.createElement)("div", { style: desc }, JSON.stringify(d.default)), (0, react.createElement)(ConstraintLine, {
+			} }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, d.name), d.role === "shadowed" ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("governedBy")} ${d.shadowedBy}`) : null, (0, react.createElement)(DescriptionHint, { text: d.description })), (0, react.createElement)("div", { style: desc }, typeof d.default === "object" ? JSON.stringify(d.default) : String(d.default)), (0, react.createElement)("div", { style: {
+				display: "flex",
+				gap: "8px",
+				flexWrap: "wrap"
+			} }, (0, react.createElement)(ConstraintLine, {
 				d,
 				t
-			})));
+			}), (0, react.createElement)(FlagPills, {
+				d,
+				t
+			}))));
 			const start = () => {
 				setDraft(d.type === "object" ? JSON.stringify(d.default, null, 2) : String(d.default));
 				setError(void 0);
@@ -403,14 +412,15 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 		/** Per-pack flat view (pack-author / troubleshooting perspective). */
 		function PacksView(props) {
 			const { payload, t } = props;
-			return (0, react.createElement)("div", null, payload.packs.map((p) => (0, react.createElement)("div", {
+			return (0, react.createElement)("div", null, (0, react.createElement)("p", { style: muted }, t("packsReadOnly")), payload.packs.map((p) => (0, react.createElement)("div", {
 				key: p.name,
 				style: card
 			}, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, p.name), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `v${p.version}`), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, p.scope === "workspace" ? t("scopeWorkspace") : t("scopeTopic")), p.paramDriftPolicy !== void 0 ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("driftPolicy")}: ${p.paramDriftPolicy}`) : null), (0, react.createElement)("div", { style: desc }, p.description), p.consumes.length > 0 ? (0, react.createElement)("div", { style: muted }, `${t("consumed")}: ${p.consumes.join(", ")}`) : null, (0, react.createElement)("div", { style: { marginTop: "6px" } }, p.params.length === 0 ? (0, react.createElement)("p", { style: muted }, t("empty")) : p.params.map((d) => (0, react.createElement)(PackParamItem, {
 				key: d.name,
 				d,
 				t,
-				onSaved: props.onSaved
+				onSaved: props.onSaved,
+				readOnly: true
 			}))))));
 		}
 		/** Config form: top-level keys as rows, oscillation.* folded under Advanced. */

@@ -6,7 +6,7 @@ export const en = {
   nav: 'Docwright params',
   title: 'Docwright parameters',
   intro: 'Declared defaults and plugin configuration. Session values (confirmations, extractions) live in the conversation, not here.',
-  viewGroups: 'Shared params',
+  viewGroups: 'Parameters',
   viewPacks: 'Packs',
   viewConfig: 'Plugin settings',
   loading: 'Loading parameters…',
@@ -42,13 +42,14 @@ export const en = {
   notEditable: 'No declared default — nothing to maintain here. Values come from the conversation (confirmation gate or extraction).',
   advanced: 'Advanced',
   objectBandNote: 'value is the generation target; the other keys are validation tolerance (read-only).',
+  packsReadOnly: 'Browse-only view — to edit a default, use the governing row in the Parameters view (it applies along the chain).',
 }
 
 export const zh: Record<string, string> = {
   nav: 'Docwright 参数',
   title: 'Docwright 参数',
   intro: '这里维护声明的默认值与插件配置。会话中的值（确认、素材抽取）在对话里，不在这里。',
-  viewGroups: '共享参数',
+  viewGroups: '参数',
   viewPacks: 'Pack',
   viewConfig: '插件设置',
   loading: '正在载入参数…',
@@ -84,6 +85,7 @@ export const zh: Record<string, string> = {
   notEditable: '没有声明默认值——这里没有可维护的现役值。它的值来自对话（确认门或素材抽取）。',
   advanced: '高级',
   objectBandNote: 'value 是生成目标；其余键是校验容差（只读）。',
+  packsReadOnly: '此视图仅供浏览——修改默认值请到「参数」视图的生效源行（改那里沿链生效）。',
 }
 
 export function translate(dict: Record<string, unknown>): Translate {

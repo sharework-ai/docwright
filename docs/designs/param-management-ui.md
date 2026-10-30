@@ -42,12 +42,12 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 三层结构，服务端把链图算完给界面（复杂度由系统吸收，UI 不猜）：
 
 1. **插件参数区块（"Docwright 设置"）**：Config 键按用途分组——常用（confirmPolicy、defaultLanguage、maxIterations）、LLM 路由（provider/model）、路径（materialsRoot/outputRoot/workspaceRoot/packsDir，标注"部署级，慎改"）、高级（promptTokenBudget、oscillation.*，默认折叠）。每键标注来源（cordis.yml 声明 / patch 层覆盖 / 内置默认）。
-2. **pack 参数聚合视图（默认视图）**：跨 pack 同名声明**聚成一行**（cfp* 族在 plan/req/func/tech 四份声明 → 一行）。服务端按 consumes 反图确定性计算每参数的**生效源**：
+2. **参数视图（默认视图，唯一编辑入口）**：跨 pack 同名声明**聚成一行**（cfp* 族在 plan/req/func/tech 四份声明 → 一行）。服务端按 consumes 反图确定性计算每参数的**生效源**：
    - **链头 default 是现役源**（下游解析时上游回执必有该键，自己的 default 轮不到）→ 编辑路由到链头 manifest，行内标注"改这里沿链生效"；
-   - **下游同名 default 被遮蔽** → 显示"由链头 X 管理"+跳转，不给一个改了没反应的输入框（反馈与确定性）；
-   - **无链关系的独立声明** → 各自编辑；
+   - **下游同名 default 被遮蔽** → 显示"由链头 X 管理"，不给一个改了没反应的输入框（反馈与确定性）；
+   - **无链关系的独立声明** → 各自可编辑；
    - 同名不同 spec 合法（机制不强制一致）→ 聚合行并列展示各 pack spec 差异，编辑前明确落在哪个 pack。
-3. **pack 视图（切换）**：按 pack 平铺全属性（pack 名/版本/description/参数表/paramDriftPolicy/maxRounds 等行为开关只读），供 pack 作者与排障视角使用。
+3. **pack 视图（切换，只读浏览）**：按 pack 平铺全属性（pack 名/版本/description/参数表/paramDriftPolicy 等行为开关），供 pack 作者与排障视角使用。**一个事实一个编辑入口**：pack 视图与参数视图渲染同一份声明对象、写通道也只有一条（manifest POST）——pack 视图不提供编辑控件（只读提示指路参数视图的生效源行），避免"两个地方都能改同一值"的事实源错觉。
 
 ### 控件映射（type → 控件）
 
