@@ -26,17 +26,17 @@ const rowHead: CSSProperties = {
   display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap', minWidth: 0,
 }
 const nameStyle: CSSProperties = {
-  fontWeight: 600, fontSize: '13px', fontFamily: 'var(--dsw-font-mono, monospace)',
+  fontWeight: 600, fontFamily: 'var(--dsw-font-mono, monospace)',
 }
 const desc: CSSProperties = {
-  color: 'var(--dsw-alias-text-secondary, inherit)', fontSize: '12px', marginTop: '2px',
+  color: 'var(--dsw-alias-text-secondary, inherit)', marginTop: '2px',
   whiteSpace: 'pre-wrap', wordBreak: 'break-word',
 }
 const valueStyle: CSSProperties = {
-  fontSize: '13px', fontFamily: 'var(--dsw-font-mono, monospace)',
+  fontFamily: 'var(--dsw-font-mono, monospace)',
 }
 const muted: CSSProperties = {
-  color: 'var(--dsw-alias-text-secondary, inherit)', fontSize: '12px',
+  color: 'var(--dsw-alias-text-secondary, inherit)',
 }
 const group: CSSProperties = {
   border: '0.5px solid var(--dsw-alias-border-l4, var(--dsw-alias-settings-card-stroke, transparent))',
@@ -52,7 +52,7 @@ const hint: CSSProperties = {
   userSelect: 'none',
 }
 const inputStyle: CSSProperties = {
-  width: '160px', fontSize: '13px',
+  width: '160px',
 }
 const actions: CSSProperties = {
   display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px',
@@ -88,11 +88,12 @@ function displayDefault(d: UiParamDeclaration, t: Translate): string {
   return JSON.stringify(d.default)
 }
 
-/** Flags that change what a value means, rendered as quiet pills. */
+/** Value-semantics flags, rendered as quiet pills. The confirm gate flag is
+ * deliberately absent: it says nothing about maintaining the default (and is
+ * not editable here), so it only confused readers. */
 function FlagPills(props: { d: UiParamDeclaration; t: Translate }) {
   const { d, t } = props
   const flags: string[] = []
-  if (d.confirm) flags.push(t('confirmed'))
   if (d.extractable) flags.push(t('extractable'))
   if (d.overridable) flags.push(t('overridable'))
   return flags.length === 0 ? null : h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } satisfies CSSProperties },
@@ -196,7 +197,7 @@ function EditSeat(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() =>
     h('div', { style: actions },
       h(Button, { size: 'sm', disabled: busy, onClick: () => void save() }, busy ? t('saving') : t('save')),
       h(Button, { size: 'sm', variant: 'ghost', disabled: busy, onClick: () => setEditing(false) }, t('cancel')),
-      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-text-critical, crimson)', fontSize: '12px' } }, error) : null))
+      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-text-critical, crimson)', } satisfies CSSProperties }, error) : null))
 }
 
 /**
@@ -359,7 +360,7 @@ function ConfigView(props: { payload: ParamsPayload; t: Translate; onSaved: () =
     h('div', { style: actions },
       h(Button, { size: 'sm', disabled: !dirty || busy, onClick: () => void saveAll() }, busy ? t('saving') : t('saveConfig')),
       done && !dirty ? h('span', { style: muted }, t('saved')) : null,
-      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-text-critical, crimson)', fontSize: '12px' } }, error) : null))
+      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-text-critical, crimson)', } satisfies CSSProperties }, error) : null))
 }
 
 /** The section: one fetch, three views. */
