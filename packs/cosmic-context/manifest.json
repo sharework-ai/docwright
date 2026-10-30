@@ -1,7 +1,10 @@
 {
   "name": "cosmic-context",
   "version": "0.2.0",
-  "description": "COSMIC project context: project background, overview, module tree (up to 3 levels with abbreviation codes), roles (person/organization/system), third-party systems, ID conventions, and design principles; generated from materials, with model-assumed items explicitly registered (root pack, no upstream consumed).",
+  "description": {
+    "zh": "COSMIC 项目上下文：项目背景、概述、模块树（最多 3 级，带缩写编码）、角色（人员/组织/系统）、第三方系统、编号约定与设计原则；由素材生成，模型推定项显式登记（根 pack，不消费上游）。",
+    "en": "COSMIC project context: project background, overview, module tree (up to 3 levels with abbreviation codes), roles (person/organization/system), third-party systems, ID conventions, and design principles; generated from materials, with model-assumed items explicitly registered (root pack, no upstream consumed)."
+  },
   "consumes": [],
   "scope": "workspace",
   "reuse": true,
@@ -14,14 +17,20 @@
       "type": "string",
       "required": true,
       "default": "^([A-Za-z][A-Za-z0-9]*[-_ ]?[0-9]+)",
-      "description": "Regex (first capture group, else whole match) extracting the requirement number from the topic name, e.g. topic 'KERQ-352 收藏夹' → KERQ-352; recorded at the chain head and inherited by every downstream stage — funcId = <topicNo>-<NN>, per-function artifacts are named <artifactPrefix>-<topicNo>-<NN>. The convention itself should come from the project reference materials"
+      "description": {
+        "zh": "从话题名提取需求编号的正则（首个捕获组，否则整体匹配），如话题 'KERQ-352 收藏夹' → KERQ-352；在链头记录并被每个下游阶段继承——funcId = <topicNo>-<NN>，每功能产物命名为 <artifactPrefix>-<topicNo>-<NN>。该约定本身应来自项目参考资料",
+        "en": "Regex (first capture group, else whole match) extracting the requirement number from the topic name, e.g. topic 'KERQ-352 收藏夹' → KERQ-352; recorded at the chain head and inherited by every downstream stage — funcId = <topicNo>-<NN>, per-function artifacts are named <artifactPrefix>-<topicNo>-<NN>. The convention itself should come from the project reference materials"
+      }
     },
     "moduleLevels": {
       "type": "number",
       "default": 2,
       "min": 1,
       "max": 3,
-      "description": "Depth of the module tree (1-3): the artifact's actual tree depth must equal it (rule context/module-depth), and moduleIdConventionForLevel1..N must be declared for every level in use; shared with cosmic-plan via receipt inheritance"
+      "description": {
+        "zh": "模块树深度（1-3）：产物的实际树深必须等于它（rule context/module-depth），且使用的每个层级都必须声明 moduleIdConventionForLevel1..N；经回执继承与 cosmic-plan 共享",
+        "en": "Depth of the module tree (1-3): the artifact's actual tree depth must equal it (rule context/module-depth), and moduleIdConventionForLevel1..N must be declared for every level in use; shared with cosmic-plan via receipt inheritance"
+      }
     }
   }
 }

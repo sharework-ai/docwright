@@ -47,7 +47,7 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
    - **下游同名 default 被遮蔽** → 显示"由链头 X 管理"，不给一个改了没反应的输入框（反馈与确定性）；
    - **无链关系的独立声明** → 各自可编辑；
    - 同名不同 spec 合法（机制不强制一致）→ 聚合行并列展示各 pack spec 差异，编辑前明确落在哪个 pack。
-3. **pack 视图（切换）**：按 pack 平铺（pack 名/版本/description/参数表/paramDriftPolicy 等行为开关），供 pack 作者、排障与"配置某个 pack"的编辑视角使用。**编辑权跟生效源走，不跟视图走**：source 声明在两个视图都渲染编辑钮（写的是同一个 manifest 字段）；shadowed 声明一律只读且值以删除线弱化 + 明确标注"由 X 管理——此处声明不生效"——那值在链上永不生效（回执继承盖过它），原样展示会让它看起来像现役值。参数视图的组卡片自上而下，组级不变量各渲染一次：组头（参数名 + flags）→ 行内说明（二级灰度）→ 生效源行（生效源 pack 单独一行——"谁管"是与值并列的事实，不做值行前缀）→ 值行（人性化投影"目标 60（容差带 30–90）" + 编辑，紧跟生效源行）→ 约束行（min/max/枚举）→ 组尾一句话列出其余声明 pack。shadowed 逐卡片重复的渲染（N 份相同文本 + 误导性死值）已废弃。改链头 default 不级联改写下游 manifest——下游声明是 pack 作者的独立事实（同名不同 spec 合法），解析层本就不读它。
+3. **pack 视图（标签页中文名「包」）**：按 pack 平铺（pack 名/版本/description/参数表/paramDriftPolicy 等行为开关），供 pack 作者、排障与"配置某个 pack"的编辑视角使用。每张 pack 卡以**整行淡蓝底色头部带**开场（`--dsw-static-blue-500` 7% 水洗，贯穿卡片整行、负边距贴边）——pack 身份（名/版本/作用域/漂移策略）是一个自己的区块，与其下的参数行在视觉上分层。**编辑权跟生效源走，不跟视图走**：source 声明在两个视图都渲染编辑钮（写的是同一个 manifest 字段）；shadowed 声明一律只读且值以删除线弱化 + 明确标注"由 X 管理——此处声明不生效"——那值在链上永不生效（回执继承盖过它），原样展示会让它看起来像现役值。参数视图的组卡片自上而下，组级不变量各渲染一次：组头（参数名 + flags）→ 行内说明（二级灰度）→ 生效源行（生效源 pack 单独一行——"谁管"是与值并列的事实，不做值行前缀）→ 值行（人性化投影"目标 60（容差带 30–90）" + 编辑，紧跟生效源行）→ 约束行（min/max/枚举）→ 组尾一句话列出其余声明 pack。shadowed 逐卡片重复的渲染（N 份相同文本 + 误导性死值）已废弃。改链头 default 不级联改写下游 manifest——下游声明是 pack 作者的独立事实（同名不同 spec 合法），解析层本就不读它。
 
 **与声明最佳实践的衔接**：删除线的死值本不该存在——按继承参数声明最佳实践（`params-and-chain-contract.md`：链上被继承的声明不填 default；default 仅作链式 pack 独立使用时的兜底），内置 cosmic 链的继承声明已全部清理（req/func/tech 0.6.1/0.5.1、plan 0.6.1、context-sync 0.1.1）。清理后 Pack 视图对链共享参数只显示生效源一行的活值；"由 X 管理"的删除线形态仅对第三方带 default 的继承声明出现，作为最佳实践的纠偏提示。
 
@@ -69,7 +69,11 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 
 ### 说明呈现（description）
 
-每个参数的 `description` 是**装载期必填非空**字段（缺了 pack 加载即报错），是界面说明的唯一事实源——界面不另写文案。展示形态：**说明直接渲染在参数名下方**（完整 description，含关联规则引用如 "rule plan/cfp-avg-band"，原样展示），以宿主二级灰度与正文区分——说明是理解参数的主材料，不藏在悬停之后。pack description 是 pack 作者内容，逐字展示、不做翻译（UI 框架文案才走 locale 双语）。
+每个参数的 `description` 与 pack `description` 是**装载期必填**字段（缺了 pack 加载即报错），是界面说明的唯一事实源——界面不另写文案。文案形状遵循宿主 **LocalizedText 约定**（`string | { en, [locale] }`，locale 键为小写语言 id，映射形态**必须带 en 兜底**；`src/description.ts` 承载校验与解析）：内置 cosmic 系 pack 全部双语（zh/en）。展示形态：**说明直接渲染在参数名下方**（完整 description，含关联规则引用如 "rule plan/cfp-avg-band"，原样展示），以宿主二级灰度与正文区分——说明是理解参数的主材料，不藏在悬停之后。locale 解析在浏览器侧：宿主 `ctx.locale.resolveText`（沿宿主 fallback 链），宿主未提供时按"请求 locale → en"本地兜底，同一语义。
+
+**Config 键的说明**：住在 Config schema meta（schemastery `description: string | Dict<string>`，`.extra('description', bi(en, zh))` 写入）——单一事实源随 schema 走，读面 RPC 原样透传，浏览器按同一约定解析；不在 UI 里硬编码文案。
+
+**模型面恒为英文**：`doc_packs` 与确认表投影 `en` 条目（`resolveLocalized(…, 'en')`），与 UI locale 无关——prompt 材料必须跨表面稳定。
 
 **Config 键的说明现状缺口**：说明只住在 `config.ts` 的 JSDoc（不进运行时），RPC 拿不到。补法与宿主惯例对齐（宿主 config-catalog 文档即从 Config schema 生成）：**给 Config schema 每键补描述**（文本取自现有 JSDoc，单一事实源随 schema 走），读面 RPC 直出——不在 UI 里硬编码文案。
 
@@ -123,7 +127,7 @@ dsh-market（~/projects/lab/dsh-market）是 dsh web 内嵌 UI 插件的完整�
 
 - **exact 路由越过宿主栅栏**：`webServer.register({ kind: 'exact' })` 精确匹配优先于宿主 `/api` 前缀栅栏——插件路由收不到宿主的 Host/Origin/登录检查，必须自接：每请求惰性读 `connection.requestRejection`。
 - **栅栏调用契约**：`gate.call(connection, request)` 必须以服务为 `this`（宿主实现依赖之）；gate 抛错 = 未放行，fail-closed 403（dsh-market #603 同款）。`connection` 服务在宿主异步 init 后才存在，挂载时读不到属正常，惰性解析。
-- **mutating 路由**：强制 same-origin（Origin 必须匹配 Host）+ 有界 JSON body；错误以 `{ error: "问题 + 原因 + 怎么办" }` 应答。
+- **mutating 路由**：强制 same-origin（Origin 必须匹配 Host）+ 有界 JSON body；错误以**信封** `{ error, code?, params?, detail? }` 应答：`error` 保持英文"问题+原因+怎么办"整句（日志面与未知码兜底），`code`+`params` 键入浏览器 locale 目录（`locales.ts` 的 `err.*` 模板，两语，已知码渲染用户语言），`detail` 承载原始底层原因（解析器输出、装载期断言文本）作次行展示，绝不插值进本地化句中。
 
 ### 写通道
 

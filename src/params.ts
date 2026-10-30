@@ -1,4 +1,5 @@
 import type { Pack, ParamSpec } from './pack.ts'
+import { resolveLocalized } from './description.ts'
 import { canonicalJson, type Json } from './receipt.ts'
 
 /**
@@ -209,7 +210,8 @@ export function previewParams(
       ...(extractionRef === undefined ? {} : { extractionRef }),
       ...(notFound?.suggestion === undefined ? {} : { suggestion: notFound.suggestion }),
       ...(notFound?.rationale === undefined ? {} : { suggestionRationale: notFound.rationale }),
-      required: spec.required === true, confirm: spec.confirm === true, overridable: spec.overridable === true, description: spec.description,
+      // The confirmation table is model face: project `en`, stable across UI locales.
+      required: spec.required === true, confirm: spec.confirm === true, overridable: spec.overridable === true, description: resolveLocalized(spec.description, 'en'),
     })
   }
   return { rows, missingRequired, drift }

@@ -67,29 +67,36 @@ export interface Config {
   model?: string
 }
 
+/**
+ * Bilingual schema description (schemastery meta `description: string |
+ * Dict<string>`): the single home of Config copy — the params UI resolves
+ * the locale browser-side; no other surface hardcodes copy about a key.
+ */
+const bi = (en: string, zh: string): { en: string; zh: string } => ({ en, zh })
+
 export const Config: z<Config> = z.object({
-  packsDir: z.string().description('Extra pack directories merged over the built-in packs/ (same-name wins)'),
-  workspaceRoot: z.string().description('Workspace root when no session workspace drives the call (default: the process cwd)'),
-  materialsRoot: z.string().description('Root material references resolve against (default: <workspace>/references)'),
-  outputRoot: z.string().description('Root artifacts are written to (default: <workspace>/output)'),
-  defaultLanguage: z.string().description('Default output language; falls back to the first pack\'s first language when unset'),
-  maxIterations: z.number().default(DEFAULT_MAX_ITERATIONS).description('Repair-loop round cap for doc_generate (tool args and pack defaults clamp to maxRoundsCeiling)'),
-  promptTokenBudget: z.number().default(DEFAULT_PROMPT_TOKEN_BUDGET).description('Rough token budget for one repair prompt; oversized materials fail loud'),
-  upstreamVersionPolicy: z.union(['strict', 'warn']).default(DEFAULT_UPSTREAM_VERSION_POLICY).description('Chained upstream pack-version mismatch: strict rejects stale upstreams, warn proceeds and surfaces upstreamWarnings'),
-  confirmPolicy: z.union(['none', 'standard', 'strict']).default(DEFAULT_CONFIRM_POLICY).description('Confirmation-gate policy: none never gates (headless/CI; required params still fail loud), standard gates on param changes or unconfirmed confirm-params, strict gates every call with a param table; per-call tool arg overrides this'),
+  packsDir: z.string().extra('description', bi('Extra pack directories merged over the built-in packs/ (same-name wins)', '额外 pack 目录，合并覆盖内置 packs/（同名者胜）')),
+  workspaceRoot: z.string().extra('description', bi('Workspace root when no session workspace drives the call (default: the process cwd)', '调用无会话工作区时使用的工作区根（默认：进程 cwd）')),
+  materialsRoot: z.string().extra('description', bi('Root material references resolve against (default: <workspace>/references)', '素材引用的解析根目录（默认：<workspace>/references）')),
+  outputRoot: z.string().extra('description', bi('Root artifacts are written to (default: <workspace>/output)', '产物写入根目录（默认：<workspace>/output）')),
+  defaultLanguage: z.string().extra('description', bi('Default output language; falls back to the first pack\'s first language when unset', '默认输出语言；未设置时回退到首个 pack 的首个语言')),
+  maxIterations: z.number().default(DEFAULT_MAX_ITERATIONS).extra('description', bi('Repair-loop round cap for doc_generate (tool args and pack defaults clamp to maxRoundsCeiling)', 'doc_generate 修复循环的轮数上限（工具入参与 pack 缺省都被 maxRoundsCeiling 钳制）')),
+  promptTokenBudget: z.number().default(DEFAULT_PROMPT_TOKEN_BUDGET).extra('description', bi('Rough token budget for one repair prompt; oversized materials fail loud', '单次修复 prompt 的粗略 token 预算；超长素材直接报错')),
+  upstreamVersionPolicy: z.union(['strict', 'warn']).default(DEFAULT_UPSTREAM_VERSION_POLICY).extra('description', bi('Chained upstream pack-version mismatch: strict rejects stale upstreams, warn proceeds and surfaces upstreamWarnings', '链式上游 pack 版本不一致：strict 拒绝过期上游，warn 继续并在 upstreamWarnings 提示')),
+  confirmPolicy: z.union(['none', 'standard', 'strict']).default(DEFAULT_CONFIRM_POLICY).extra('description', bi('Confirmation-gate policy: none never gates (headless/CI; required params still fail loud), standard gates on param changes or unconfirmed confirm-params, strict gates every call with a param table; per-call tool arg overrides this', '确认门策略：none 永不设门（headless/CI；required 参数仍会报错），standard 在参数变化或有未确认 confirm 参数时设门，strict 每次调用都出参数表设门；调用级工具入参可覆盖')),
   oscillation: z.object({
-    mode: z.union(['auto', 'score', 'fingerprint']).default('auto').description('auto (default): pack score if exported else the built-in default score; score forces the pack score; fingerprint uses the loose fallback only'),
-    stagnantRounds: z.number().default(DEFAULT_STAGNANT_ROUNDS).description('Terminate after this many consecutive rounds without beating the best score'),
-    decliningRounds: z.number().default(DEFAULT_DECLINING_ROUNDS).description('Terminate after this many consecutive strictly-decreasing rounds'),
-    maxRepeats: z.number().default(DEFAULT_MAX_REPEATS).description('Terminate after this many consecutive identical fingerprints'),
-    epsilon: z.number().default(DEFAULT_EPSILON).description('Minimum improvement that counts as progress'),
+    mode: z.union(['auto', 'score', 'fingerprint']).default('auto').extra('description', bi('auto (default): pack score if exported else the built-in default score; score forces the pack score; fingerprint uses the loose fallback only', 'auto（默认）：pack 导出了 score 就用 pack score，否则用内置默认评分；score 强制用 pack score；fingerprint 只用宽松兜底')),
+    stagnantRounds: z.number().default(DEFAULT_STAGNANT_ROUNDS).extra('description', bi('Terminate after this many consecutive rounds without beating the best score', '连续这么多轮未超过最佳评分即终止')),
+    decliningRounds: z.number().default(DEFAULT_DECLINING_ROUNDS).extra('description', bi('Terminate after this many consecutive strictly-decreasing rounds', '连续这么多轮评分严格下降即终止')),
+    maxRepeats: z.number().default(DEFAULT_MAX_REPEATS).extra('description', bi('Terminate after this many consecutive identical fingerprints', '连续这么多轮指纹完全相同即终止')),
+    epsilon: z.number().default(DEFAULT_EPSILON).extra('description', bi('Minimum improvement that counts as progress', '算作有进展的最小提升量')),
     defaultScore: z.object({
-      error: z.number().default(DEFAULT_SCORE_WEIGHTS.error).description('Severity weight for the built-in default score'),
-      warning: z.number().default(DEFAULT_SCORE_WEIGHTS.warning).description('Severity weight for the built-in default score'),
-      info: z.number().default(DEFAULT_SCORE_WEIGHTS.info).description('Severity weight for the built-in default score'),
-    }).description('Severity weights for the built-in default convergence score'),
-  }).description('Repair-loop convergence tuning (termination is early-exit only; green stays 0 errors)'),
-  maxRoundsCeiling: z.number().default(DEFAULT_MAX_ROUNDS_CEILING).description('Absolute round cap for doc_generate; tool args and pack defaults clamp to it (hard ceiling, host-operator owned)'),
-  provider: z.string().description('Provider route name in the host LLM composition (e.g. deepseek-official); required at the first generate call'),
-  model: z.string().description('Model name for the LLM seam; required at the first generate call'),
+      error: z.number().default(DEFAULT_SCORE_WEIGHTS.error).extra('description', bi('Severity weight for the built-in default score', '内置默认评分中该严重度的权重')),
+      warning: z.number().default(DEFAULT_SCORE_WEIGHTS.warning).extra('description', bi('Severity weight for the built-in default score', '内置默认评分中该严重度的权重')),
+      info: z.number().default(DEFAULT_SCORE_WEIGHTS.info).extra('description', bi('Severity weight for the built-in default score', '内置默认评分中该严重度的权重')),
+    }).extra('description', bi('Severity weights for the built-in default convergence score', '内置默认收敛评分的严重度权重')),
+  }).extra('description', bi('Repair-loop convergence tuning (termination is early-exit only; green stays 0 errors)', '修复循环收敛调参（只影响提前终止；green 仍是 0 error）')),
+  maxRoundsCeiling: z.number().default(DEFAULT_MAX_ROUNDS_CEILING).extra('description', bi('Absolute round cap for doc_generate; tool args and pack defaults clamp to it (hard ceiling, host-operator owned)', 'doc_generate 的绝对轮数上限；工具入参与 pack 缺省都被它钳制（硬上限，宿主运维所有）')),
+  provider: z.string().extra('description', bi('Provider route name in the host LLM composition (e.g. deepseek-official); required at the first generate call', '宿主 LLM 组合中的 provider 路由名（如 deepseek-official）；首次生成调用前必须配置')),
+  model: z.string().extra('description', bi('Model name for the LLM seam; required at the first generate call', 'LLM 接缝的模型名；首次生成调用前必须配置')),
 })

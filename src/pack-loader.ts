@@ -3,6 +3,8 @@ import { isAbsolute, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { DeclarativeRule, FunctionRule, Pack, PackManifest, ParamSpec, ScoreFn } from './pack.ts'
 import { isParamRef } from './pack.ts'
+import { assertLocalizedText } from './description.ts'
+import type { LocalizedText } from './description.ts'
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
@@ -26,7 +28,7 @@ function assertParamSpec(raw: unknown, dir: string, name: string): ParamSpec {
   if (typeof raw !== 'object' || raw === null) throw new Error(`${where} must be an object`)
   const s = raw as Partial<ParamSpec>
   if (s.type !== 'number' && s.type !== 'string' && s.type !== 'boolean' && s.type !== 'object') throw new Error(`${where}.type must be number|string|boolean|object`)
-  if (typeof s.description !== 'string' || s.description.length === 0) throw new Error(`${where}.description must be a non-empty string`)
+  assertLocalizedText(s.description, `${where}.description`)
   for (const flag of ['required', 'overridable', 'confirm'] as const) {
     if (s[flag] !== undefined && typeof s[flag] !== 'boolean') throw new Error(`${where}.${flag} must be a boolean when present`)
   }
@@ -87,9 +89,12 @@ export function assertManifest(raw: unknown, dir: string): PackManifest {
   const m = raw as Partial<PackManifest>
   if (typeof m.name !== 'string' || m.name.length === 0) throw new Error(`pack ${dir}: manifest.name must be a non-empty string`)
   if (typeof m.version !== 'string' || m.version.length === 0) throw new Error(`pack ${dir}: manifest.version must be a non-empty string`)
-  if (typeof m.description !== 'string' || m.description.length === 0) {
-    throw new Error(`pack ${dir}: manifest.description must be a non-empty string (one line naming the document this pack generates; doc_packs shows it to the model)`)
+  try {
+    assertLocalizedText(m.description, `pack ${dir}: manifest.description`)
+  } catch (error) {
+    throw new Error(`${(error as Error).message} (one line naming the document this pack generates; doc_packs shows the "en" entry to the model)`)
   }
+  const description: LocalizedText = m.description
   if (!Array.isArray(m.languages) || m.languages.length === 0) throw new Error(`pack ${dir}: manifest.languages must be a non-empty array`)
   if (m.languages.some(l => typeof l !== 'string' || l.length === 0)) throw new Error(`pack ${dir}: manifest.languages entries must be non-empty strings`)
   if (m.consumes !== undefined && !Array.isArray(m.consumes)) throw new Error(`pack ${dir}: manifest.consumes must be an array when present`)
@@ -134,7 +139,7 @@ export function assertManifest(raw: unknown, dir: string): PackManifest {
   return {
     name: m.name,
     version: m.version,
-    description: m.description,
+    description,
     consumes: m.consumes ?? [],
     scope,
     reuse: m.reuse ?? scope === 'workspace',

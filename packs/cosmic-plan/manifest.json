@@ -1,7 +1,10 @@
 {
   "name": "cosmic-plan",
   "version": "0.6.1",
-  "description": "COSMIC function-point estimation plan: given one requirement and the green project context, plan which modules to add or modify — each changed leaf module becomes one function with hierarchical names and estimated CFPs (consumes a green cosmic-context artifact; requires topic — one requirement per topic).",
+  "description": {
+    "zh": "COSMIC 功能点估算计划：给定一条需求与绿色的项目上下文，规划要新增或修改哪些模块——每个被修改的叶子模块成为一个功能，带层级化命名与 CFP 估算（消费绿色的 cosmic-context 产物；requires topic——每话题一条需求）。",
+    "en": "COSMIC function-point estimation plan: given one requirement and the green project context, plan which modules to add or modify — each changed leaf module becomes one function with hierarchical names and estimated CFPs (consumes a green cosmic-context artifact; requires topic — one requirement per topic)."
+  },
   "consumes": [
     "cosmic-context"
   ],
@@ -18,7 +21,10 @@
         "max": 45
       },
       "confirm": true,
-      "description": "Per-function average CFP budget {value, min, max}: value is the target MEAN size per function and [min, max] validates that mean across functions (rule plan/cfp-avg-band); individual functions are bounded by cfpMin/cfpMax instead"
+      "description": {
+        "zh": "每功能平均 CFP 预算 {value, min, max}：value 是单功能规模的目标均值，[min, max] 校验各功能的实际均值（rule plan/cfp-avg-band）；单个功能的上下限由 cfpMin/cfpMax 约束",
+        "en": "Per-function average CFP budget {value, min, max}: value is the target MEAN size per function and [min, max] validates that mean across functions (rule plan/cfp-avg-band); individual functions are bounded by cfpMin/cfpMax instead"
+      }
     },
     "cfpMin": {
       "type": "object",
@@ -28,7 +34,10 @@
         "max": 20
       },
       "confirm": true,
-      "description": "Per-function CFP floor {value, min, max}: value bounds any single estimatedCfps from below (rule plan/cfp-func-range); [min, max] validates the declared floor itself"
+      "description": {
+        "zh": "每功能 CFP 下限 {value, min, max}：value 约束任何单个 estimatedCfps 的下界（rule plan/cfp-func-range）；[min, max] 校验该下限声明本身",
+        "en": "Per-function CFP floor {value, min, max}: value bounds any single estimatedCfps from below (rule plan/cfp-func-range); [min, max] validates the declared floor itself"
+      }
     },
     "cfpMax": {
       "type": "object",
@@ -38,13 +47,19 @@
         "max": 90
       },
       "confirm": true,
-      "description": "Per-function CFP ceiling {value, min, max}: value bounds any single estimatedCfps from above — a module larger than this must be split into several module functions (rule plan/cfp-func-range); [min, max] validates the declared ceiling itself"
+      "description": {
+        "zh": "每功能 CFP 上限 {value, min, max}：value 约束任何单个 estimatedCfps 的上界——超过该规模的模块必须拆成多个模块功能（rule plan/cfp-func-range）；[min, max] 校验该上限声明本身",
+        "en": "Per-function CFP ceiling {value, min, max}: value bounds any single estimatedCfps from above — a module larger than this must be split into several module functions (rule plan/cfp-func-range); [min, max] validates the declared ceiling itself"
+      }
     },
     "cfpTotal": {
       "type": "object",
       "required": true,
       "confirm": true,
-      "description": "Total CFP budget {value, downFactor, upFactor}: totalCfps must fall inside [value*downFactor, value*upFactor] (rule plan/cfp-total-band); the tech stage never totals below its planned estimate regardless of downFactor; no default — state the budget via params, downstream stages inherit it; extractable: state it in the requirement doc and run doc_extract_params with a verbatim quote (e.g. quote: 'the expected CFPs is 70') — an unquoted budget must not be invented",
+      "description": {
+        "zh": "总 CFP 预算 {value, downFactor, upFactor}：totalCfps 必须落在 [value*downFactor, value*upFactor] 内（rule plan/cfp-total-band）；无论 downFactor 多小，tech 阶段的总数都不会低于其计划估计值；无默认值——通过 params 声明，下游阶段沿链继承；可抽取：在需求文档中写明预算并用 doc_extract_params 附逐字引文（如 quote: 'the expected CFPs is 70'）——没有引文的预算不得凭空捏造",
+        "en": "Total CFP budget {value, downFactor, upFactor}: totalCfps must fall inside [value*downFactor, value*upFactor] (rule plan/cfp-total-band); the tech stage never totals below its planned estimate regardless of downFactor; no default — state the budget via params, downstream stages inherit it; extractable: state it in the requirement doc and run doc_extract_params with a verbatim quote (e.g. quote: 'the expected CFPs is 70') — an unquoted budget must not be invented"
+      },
       "extractable": true
     },
     "cfpPerSubProc": {
@@ -52,21 +67,33 @@
       "default": 2.5,
       "min": 1,
       "max": 10,
-      "description": "Average CFP per data movement; sizing guidance carried to the downstream func/tech stages"
+      "description": {
+        "zh": "每次数据移动的平均 CFP；作为规模基准传递给下游 func/tech 阶段",
+        "en": "Average CFP per data movement; sizing guidance carried to the downstream func/tech stages"
+      }
     },
     "moduleLevels": {
       "type": "number",
       "min": 1,
       "max": 3,
-      "description": "Depth of the module tree (1-3) as declared by the upstream cosmic-context artifact: drives l2Name/l3Name requiredness (rule plan/name-hierarchy); inherited from the context receipt"
+      "description": {
+        "zh": "模块树深度（1-3），以上游 cosmic-context 产物的声明为准：决定 l2Name/l3Name 是否必填（rule plan/name-hierarchy）；从上下文回执继承",
+        "en": "Depth of the module tree (1-3) as declared by the upstream cosmic-context artifact: drives l2Name/l3Name requiredness (rule plan/name-hierarchy); inherited from the context receipt"
+      }
     },
     "topicNo": {
       "type": "string",
-      "description": "Derived by the engine: requirement number extracted from the topic name via topicNoPattern (explicit values override); funcId = <topicNo>-<NN> and per-function artifacts are named <artifactPrefix>-<topicNo>-<NN>; inherited along the chain"
+      "description": {
+        "zh": "由引擎派生：用 topicNoPattern 从话题名提取需求编号（显式传参可覆盖）；funcId = <topicNo>-<NN>，每功能产物命名为 <artifactPrefix>-<topicNo>-<NN>；沿链继承",
+        "en": "Derived by the engine: requirement number extracted from the topic name via topicNoPattern (explicit values override); funcId = <topicNo>-<NN> and per-function artifacts are named <artifactPrefix>-<topicNo>-<NN>; inherited along the chain"
+      }
     },
     "topicNoPattern": {
       "type": "string",
-      "description": "Regex (first capture group, else whole match) extracting the requirement number from the topic name, e.g. topic 'KERQ-352 收藏夹' → KERQ-352; the engine injects the match as the derived param topicNo — funcId = <topicNo>-<NN> (rule plan/func-id-numbering) and per-function artifacts are named <artifactPrefix>-<topicNo>-<NN>; no match degrades gracefully (rule skips, naming falls back)"
+      "description": {
+        "zh": "从话题名提取需求编号的正则（首个捕获组，否则整体匹配），如话题 'KERQ-352 收藏夹' → KERQ-352；引擎将匹配结果注入派生参数 topicNo——funcId = <topicNo>-<NN>（rule plan/func-id-numbering），每功能产物命名为 <artifactPrefix>-<topicNo>-<NN>；无匹配时优雅降级（规则跳过，命名回退）",
+        "en": "Regex (first capture group, else whole match) extracting the requirement number from the topic name, e.g. topic 'KERQ-352 收藏夹' → KERQ-352; the engine injects the match as the derived param topicNo — funcId = <topicNo>-<NN> (rule plan/func-id-numbering) and per-function artifacts are named <artifactPrefix>-<topicNo>-<NN>; no match degrades gracefully (rule skips, naming falls back)"
+      }
     }
   },
   "requiresTopic": true,

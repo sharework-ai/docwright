@@ -1,4 +1,6 @@
 import type { Config as DocwrightConfig } from './config.ts'
+import { asLocalizedText } from './description.ts'
+import type { LocalizedText } from './description.ts'
 import type { Pack, ParamSpec } from './pack.ts'
 import type { Json } from './receipt.ts'
 
@@ -76,7 +78,8 @@ export interface UiParamDeclaration {
   readonly pack: string
   readonly name: string
   readonly type: string
-  readonly description: string
+  /** Author content passed through verbatim (LocalizedText); the browser resolves the locale. */
+  readonly description: LocalizedText
   readonly default: Json
   readonly required: boolean
   readonly confirm: boolean
@@ -93,7 +96,8 @@ export interface UiParamDeclaration {
 export interface UiPackEntry {
   readonly name: string
   readonly version: string
-  readonly description: string
+  /** Author content passed through verbatim (LocalizedText); the browser resolves the locale. */
+  readonly description: LocalizedText
   readonly scope: 'workspace' | 'topic'
   readonly consumes: readonly string[]
   readonly paramDriftPolicy?: string
@@ -181,7 +185,7 @@ export function buildParamsCatalog(packs: ReadonlyMap<string, Pack>): ParamsCata
 export interface UiConfigEntry {
   readonly key: string
   readonly type: string
-  readonly description?: string
+  readonly description?: LocalizedText
   /** Absent when unset (no schema default and not configured). */
   readonly value?: Json
   /** Schema default; absent when the key has none (provider, model, paths). */
@@ -234,7 +238,9 @@ export function buildConfigCatalog(schema: SchemaNode, resolved: DocwrightConfig
   const entries: UiConfigEntry[] = []
   const walk = (node: SchemaNode, path: readonly string[]): void => {
     const meta = node.meta ?? {}
-    const description = typeof meta.description === 'string' && meta.description.length > 0 ? meta.description : undefined
+    // Schema meta is the single home of Config copy; LocalizedText dicts pass
+    // through for the browser to resolve (schemastery meta: string | Dict).
+    const description = asLocalizedText(meta.description)
     const hasDefault = 'default' in meta && meta.default !== undefined
     if (node.dict !== undefined && node.dict !== null && Object.keys(node.dict).length > 0) {
       if (path.length > 0 && description !== undefined) {

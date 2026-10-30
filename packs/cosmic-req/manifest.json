@@ -1,7 +1,10 @@
 {
   "name": "cosmic-req",
   "version": "0.6.1",
-  "description": "COSMIC requirements analysis for one plan function: functional description, functional users (roles or third-party systems) with user stories — the primary source for later flow analysis (which role or module does what) — and business rules (consumes a green cosmic-plan artifact; requires topic — one requirement per topic).",
+  "description": {
+    "zh": "COSMIC 需求分析（针对计划中的一个功能）：功能描述、功能用户（角色或第三方系统）及其用户故事——后续流程分析的主要依据（哪个角色或模块做什么）——以及业务规则（消费绿色的 cosmic-plan 产物；requires topic——每话题一条需求）。",
+    "en": "COSMIC requirements analysis for one plan function: functional description, functional users (roles or third-party systems) with user stories — the primary source for later flow analysis (which role or module does what) — and business rules (consumes a green cosmic-plan artifact; requires topic — one requirement per topic)."
+  },
   "consumes": [
     "cosmic-plan"
   ],
@@ -13,61 +16,94 @@
     "functionalUserRoles": {
       "type": "string",
       "default": "customer,operator,manager,business-partner,supplier,3rd-payment-service",
-      "description": "Comma-separated allowlist of system-level functional user roles (rule req/functional-user-roles); override per deployment"
+      "description": {
+        "zh": "系统级功能用户角色的逗号分隔允许清单（rule req/functional-user-roles）；按部署覆盖",
+        "en": "Comma-separated allowlist of system-level functional user roles (rule req/functional-user-roles); override per deployment"
+      }
     },
     "funcDescMaxLength": {
       "type": "number",
       "default": 500,
       "min": 100,
       "max": 2000,
-      "description": "Maximum functional description length in characters (rule req/func-desc-max-length; the schema hard ceiling is 2000)"
+      "description": {
+        "zh": "功能描述的最大字符长度（rule req/func-desc-max-length；schema 硬上限 2000）",
+        "en": "Maximum functional description length in characters (rule req/func-desc-max-length; the schema hard ceiling is 2000)"
+      }
     },
     "cfpsPerRule": {
       "type": "number",
       "default": 30,
       "min": 10,
       "max": 100,
-      "description": "CFP budget per business rule when sizing the businessRules array (rule req/business-rule-count)"
+      "description": {
+        "zh": "为 businessRules 数组定规模时每条业务规则的 CFP 预算（rule req/business-rule-count）",
+        "en": "CFP budget per business rule when sizing the businessRules array (rule req/business-rule-count)"
+      }
     },
     "cfpPerFunc": {
       "type": "object",
       "confirm": true,
-      "description": "Per-function CFP budget {value, min, max}; inherited from the upstream receipt and re-recorded for the chain"
+      "description": {
+        "zh": "每功能 CFP 预算 {value, min, max}；从上游回执继承并为链重新记录",
+        "en": "Per-function CFP budget {value, min, max}; inherited from the upstream receipt and re-recorded for the chain"
+      }
     },
     "cfpMin": {
       "type": "object",
       "confirm": true,
-      "description": "Per-function CFP floor {value, min, max}: value bounds any single estimatedCfps from below (rule plan/cfp-func-range); inherited from the upstream receipt and re-recorded for the chain"
+      "description": {
+        "zh": "每功能 CFP 下限 {value, min, max}：value 约束任何单个 estimatedCfps 的下界（rule plan/cfp-func-range）；从上游回执继承并为链重新记录",
+        "en": "Per-function CFP floor {value, min, max}: value bounds any single estimatedCfps from below (rule plan/cfp-func-range); inherited from the upstream receipt and re-recorded for the chain"
+      }
     },
     "cfpMax": {
       "type": "object",
       "confirm": true,
-      "description": "Per-function CFP ceiling {value, min, max}: value bounds any single estimatedCfps from above — a module larger than this must be split into several module functions (rule plan/cfp-func-range); inherited from the upstream receipt and re-recorded for the chain"
+      "description": {
+        "zh": "每功能 CFP 上限 {value, min, max}：value 约束任何单个 estimatedCfps 的上界——超过该规模的模块必须拆成多个模块功能（rule plan/cfp-func-range）；从上游回执继承并为链重新记录",
+        "en": "Per-function CFP ceiling {value, min, max}: value bounds any single estimatedCfps from above — a module larger than this must be split into several module functions (rule plan/cfp-func-range); inherited from the upstream receipt and re-recorded for the chain"
+      }
     },
     "topicNo": {
       "type": "string",
-      "description": "Derived by the engine: requirement number extracted from the topic name via topicNoPattern (explicit values override); inherited along the chain; drives <artifactPrefix>-<topicNo>-<NN> artifact naming"
+      "description": {
+        "zh": "由引擎派生：用 topicNoPattern 从话题名提取需求编号（显式传参可覆盖）；沿链继承；决定 <artifactPrefix>-<topicNo>-<NN> 的产物命名",
+        "en": "Derived by the engine: requirement number extracted from the topic name via topicNoPattern (explicit values override); inherited along the chain; drives <artifactPrefix>-<topicNo>-<NN> artifact naming"
+      }
     },
     "topicNoPattern": {
       "type": "string",
-      "description": "Regex (first capture group, else whole match) extracting the requirement number from the topic name, e.g. topic 'KERQ-352 收藏夹' → KERQ-352"
+      "description": {
+        "zh": "从话题名提取需求编号的正则（首个捕获组，否则整体匹配），如话题 'KERQ-352 收藏夹' → KERQ-352",
+        "en": "Regex (first capture group, else whole match) extracting the requirement number from the topic name, e.g. topic 'KERQ-352 收藏夹' → KERQ-352"
+      }
     },
     "cfpTotal": {
       "type": "object",
       "confirm": true,
-      "description": "Total CFP budget {value, downFactor, upFactor}; the chain head states it, downstream stages inherit it from the upstream receipt"
+      "description": {
+        "zh": "总 CFP 预算 {value, downFactor, upFactor}；由链头声明，下游阶段从上游回执继承",
+        "en": "Total CFP budget {value, downFactor, upFactor}; the chain head states it, downstream stages inherit it from the upstream receipt"
+      }
     },
     "cfpPerSubProc": {
       "type": "number",
       "min": 1,
       "max": 10,
-      "description": "Average CFP per data movement; sizing guidance carried down the chain"
+      "description": {
+        "zh": "每次数据移动的平均 CFP；沿链传递的规模基准",
+        "en": "Average CFP per data movement; sizing guidance carried down the chain"
+      }
     },
     "targetIndex": {
       "type": "number",
       "required": true,
       "min": 1,
-      "description": "1-based position of the target function in the upstream plan functions array; no default — pick from the candidates listed when missing"
+      "description": {
+        "zh": "目标功能在上游 plan functions 数组中的 1 起始位置；无默认值——缺失时从列出的候选中选择",
+        "en": "1-based position of the target function in the upstream plan functions array; no default — pick from the candidates listed when missing"
+      }
     }
   },
   "requiresTopic": true,

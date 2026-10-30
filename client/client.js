@@ -28,17 +28,43 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 		let react = require("react");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		_deepseek_ai_dsh_client_ui_primitives = __toESM(_deepseek_ai_dsh_client_ui_primitives, 1);
+		//#region src/description.ts
+		/** Resolve for a surface: the requested locale first, `en` as the fallback. */
+		function resolveLocalized(text, locale) {
+			if (text === void 0) return "";
+			if (typeof text === "string") return text;
+			if (locale !== "en" && typeof text[locale] === "string") return text[locale];
+			return text.en;
+		}
+		//#endregion
 		//#region src/client/api.ts
+		var ApiError = class extends Error {
+			code;
+			params;
+			detail;
+			constructor(message, coded = {}) {
+				super(message);
+				this.name = "ApiError";
+				if (coded.code !== void 0) this.code = coded.code;
+				if (coded.params !== void 0) this.params = coded.params;
+				if (coded.detail !== void 0) this.detail = coded.detail;
+			}
+		};
 		async function parse(response) {
 			let body;
 			try {
 				body = await response.json();
 			} catch {
-				throw new Error(`docwright: the server answered HTTP ${response.status} with a non-JSON body; is the docwright plugin loaded?`);
+				throw new ApiError(`docwright: the server answered HTTP ${response.status} with a non-JSON body; is the docwright plugin loaded?`);
 			}
 			if (!response.ok) {
-				const detail = body.error;
-				throw new Error(typeof detail === "string" && detail.length > 0 ? detail : `docwright request failed with HTTP ${response.status}`);
+				const envelope = body;
+				const message = typeof envelope.error === "string" && envelope.error.length > 0 ? envelope.error : `docwright request failed with HTTP ${response.status}`;
+				const coded = {};
+				if (typeof envelope.code === "string") coded.code = envelope.code;
+				if (typeof envelope.params === "object" && envelope.params !== null) coded.params = envelope.params;
+				if (typeof envelope.detail === "string") coded.detail = envelope.detail;
+				throw new ApiError(message, coded);
 			}
 			return body;
 		}
@@ -111,14 +137,28 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			bandValue: "target {value}, tolerance band {min}-{max}",
 			factorValue: "target {value}, tolerance x{down}-x{up}",
 			shadowedNote: "Also declared by {packs} (governed by the source; per-pack spec details in the Packs view).",
-			shadowedByNote: "managed by {pack} - never takes effect"
+			shadowedByNote: "managed by {pack} - never takes effect",
+			"err.gateRejected": "The request was rejected by the host (HTTP {status}): not logged in, or the origin check failed. Refresh the page and sign in again.",
+			"err.crossSiteWrite": "Write refused: the request origin does not match the deployment host (cross-site request). Operate inside the dsh web UI instead of from other sites.",
+			"err.bodyTooLarge": "The request body exceeds the {max}-byte limit; nothing was written. Reduce the request size.",
+			"err.invalidJsonBody": "The request body is not valid JSON; nothing was written.",
+			"err.invalidPatchBody": "Malformed request: expected {\"patch\": {...}} (an object of Config keys); nothing was written.",
+			"err.invalidParamBody": "Malformed request: non-empty pack and param names are required; nothing was written.",
+			"err.valueRequired": "Missing value (the new default). The UI edits defaults; it does not remove them.",
+			"err.noProfileEntry": "The host config editor lists no profile entry for docwright; the save was refused. Configure docwright via cordis.yml or the profile patch.",
+			"err.unknownPack": "Unknown pack \"{pack}\". Available: {available}. Nothing was written.",
+			"err.paramNotEditable": "Pack \"{pack}\" param {param} declares no default — the UI maintains declared defaults only. Structural changes are a pack-author manifest edit with a version bump. Nothing was written.",
+			"err.manifestCorrupt": "The pack \"{pack}\" manifest.json is not valid JSON; nothing was written. Fix the file first.",
+			"err.paramVanished": "params.{param} no longer exists in the manifest (the file may have been edited concurrently); nothing was written. Refresh and retry.",
+			"err.manifestInvalid": "The proposed manifest failed the load-time validation; nothing was written. Fix the value per the detail below.",
+			"err.reloadFailed": "The manifest was written, but reloading the packs failed. Fix or revert {path}; until a reload succeeds the running tools keep the previous spec."
 		};
 		const zh = {
 			nav: "Docwright 参数",
 			title: "Docwright 参数",
 			intro: "这里维护声明的默认值与插件配置。会话中的值（确认、素材抽取）在对话里，不在这里。",
 			viewGroups: "参数",
-			viewPacks: "Pack",
+			viewPacks: "包",
 			viewConfig: "插件设置",
 			loading: "正在载入参数…",
 			loadFailed: "参数载入失败。",
@@ -156,12 +196,40 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			bandValue: "目标 {value}（容差带 {min}–{max}）",
 			factorValue: "目标 {value}（容差 ×{down}–×{up}）",
 			shadowedNote: "其余声明：{packs}（由生效源管理；spec 详情见 Pack 视图）。",
-			shadowedByNote: "由 {pack} 管理——此处声明不生效"
+			shadowedByNote: "由 {pack} 管理——此处声明不生效",
+			"err.gateRejected": "请求被宿主拒绝（HTTP {status}）：未登录或来源校验未通过。刷新页面重新登录后再试。",
+			"err.crossSiteWrite": "写入被拒绝：请求来源与部署主机不一致（跨站请求）。请在 dsh web 界面内操作，不要从其他站点发起。",
+			"err.bodyTooLarge": "请求体超过 {max} 字节上限，未写入任何内容。请缩小请求内容。",
+			"err.invalidJsonBody": "请求体不是合法 JSON，未写入任何内容。",
+			"err.invalidPatchBody": "请求格式错误：应为 {\"patch\": {...}}（Config 键的对象），未写入任何内容。",
+			"err.invalidParamBody": "请求格式错误：需要非空的 pack 与 param 名称，未写入任何内容。",
+			"err.valueRequired": "缺少 value（新的默认值）。界面只支持修改默认值，不支持删除。",
+			"err.noProfileEntry": "宿主配置编辑器没有列出 docwright 的 profile entry，无法保存。请通过 cordis.yml 或 profile patch 配置 docwright。",
+			"err.unknownPack": "找不到 pack「{pack}」。可用：{available}。未写入任何内容。",
+			"err.paramNotEditable": "pack「{pack}」的参数 {param} 没有声明默认值——界面只维护已声明的默认值。结构性改动请由 pack 作者编辑 manifest 并升版。未写入任何内容。",
+			"err.manifestCorrupt": "pack「{pack}」的 manifest.json 不是合法 JSON，未写入任何内容。请先修复该文件。",
+			"err.paramVanished": "manifest 中已不存在参数 {param}（文件可能被同时编辑过），未写入任何内容。请刷新后重试。",
+			"err.manifestInvalid": "提议的 manifest 未通过装载期校验，未写入任何内容。请按下方详情修正数值。",
+			"err.reloadFailed": "manifest 已写入，但重新装载 pack 失败。请修复或还原 {path}；在装载成功前，运行中的工具仍持旧 spec。"
 		};
 		function translate(dict) {
 			return (key) => {
 				const value = dict[key];
 				return typeof value === "string" ? value : key;
+			};
+		}
+		/** Fill a {key}-templated locale string. */
+		function fill(template, vars) {
+			return template.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? `{${k}}`));
+		}
+		/** A save/load failure as the UI renders it: the localized catalog entry for
+		* known codes, the raw server sentence otherwise, plus the raw detail line. */
+		function renderError(error, lang) {
+			const dict = lang === "zh" ? zh : en;
+			const template = error.code === void 0 ? void 0 : dict[`err.${error.code}`];
+			return {
+				text: typeof template === "string" ? fill(template, { ...error.params ?? {} }) : error.message,
+				...error.detail === void 0 ? {} : { detail: error.detail }
 			};
 		}
 		//#endregion
@@ -172,8 +240,11 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 		* per-pack flat view, and the plugin Config form. Controls map from the
 		* ParamSpec type (number → numeric input, enum → select, boolean → switch,
 		* object → JSON-per-value with endpoints read-only); every parameter shows
-		* its author's description inline beneath the name. Writes go through the
-		* plugin's own routes (src/http.ts), never the conversation.
+		* its author's description inline beneath the name, resolved to the active
+		* locale by the host's `locale.resolveText` (LocalizedText from the RPC,
+		* en-fallback semantics of src/description.ts). Writes go through the
+		* plugin's own routes (src/http.ts), never the conversation; their error
+		* envelopes render through the locale catalog (locales.ts renderError).
 		*
 		* Typography follows the host conversation body, not ad-hoc sizes: one
 		* family and size for all running text (`--dsw-font-family` +
@@ -227,7 +298,22 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			padding: "12px 16px",
 			marginBottom: "12px"
 		};
-		const card = { ...group };
+		const card = {
+			...group,
+			overflow: "hidden"
+		};
+		/** The pack card's full-width header band: a quiet blue wash that separates
+		* "which pack am I looking at" from the parameter rows below it. */
+		const packHead = {
+			display: "flex",
+			alignItems: "baseline",
+			gap: "8px",
+			flexWrap: "wrap",
+			minWidth: 0,
+			margin: "-12px -16px 10px",
+			padding: "10px 16px",
+			background: "color-mix(in srgb, var(--dsw-static-blue-500, rgb(59, 130, 246)) 7%, transparent)"
+		};
 		const sourceLine = {
 			display: "flex",
 			alignItems: "center",
@@ -242,7 +328,9 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			marginTop: "8px"
 		};
 		/** The author's description, inline beneath the parameter name — the primary
-		* explanation stays in view instead of hiding behind a hover. */
+		* explanation stays in view instead of hiding behind a hover. Locale
+		* resolution: the host's resolveText when available, its semantics locally
+		* otherwise (src/description.ts). */
 		function DescriptionLine(props) {
 			return (0, react.createElement)("div", {
 				className: `${NS$1}-desc`,
@@ -250,11 +338,18 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 					...desc,
 					marginTop: "2px"
 				}
-			}, props.text);
+			}, props.resolveText(props.text ?? ""));
 		}
-		/** Fill a {key}-templated locale string. */
-		function fill(template, vars) {
-			return template.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? `{${k}}`));
+		/** One failing write/load as text + optional raw detail line. */
+		function ErrorLine(props) {
+			const rendered = renderError(props.error, props.lang);
+			return (0, react.createElement)("span", { style: {
+				color: "var(--dsw-alias-state-error-primary, crimson)",
+				whiteSpace: "pre-wrap"
+			} }, rendered.text, rendered.detail !== void 0 ? (0, react.createElement)("span", { style: {
+				...muted,
+				whiteSpace: "pre-wrap"
+			} }, `\n${rendered.detail}`) : null);
 		}
 		/**
 		* Human projection of a declared default: value-band objects read as
@@ -336,6 +431,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			return (0, react.createElement)(EditSeat, {
 				d,
 				t,
+				lang: props.lang,
 				onSaved: props.onSaved
 			});
 		}
@@ -354,10 +450,10 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			const save = async () => {
 				const problem = validateDraft(d, draft);
 				if (problem !== void 0) {
-					setError(problem === "outOfRange" ? fill(t("rangeTemplate"), {
+					setError(new Error(problem === "outOfRange" ? fill(t("rangeTemplate"), {
 						min: String(d.min ?? ""),
 						max: String(d.max ?? "")
-					}) : t(problem));
+					}) : t(problem)));
 					return;
 				}
 				setBusy(true);
@@ -368,7 +464,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 					setEditing(false);
 					props.onSaved?.();
 				} catch (saveError) {
-					setError(saveError.message);
+					setError(saveError);
 				} finally {
 					setBusy(false);
 				}
@@ -394,7 +490,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 					...inputStyle,
 					width: "100%",
 					maxWidth: "480px",
-					fontFamily: "var(--dsw-font-mono, monospace)"
+					fontFamily: codeFont
 				}
 			}) : (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Input, {
 				value: draft,
@@ -411,7 +507,10 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				variant: "ghost",
 				disabled: busy,
 				onClick: () => setEditing(false)
-			}, t("cancel")), error !== void 0 ? (0, react.createElement)("span", { style: { color: "var(--dsw-alias-state-error-primary, crimson)" } }, error) : null));
+			}, t("cancel")), error !== void 0 ? (0, react.createElement)(ErrorLine, {
+				error,
+				lang: props.lang
+			}) : null));
 		}
 		/**
 		* One aggregated parameter group = ONE card, top to bottom: name + flags,
@@ -430,9 +529,13 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			return (0, react.createElement)("div", { style: group }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, name), (0, react.createElement)(FlagPills, {
 				d: governing,
 				t
-			})), (0, react.createElement)(DescriptionLine, { text: governing.description }), (0, react.createElement)("div", { style: sourceLine }, (0, react.createElement)("span", { style: muted }, `${t("sources")}:`), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, governing.pack)), (0, react.createElement)(ValueRow, {
+			})), (0, react.createElement)(DescriptionLine, {
+				text: governing.description,
+				resolveText: props.resolveText
+			}), (0, react.createElement)("div", { style: sourceLine }, (0, react.createElement)("span", { style: muted }, `${t("sources")}:`), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, governing.pack)), (0, react.createElement)(ValueRow, {
 				d: governing,
 				t,
+				lang: props.lang,
 				onSaved: props.onSaved
 			}), (0, react.createElement)("div", { style: { marginTop: "2px" } }, (0, react.createElement)(ConstraintLine, {
 				d: governing,
@@ -451,6 +554,8 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				name: g.name,
 				declarations: g.declarations,
 				t,
+				lang: props.lang,
+				resolveText: props.resolveText,
 				onSaved: props.onSaved
 			})));
 		}
@@ -468,25 +573,36 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			} }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, d.name), (0, react.createElement)(FlagPills, {
 				d,
 				t
-			})), (0, react.createElement)(DescriptionLine, { text: d.description }), (0, react.createElement)(ValueRow, {
+			})), (0, react.createElement)(DescriptionLine, {
+				text: d.description,
+				resolveText: props.resolveText
+			}), (0, react.createElement)(ValueRow, {
 				d,
 				t,
+				lang: props.lang,
 				onSaved: props.onSaved
 			}), (0, react.createElement)("div", { style: { marginTop: "2px" } }, (0, react.createElement)(ConstraintLine, {
 				d,
 				t
 			}))));
 		}
-		/** Per-pack flat view (pack-author / troubleshooting perspective). */
+		/** Per-pack flat view (pack-author / troubleshooting perspective). Each card
+		* opens with a full-width blue-wash header band — pack identity reads as a
+		* section of its own, visually distinct from the param rows it contains. */
 		function PacksView(props) {
 			const { payload, t } = props;
 			return (0, react.createElement)("div", null, (0, react.createElement)("p", { style: muted }, t("packsEditNote")), payload.packs.map((p) => (0, react.createElement)("div", {
 				key: p.name,
 				style: card
-			}, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, p.name), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `v${p.version}`), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, p.scope === "workspace" ? t("scopeWorkspace") : t("scopeTopic")), p.paramDriftPolicy !== void 0 ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("driftPolicy")}: ${p.paramDriftPolicy}`) : null), (0, react.createElement)("div", { style: desc }, p.description), p.consumes.length > 0 ? (0, react.createElement)("div", { style: muted }, `${t("consumed")}: ${p.consumes.join(", ")}`) : null, (0, react.createElement)("div", { style: { marginTop: "6px" } }, p.params.length === 0 ? (0, react.createElement)("p", { style: muted }, t("empty")) : p.params.map((d) => (0, react.createElement)(PackDeclRow, {
+			}, (0, react.createElement)("div", { style: packHead }, (0, react.createElement)("span", { style: nameStyle }, p.name), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `v${p.version}`), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, p.scope === "workspace" ? t("scopeWorkspace") : t("scopeTopic")), p.paramDriftPolicy !== void 0 ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("driftPolicy")}: ${p.paramDriftPolicy}`) : null), (0, react.createElement)("div", { style: {
+				...desc,
+				marginBottom: "4px"
+			} }, props.resolveText(p.description)), p.consumes.length > 0 ? (0, react.createElement)("div", { style: muted }, `${t("consumed")}: ${p.consumes.join(", ")}`) : null, (0, react.createElement)("div", { style: { marginTop: "6px" } }, p.params.length === 0 ? (0, react.createElement)("p", { style: muted }, t("empty")) : p.params.map((d) => (0, react.createElement)(PackDeclRow, {
 				key: d.name,
 				d,
 				t,
+				lang: props.lang,
+				resolveText: props.resolveText,
 				onSaved: props.onSaved
 			}))))));
 		}
@@ -553,7 +669,10 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 					flexDirection: "column",
 					flex: 1,
 					minWidth: 0
-				} }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, e.key), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, e.origin === "configured" ? t("configured") : e.value === void 0 ? t("unset") : t("inherited"))), e.description !== void 0 ? (0, react.createElement)(DescriptionLine, { text: e.description }) : null, control, e.origin === "default" && e.default !== void 0 && String(e.default) !== String(e.value ?? "") ? (0, react.createElement)("div", { style: muted }, `${t("inherited")}: ${String(e.default)}`) : null));
+				} }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, e.key), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, e.origin === "configured" ? t("configured") : e.value === void 0 ? t("unset") : t("inherited"))), e.description !== void 0 ? (0, react.createElement)(DescriptionLine, {
+					text: e.description,
+					resolveText: props.resolveText
+				}) : null, control, e.origin === "default" && e.default !== void 0 && String(e.default) !== String(e.value ?? "") ? (0, react.createElement)("div", { style: muted }, `${t("inherited")}: ${String(e.default)}`) : null));
 			};
 			const saveAll = async () => {
 				const patch = {};
@@ -578,7 +697,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 					setSwitches({});
 					props.onSaved();
 				} catch (saveError) {
-					setError(saveError.message);
+					setError(saveError);
 				} finally {
 					setBusy(false);
 				}
@@ -592,11 +711,15 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				size: "sm",
 				disabled: !dirty || busy,
 				onClick: () => void saveAll()
-			}, busy ? t("saving") : t("saveConfig")), done && !dirty ? (0, react.createElement)("span", { style: muted }, t("saved")) : null, error !== void 0 ? (0, react.createElement)("span", { style: { color: "var(--dsw-alias-state-error-primary, crimson)" } }, error) : null));
+			}, busy ? t("saving") : t("saveConfig")), done && !dirty ? (0, react.createElement)("span", { style: muted }, t("saved")) : null, error !== void 0 ? (0, react.createElement)(ErrorLine, {
+				error,
+				lang: props.lang
+			}) : null));
 		}
 		/** The section: one fetch, three views. */
 		function ParamsSection(props) {
-			const t = (0, react.useMemo)(() => translate(props.lang === "zh" ? zh : en), [props.lang]);
+			const lang = props.lang === "zh" ? "zh" : "en";
+			const t = (0, react.useMemo)(() => translate(lang === "zh" ? zh : en), [lang]);
 			const [payload, setPayload] = (0, react.useState)(void 0);
 			const [error, setError] = (0, react.useState)(void 0);
 			const [view, setView] = (0, react.useState)("groups");
@@ -604,12 +727,15 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				fetchParams().then((p) => {
 					setPayload(p);
 					setError(void 0);
-				}).catch((e) => setError(e.message));
+				}).catch((e) => setError(e));
 			}, []);
 			(0, react.useEffect)(() => {
 				refresh();
 			}, [refresh]);
-			if (error !== void 0) return (0, react.createElement)("div", { style: baseText }, (0, react.createElement)("p", { style: { color: "var(--dsw-alias-state-error-primary, crimson)" } }, t("loadFailed")), (0, react.createElement)("p", { style: muted }, error), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+			if (error !== void 0) return (0, react.createElement)("div", { style: baseText }, (0, react.createElement)("p", { style: {
+				color: "var(--dsw-alias-state-error-primary, crimson)",
+				whiteSpace: "pre-wrap"
+			} }, renderError(error, lang).text), (0, react.createElement)("p", { style: muted }, error.message), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 				size: "sm",
 				onClick: refresh
 			}, t("retry")));
@@ -655,14 +781,20 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			})), view === "groups" ? (0, react.createElement)(GroupsView, {
 				payload,
 				t,
+				lang,
+				resolveText: props.resolveText,
 				onSaved: refresh
 			}) : null, view === "packs" ? (0, react.createElement)(PacksView, {
 				payload,
 				t,
+				lang,
+				resolveText: props.resolveText,
 				onSaved: refresh
 			}) : null, view === "config" ? (0, react.createElement)(ConfigView, {
 				payload,
 				t,
+				lang,
+				resolveText: props.resolveText,
 				onSaved: refresh
 			}) : null);
 		}
@@ -720,6 +852,10 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				lang = ctx.locale.getSnapshot().active === "zh" ? "zh" : "en";
 			});
 			const label = () => lang === "zh" ? "Docwright 参数" : "Docwright params";
+			const resolveText = (value) => {
+				if (typeof ctx.locale.resolveText === "function") return ctx.locale.resolveText(value);
+				return resolveLocalized(value, lang);
+			};
 			ctx.slots.inject("settings.plugins.tab", () => {
 				const off = ctx.slots.register({
 					name: "settings.plugins.tab",
@@ -728,7 +864,10 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 					label,
 					locale: NS,
 					inject: () => ({ lang })
-				}, () => (0, react.createElement)(ParamsSection, { lang }));
+				}, () => (0, react.createElement)(ParamsSection, {
+					lang,
+					resolveText
+				}));
 				ctx.effect(() => () => {
 					if (typeof off === "function") off();
 				}, "docwright: settings tab");
@@ -739,7 +878,10 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 					key: PACKAGE_NAME,
 					locale: NS,
 					inject: () => ({ lang })
-				}, (owner = {}) => owner.view === "summary" ? null : (0, react.createElement)(ParamsSection, { lang }));
+				}, (owner = {}) => owner.view === "summary" ? null : (0, react.createElement)(ParamsSection, {
+					lang,
+					resolveText
+				}));
 				ctx.effect(() => () => {
 					if (typeof off === "function") off();
 				}, "docwright: bundle config card");
