@@ -215,7 +215,8 @@ export function defineDocPacksTool(deps: ToolDeps) {
   return defineTool({
     name: 'doc_packs',
     description: 'List installed document packs: name, one-line description, supported languages, and consumed upstream types. '
-      + 'Call this before doc_generate to pick the right pack for the document the user wants.',
+      + 'Call this before doc_generate to pick the right pack for the document the user wants. '
+      + 'If no installed pack fits the document type the user needs, load the docwright-pack-authoring skill to author a new pack (the how-to guide ships with this plugin).',
     parameters: {},
     output: {
       schema: { type: 'json' },

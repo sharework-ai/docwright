@@ -1,6 +1,6 @@
 # 设计：pack 工坊 —— docwright 的 pack authoring 能力
 
-Status: PROPOSAL（2026-10-30 定稿，待实施）
+Status: S1 IMPLEMENTED（2026-10-30：技能 docwright-pack-authoring + doc_packs 邀请 + pack:check 运行器 + guides/ 随包分发 + golden.params.json 约定；459 tests + 覆盖门 + host-smoke 技能断言 PASS）；S2 PENDING（product-management 实证 pack 待立项）
 关联: docwright-mvp.md §4-§5（pack 契约与职责边界）、params-and-chain-contract.md 与 param-object-model.md（参数属性全集）、cosmic-context.md（场景链头与作用域）、scenario-chains.md（多场景发现，其触发条件即本设计 S2）、AGENTS.md（测试政策与真实会话实测方法）
 
 ## 问题
@@ -19,7 +19,7 @@ Status: PROPOSAL（2026-10-30 定稿，待实施）
 
 1. **doc_packs 静态邀请**：工具描述追加一句——当前 pack 无法覆盖所需文档类型时，加载 `docwright-pack-authoring` 技能造一个新 pack。与 "discover packs via doc_packs" 同款的拉式邀请模式。
 2. **运行时技能 `docwright-pack-authoring`**：apply 期经 `ctx.inject(['skills'], ...)` 可选注入（无 skills 服务的宿主休眠——webServer 先例，index.ts:63）+ `ctx.skills.register({ name, description, whenToUse, content, resourceBase })` 注册。body 从随包 guide 文件读入（包根 `guides/pack-authoring.md`，与 `packs/` 平级；apply 期 `join(import.meta.dirname, '..', 'guides', ...)` 读取），文件缺失 fail loud（misconfiguration fails loud）。`resourceBase` 指向 guides 目录，body 可引用同目录资源。模型面英文（模型面恒投影 en 的既有约定）。
-3. **仓库 docs 是人类面**：本设计与 mvp §4 是契约事实源；技能 body 是模型面的单一事实源，两处不并存内容等价的指南（one home per fact）——guide 引用契约条款（"参数属性全集见 params-and-chain-contract.md"），不复制。
+3. **仓库 docs 是人类面**：本设计与 mvp §4 是机制事实源；技能 body 是模型面 playbook 的单一事实源（one home per fact：过程知识只住 guide，机制语义只住规格）。guide **自包含**——已安装形态读不到仓库 docs，不得引用；两处内容冲突时以规格为准并回修 guide。
 
 ## Authoring 的发生地与权限模型（write path）
 
