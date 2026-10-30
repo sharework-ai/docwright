@@ -3,6 +3,7 @@
 Source: functional spec at docs/designs/docwright-mvp.md. 本文件记录真正待办与已完成的压缩账目（一个事实一个家；实施细节见 git 与 Implementation tracker）。
 
 ## Open
+- [ ] **pack-authoring（PROPOSAL，设计定稿 docs/designs/pack-authoring.md）** — pack 工坊：插件模型面从"用 pack"扩展到"造 pack"。方法/牙齿/实证三分：技能 docwright-pack-authoring（九阶段 playbook，`ctx.inject(['skills'])` 可选注入休眠，guide 随包分发缺失 fail loud）+ doc_packs 静态邀请 + **pack:check 运行器**（装载门+schema 编译+golden 全绿一条命令，复用 loadPacks/getDocService 零第二套校验）。S2 实证 = product-management 场景（需求分析与跟踪→概要设计；参考 ~/projects/lab/product-management，22 份 section schema + req-* 流水线），允许与原型出入——以方法验证为准（最小可证分解），兼作 scenario-chains 触发条件。
 - [x] **param-management-ui（IMPLEMENTED 2026-10-29）** — 插件级 / pack 级参数的界面管理。设计 docs/designs/param-management-ui.md（含实施修正四条：Loader id=包名 / settings.plugins.tab + plugins.bundle.config 席位 / Config 写走 configEditor / pack Map 原地热替换）。纳入判据：界面只出现有 default 的 ParamSpec 与 Config 键；统一展现 = 插件参数区块 + 跨 pack 同名聚合（生效源计算、遮蔽行指路）+ pack 平铺；四类控件映射 + 行内 description。
 
 - [ ] **scenario-chains（PROPOSAL，挂起至触发）** — 场景链两级能力发现：manifest 增必填 `scenario` 标签 + `doc_packs` 恒定分组返回，多场景共存时模型按任务域聚焦。**触发条件：第二个真实场景包立项（或内置 pack 总数越过 ~15）**，实施切分 S1/S2 见 docs/designs/scenario-chains.md。前置已落地：同 root 重名 pack 加载期 fail loud（跨 root 覆盖为 packsDir 既定语义）。
