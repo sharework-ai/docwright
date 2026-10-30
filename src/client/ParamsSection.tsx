@@ -32,6 +32,9 @@ const desc: CSSProperties = {
   color: 'var(--dsw-alias-text-secondary, inherit)', fontSize: '12px', marginTop: '2px',
   whiteSpace: 'pre-wrap', wordBreak: 'break-word',
 }
+const valueStyle: CSSProperties = {
+  fontSize: '13px', fontFamily: 'var(--dsw-font-mono, monospace)',
+}
 const muted: CSSProperties = {
   color: 'var(--dsw-alias-text-secondary, inherit)', fontSize: '12px',
 }
@@ -63,15 +66,26 @@ function DescriptionHint(props: { text: string }) {
   })
 }
 
-/** A named value row: label + "?" hint + control slot. */
-function ParamRow(props: { name: string; description: string; children: ReactNode }) {
-  return h('div', { className: `${NS}-row`, style: row },
-    h('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 } satisfies CSSProperties },
-      h('div', { style: rowHead },
-        h('span', { style: nameStyle }, props.name),
-        h(DescriptionHint, { text: props.description })),
-      h('div', { style: desc }, props.children)),
-  )
+/** Fill a {key}-templated locale string. */
+function fill(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`))
+}
+
+/**
+ * Human projection of a declared default: value-band objects read as
+ * "target 60 (band 30-90)" instead of raw JSON; anything else that is not a
+ * plain scalar falls back to JSON.
+ */
+function displayDefault(d: UiParamDeclaration, t: Translate): string {
+  if (typeof d.default !== 'object' || d.default === null) return String(d.default)
+  const o = d.default as Record<string, unknown>
+  if (typeof o.value === 'number' && typeof o.min === 'number' && typeof o.max === 'number') {
+    return fill(t('bandValue'), { value: o.value, min: o.min, max: o.max })
+  }
+  if (typeof o.value === 'number' && typeof o.downFactor === 'number' && typeof o.upFactor === 'number') {
+    return fill(t('factorValue'), { value: o.value, down: o.downFactor, up: o.upFactor })
+  }
+  return JSON.stringify(d.default)
 }
 
 /** Flags that change what a value means, rendered as quiet pills. */
@@ -81,7 +95,7 @@ function FlagPills(props: { d: UiParamDeclaration; t: Translate }) {
   if (d.confirm) flags.push(t('confirmed'))
   if (d.extractable) flags.push(t('extractable'))
   if (d.overridable) flags.push(t('overridable'))
-  return flags.length === 0 ? null : h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
+  return flags.length === 0 ? null : h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } satisfies CSSProperties },
     flags.map(f => h(Pill, { key: f }, f)))
 }
 
@@ -117,25 +131,31 @@ function validateDraft(d: UiParamDeclaration, text: string): string | undefined 
   return undefined
 }
 
-/** One pack-param declaration. Editable only from the parameter view's governing row; shadowed and read-only rows render the value without a control. */
-function PackParamItem(props: { d: UiParamDeclaration; t: Translate; onSaved: () => void; readOnly?: boolean }) {
+/**
+ * One declaration's value line, editability decided by ROLE (not by view):
+ * a source declaration is editable whereever it is shown (the parameter
+ * view's governing row and the owning pack's row in the Packs view write
+ * the same manifest field); a shadowed declaration renders its value
+ * struck-through and muted — it NEVER takes effect on the chain (the
+ * receipt base outranks it) — with an explicit note naming the manager.
+ */
+function ValueRow(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() => void) | undefined }) {
+  const { d, t } = props
+  if (d.role === 'shadowed') {
+    return h('div', { style: rowHead },
+      h('span', { style: { ...valueStyle, color: 'var(--dsw-alias-text-secondary, inherit)', textDecoration: 'line-through' } satisfies CSSProperties }, displayDefault(d, t)),
+      h(Pill, {}, fill(t('shadowedByNote'), { pack: d.shadowedBy ?? '' })))
+  }
+  return h(EditSeat, { d, t, onSaved: props.onSaved })
+}
+
+/** The staged-edit control for a source declaration. */
+function EditSeat(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() => void) | undefined }) {
   const { d, t } = props
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
-  if (props.readOnly || d.role === 'shadowed') {
-    return h('div', { className: `${NS}-row`, style: row },
-      h('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 } satisfies CSSProperties },
-        h('div', { style: rowHead },
-          h('span', { style: nameStyle }, d.name),
-          d.role === 'shadowed' ? h(Pill, {}, `${t('governedBy')} ${d.shadowedBy}`) : null,
-          h(DescriptionHint, { text: d.description })),
-        h('div', { style: desc }, typeof d.default === 'object' ? JSON.stringify(d.default) : String(d.default)),
-        h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } satisfies CSSProperties },
-          h(ConstraintLine, { d, t }),
-          h(FlagPills, { d, t }))))
-  }
   const start = () => {
     setDraft(d.type === 'object' ? JSON.stringify(d.default, null, 2) : String(d.default))
     setError(undefined)
@@ -144,7 +164,7 @@ function PackParamItem(props: { d: UiParamDeclaration; t: Translate; onSaved: ()
   const save = async () => {
     const problem = validateDraft(d, draft)
     if (problem !== undefined) {
-      setError(problem === 'outOfRange' ? t('rangeTemplate').replace('{min}', String(d.min ?? '')).replace('{max}', String(d.max ?? '')) : t(problem))
+      setError(problem === 'outOfRange' ? fill(t('rangeTemplate'), { min: String(d.min ?? ''), max: String(d.max ?? '') }) : t(problem))
       return
     }
     setBusy(true)
@@ -153,58 +173,89 @@ function PackParamItem(props: { d: UiParamDeclaration; t: Translate; onSaved: ()
       const value = d.type === 'object' ? JSON.parse(draft) : d.type === 'number' ? Number(draft) : draft
       await savePackParam(d.pack, d.name, value)
       setEditing(false)
-      props.onSaved()
+      props.onSaved?.()
     } catch (saveError) {
       setError((saveError as Error).message)
     } finally {
       setBusy(false)
     }
   }
-  const control = !editing
-    ? h('div', { style: rowHead },
-        h('span', { style: nameStyle }, String(typeof d.default === 'object' ? JSON.stringify(d.default) : d.default)),
-        h(Button, { size: 'sm', variant: 'ghost', onClick: start }, t('edit')))
-    : h('div', null,
-        d.enumValues !== undefined
-          ? h('select', { value: String(d.default), onChange: (e: { target: { value: string } }) => setDraft(e.target.value), style: inputStyle },
-              d.enumValues.map(v => h('option', { key: String(v), value: String(v) }, String(v))))
-          : d.type === 'object'
-            ? h('textarea', { value: draft, onChange: (e: { target: { value: string } }) => setDraft(e.target.value), rows: 4,
-                style: { ...inputStyle, width: '100%', maxWidth: '480px', fontFamily: 'var(--dsw-font-mono, monospace)' } })
-            : h(Input, { value: draft, type: d.type === 'number' ? 'number' : 'text', step: 'any',
-                onChange: (e: { target: { value: string } }) => setDraft(e.target.value), style: inputStyle }),
-        h('div', { style: actions },
-          h(Button, { size: 'sm', disabled: busy, onClick: () => void save() }, busy ? t('saving') : t('save')),
-          h(Button, { size: 'sm', variant: 'ghost', disabled: busy, onClick: () => setEditing(false) }, t('cancel')),
-          error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-text-critical, crimson)', fontSize: '12px' } }, error) : null))
-  return h('div', { className: `${NS}-row`, style: { ...row, flexDirection: 'column', alignItems: 'stretch' } },
-    h('div', { style: rowHead },
-      h('span', { style: nameStyle }, d.name),
-      h(Pill, {}, d.pack),
-      h(DescriptionHint, { text: d.description })),
-    control,
-    h('div', { style: { display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' } },
-      h(ConstraintLine, { d, t }),
-      h(FlagPills, { d, t })))
+  const valueLine = h('div', { style: rowHead },
+    h('span', { style: valueStyle }, displayDefault(d, t)),
+    editing ? null : h(Button, { size: 'sm', variant: 'ghost', onClick: start }, t('edit')))
+  if (!editing) return valueLine
+  return h('div', null,
+    d.enumValues !== undefined
+      ? h('select', { value: String(d.default), onChange: (e: { target: { value: string } }) => setDraft(e.target.value), style: inputStyle },
+          d.enumValues.map(v => h('option', { key: String(v), value: String(v) }, String(v))))
+      : d.type === 'object'
+        ? h('textarea', { value: draft, onChange: (e: { target: { value: string } }) => setDraft(e.target.value), rows: 4,
+            style: { ...inputStyle, width: '100%', maxWidth: '480px', fontFamily: 'var(--dsw-font-mono, monospace)' } satisfies CSSProperties })
+        : h(Input, { value: draft, type: d.type === 'number' ? 'number' : 'text', step: 'any',
+            onChange: (e: { target: { value: string } }) => setDraft(e.target.value), style: inputStyle }),
+    h('div', { style: actions },
+      h(Button, { size: 'sm', disabled: busy, onClick: () => void save() }, busy ? t('saving') : t('save')),
+      h(Button, { size: 'sm', variant: 'ghost', disabled: busy, onClick: () => setEditing(false) }, t('cancel')),
+      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-text-critical, crimson)', fontSize: '12px' } }, error) : null))
 }
 
-/** Aggregated shared-param groups: one row per name, sources first. */
+/**
+ * One aggregated parameter group = ONE card: header carries the name and
+ * every group-level invariant (flags, hover description, Mind-the-gap
+ * note), one governing row carries the effective value and the edit seat,
+ * and the shadowed declarations collapse into a single sentence — their
+ * values never take effect (the receipt base outranks them), so rendering
+ * them per-card repeated the same text N times and showed misleading
+ * never-applied numbers.
+ */
+function ParamGroupCard(props: { name: string; declarations: readonly UiParamDeclaration[]; t: Translate; onSaved: () => void }) {
+  const { name, declarations, t } = props
+  const governing = declarations.find(d => d.role === 'source') ?? declarations[0]!
+  const shadowed = declarations.filter(d => d !== governing)
+  const governingPack = h(Pill, {}, governing.pack)
+  return h('div', { style: group },
+    h('div', { style: rowHead },
+      h('span', { style: nameStyle }, name),
+      h(FlagPills, { d: governing, t }),
+      h(DescriptionHint, { text: governing.description })),
+    h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' } satisfies CSSProperties },
+      h('span', { style: muted }, `${t('sources')}:`),
+      governingPack,
+      h(ValueRow, { d: governing, t, onSaved: props.onSaved })),
+    h('div', { style: { marginTop: '4px' } },
+      h(ConstraintLine, { d: governing, t })),
+    shadowed.length > 0
+      ? h('div', { style: { ...muted, marginTop: '4px' } satisfies CSSProperties },
+          fill(t('shadowedNote'), { packs: shadowed.map(d => d.pack).join(', ') }))
+      : null)
+}
+
+/** Aggregated parameter view: one card per parameter name. */
 function GroupsView(props: { payload: ParamsPayload; t: Translate; onSaved: () => void }) {
   const { payload, t } = props
   if (payload.groups.length === 0) return h('p', { style: muted }, t('empty'))
-  return h('div', null, payload.groups.map(g => h('div', { key: g.name, style: group },
-    h('div', { style: rowHead },
-      h('span', { style: nameStyle }, g.name),
-      g.sources.length > 0 ? h(Pill, {}, `${t('sources')}: ${g.sources.join(', ')}`) : null),
-    h('div', { style: { marginTop: '4px' } },
-      g.declarations.map(d => h(PackParamItem, { key: `${d.pack}/${d.name}`, d, t, onSaved: props.onSaved }))))))
+  return h('div', null, payload.groups.map(g => h(ParamGroupCard, { key: g.name, name: g.name, declarations: g.declarations, t, onSaved: props.onSaved })))
+}
+
+/** One declaration row inside a pack's card. Source rows carry the edit seat; shadowed rows strike their never-applied value through. */
+function PackDeclRow(props: { d: UiParamDeclaration; t: Translate; onSaved: () => void }) {
+  const { d, t } = props
+  return h('div', { className: `${NS}-row`, style: row },
+    h('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 } satisfies CSSProperties },
+      h('div', { style: rowHead },
+        h('span', { style: nameStyle }, d.name),
+        h(FlagPills, { d, t }),
+        h(DescriptionHint, { text: d.description })),
+      h(ValueRow, { d, t, onSaved: props.onSaved }),
+      h('div', { style: { marginTop: '4px' } },
+        h(ConstraintLine, { d, t }))))
 }
 
 /** Per-pack flat view (pack-author / troubleshooting perspective). */
 function PacksView(props: { payload: ParamsPayload; t: Translate; onSaved: () => void }) {
   const { payload, t } = props
   return h('div', null,
-    h('p', { style: muted }, t('packsReadOnly')),
+    h('p', { style: muted }, t('packsEditNote')),
     payload.packs.map((p: UiPackEntry) => h('div', { key: p.name, style: card },
     h('div', { style: rowHead },
       h('span', { style: nameStyle }, p.name),
@@ -216,7 +267,7 @@ function PacksView(props: { payload: ParamsPayload; t: Translate; onSaved: () =>
     h('div', { style: { marginTop: '6px' } },
       p.params.length === 0
         ? h('p', { style: muted }, t('empty'))
-        : p.params.map(d => h(PackParamItem, { key: d.name, d, t, onSaved: props.onSaved, readOnly: true }))))))
+        : p.params.map(d => h(PackDeclRow, { key: d.name, d, t, onSaved: props.onSaved }))))))
 }
 
 /** Config form: top-level keys as rows, oscillation.* folded under Advanced. */

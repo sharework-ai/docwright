@@ -108,7 +108,11 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			notEditable: "No declared default — nothing to maintain here. Values come from the conversation (confirmation gate or extraction).",
 			advanced: "Advanced",
 			objectBandNote: "value is the generation target; the other keys are validation tolerance (read-only).",
-			packsReadOnly: "Browse-only view — to edit a default, use the governing row in the Parameters view (it applies along the chain)."
+			packsEditNote: "Edit where the value governs: rows marked [managed by ...] are shadowed declarations - they never take effect on the chain; edit the source row instead.",
+			bandValue: "target {value}, tolerance band {min}-{max}",
+			factorValue: "target {value}, tolerance x{down}-x{up}",
+			shadowedNote: "Also declared by {packs} (governed by the source; per-pack spec details in the Packs view).",
+			shadowedByNote: "managed by {pack} - never takes effect"
 		};
 		const zh = {
 			nav: "Docwright 参数",
@@ -150,7 +154,11 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			notEditable: "没有声明默认值——这里没有可维护的现役值。它的值来自对话（确认门或素材抽取）。",
 			advanced: "高级",
 			objectBandNote: "value 是生成目标；其余键是校验容差（只读）。",
-			packsReadOnly: "此视图仅供浏览——修改默认值请到「参数」视图的生效源行（改那里沿链生效）。"
+			packsEditNote: "在生效处编辑：标有「由 … 管理」的行是被遮蔽的声明——在链上永不生效，请改生效源行。",
+			bandValue: "目标 {value}（容差带 {min}–{max}）",
+			factorValue: "目标 {value}（容差 ×{down}–×{up}）",
+			shadowedNote: "其余声明：{packs}（由生效源管理；spec 详情见 Pack 视图）。",
+			shadowedByNote: "由 {pack} 管理——此处声明不生效"
 		};
 		function translate(dict) {
 			return (key) => {
@@ -194,6 +202,10 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			marginTop: "2px",
 			whiteSpace: "pre-wrap",
 			wordBreak: "break-word"
+		};
+		const valueStyle = {
+			fontSize: "13px",
+			fontFamily: "var(--dsw-font-mono, monospace)"
 		};
 		const muted = {
 			color: "var(--dsw-alias-text-secondary, inherit)",
@@ -245,6 +257,30 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				}, "?")
 			});
 		}
+		/** Fill a {key}-templated locale string. */
+		function fill(template, vars) {
+			return template.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? `{${k}}`));
+		}
+		/**
+		* Human projection of a declared default: value-band objects read as
+		* "target 60 (band 30-90)" instead of raw JSON; anything else that is not a
+		* plain scalar falls back to JSON.
+		*/
+		function displayDefault(d, t) {
+			if (typeof d.default !== "object" || d.default === null) return String(d.default);
+			const o = d.default;
+			if (typeof o.value === "number" && typeof o.min === "number" && typeof o.max === "number") return fill(t("bandValue"), {
+				value: o.value,
+				min: o.min,
+				max: o.max
+			});
+			if (typeof o.value === "number" && typeof o.downFactor === "number" && typeof o.upFactor === "number") return fill(t("factorValue"), {
+				value: o.value,
+				down: o.downFactor,
+				up: o.upFactor
+			});
+			return JSON.stringify(d.default);
+		}
 		/** Flags that change what a value means, rendered as quiet pills. */
 		function FlagPills(props) {
 			const { d, t } = props;
@@ -285,32 +321,34 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				return;
 			}
 		}
-		/** One pack-param declaration. Editable only from the parameter view's governing row; shadowed and read-only rows render the value without a control. */
-		function PackParamItem(props) {
+		/**
+		* One declaration's value line, editability decided by ROLE (not by view):
+		* a source declaration is editable whereever it is shown (the parameter
+		* view's governing row and the owning pack's row in the Packs view write
+		* the same manifest field); a shadowed declaration renders its value
+		* struck-through and muted — it NEVER takes effect on the chain (the
+		* receipt base outranks it) — with an explicit note naming the manager.
+		*/
+		function ValueRow(props) {
+			const { d, t } = props;
+			if (d.role === "shadowed") return (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: {
+				...valueStyle,
+				color: "var(--dsw-alias-text-secondary, inherit)",
+				textDecoration: "line-through"
+			} }, displayDefault(d, t)), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, fill(t("shadowedByNote"), { pack: d.shadowedBy ?? "" })));
+			return (0, react.createElement)(EditSeat, {
+				d,
+				t,
+				onSaved: props.onSaved
+			});
+		}
+		/** The staged-edit control for a source declaration. */
+		function EditSeat(props) {
 			const { d, t } = props;
 			const [editing, setEditing] = (0, react.useState)(false);
 			const [draft, setDraft] = (0, react.useState)("");
 			const [busy, setBusy] = (0, react.useState)(false);
 			const [error, setError] = (0, react.useState)(void 0);
-			if (props.readOnly || d.role === "shadowed") return (0, react.createElement)("div", {
-				className: `${NS$1}-row`,
-				style: row
-			}, (0, react.createElement)("div", { style: {
-				display: "flex",
-				flexDirection: "column",
-				flex: 1,
-				minWidth: 0
-			} }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, d.name), d.role === "shadowed" ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("governedBy")} ${d.shadowedBy}`) : null, (0, react.createElement)(DescriptionHint, { text: d.description })), (0, react.createElement)("div", { style: desc }, typeof d.default === "object" ? JSON.stringify(d.default) : String(d.default)), (0, react.createElement)("div", { style: {
-				display: "flex",
-				gap: "8px",
-				flexWrap: "wrap"
-			} }, (0, react.createElement)(ConstraintLine, {
-				d,
-				t
-			}), (0, react.createElement)(FlagPills, {
-				d,
-				t
-			}))));
 			const start = () => {
 				setDraft(d.type === "object" ? JSON.stringify(d.default, null, 2) : String(d.default));
 				setError(void 0);
@@ -319,7 +357,10 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			const save = async () => {
 				const problem = validateDraft(d, draft);
 				if (problem !== void 0) {
-					setError(problem === "outOfRange" ? t("rangeTemplate").replace("{min}", String(d.min ?? "")).replace("{max}", String(d.max ?? "")) : t(problem));
+					setError(problem === "outOfRange" ? fill(t("rangeTemplate"), {
+						min: String(d.min ?? ""),
+						max: String(d.max ?? "")
+					}) : t(problem));
 					return;
 				}
 				setBusy(true);
@@ -328,18 +369,20 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 					const value = d.type === "object" ? JSON.parse(draft) : d.type === "number" ? Number(draft) : draft;
 					await savePackParam(d.pack, d.name, value);
 					setEditing(false);
-					props.onSaved();
+					props.onSaved?.();
 				} catch (saveError) {
 					setError(saveError.message);
 				} finally {
 					setBusy(false);
 				}
 			};
-			const control = !editing ? (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, String(typeof d.default === "object" ? JSON.stringify(d.default) : d.default)), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+			const valueLine = (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: valueStyle }, displayDefault(d, t)), editing ? null : (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 				size: "sm",
 				variant: "ghost",
 				onClick: start
-			}, t("edit"))) : (0, react.createElement)("div", null, d.enumValues !== void 0 ? (0, react.createElement)("select", {
+			}, t("edit")));
+			if (!editing) return valueLine;
+			return (0, react.createElement)("div", null, d.enumValues !== void 0 ? (0, react.createElement)("select", {
 				value: String(d.default),
 				onChange: (e) => setDraft(e.target.value),
 				style: inputStyle
@@ -375,52 +418,87 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				color: "var(--dsw-alias-text-critical, crimson)",
 				fontSize: "12px"
 			} }, error) : null));
-			return (0, react.createElement)("div", {
-				className: `${NS$1}-row`,
-				style: {
-					...row,
-					flexDirection: "column",
-					alignItems: "stretch"
-				}
-			}, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, d.name), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, d.pack), (0, react.createElement)(DescriptionHint, { text: d.description })), control, (0, react.createElement)("div", { style: {
-				display: "flex",
-				gap: "8px",
-				marginTop: "4px",
-				flexWrap: "wrap"
-			} }, (0, react.createElement)(ConstraintLine, {
-				d,
-				t
-			}), (0, react.createElement)(FlagPills, {
-				d,
-				t
-			})));
 		}
-		/** Aggregated shared-param groups: one row per name, sources first. */
+		/**
+		* One aggregated parameter group = ONE card: header carries the name and
+		* every group-level invariant (flags, hover description, Mind-the-gap
+		* note), one governing row carries the effective value and the edit seat,
+		* and the shadowed declarations collapse into a single sentence — their
+		* values never take effect (the receipt base outranks them), so rendering
+		* them per-card repeated the same text N times and showed misleading
+		* never-applied numbers.
+		*/
+		function ParamGroupCard(props) {
+			const { name, declarations, t } = props;
+			const governing = declarations.find((d) => d.role === "source") ?? declarations[0];
+			const shadowed = declarations.filter((d) => d !== governing);
+			const governingPack = (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, governing.pack);
+			return (0, react.createElement)("div", { style: group }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, name), (0, react.createElement)(FlagPills, {
+				d: governing,
+				t
+			}), (0, react.createElement)(DescriptionHint, { text: governing.description })), (0, react.createElement)("div", { style: {
+				display: "flex",
+				alignItems: "center",
+				gap: "8px",
+				marginTop: "4px"
+			} }, (0, react.createElement)("span", { style: muted }, `${t("sources")}:`), governingPack, (0, react.createElement)(ValueRow, {
+				d: governing,
+				t,
+				onSaved: props.onSaved
+			})), (0, react.createElement)("div", { style: { marginTop: "4px" } }, (0, react.createElement)(ConstraintLine, {
+				d: governing,
+				t
+			})), shadowed.length > 0 ? (0, react.createElement)("div", { style: {
+				...muted,
+				marginTop: "4px"
+			} }, fill(t("shadowedNote"), { packs: shadowed.map((d) => d.pack).join(", ") })) : null);
+		}
+		/** Aggregated parameter view: one card per parameter name. */
 		function GroupsView(props) {
 			const { payload, t } = props;
 			if (payload.groups.length === 0) return (0, react.createElement)("p", { style: muted }, t("empty"));
-			return (0, react.createElement)("div", null, payload.groups.map((g) => (0, react.createElement)("div", {
+			return (0, react.createElement)("div", null, payload.groups.map((g) => (0, react.createElement)(ParamGroupCard, {
 				key: g.name,
-				style: group
-			}, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, g.name), g.sources.length > 0 ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("sources")}: ${g.sources.join(", ")}`) : null), (0, react.createElement)("div", { style: { marginTop: "4px" } }, g.declarations.map((d) => (0, react.createElement)(PackParamItem, {
-				key: `${d.pack}/${d.name}`,
+				name: g.name,
+				declarations: g.declarations,
+				t,
+				onSaved: props.onSaved
+			})));
+		}
+		/** One declaration row inside a pack's card. Source rows carry the edit seat; shadowed rows strike their never-applied value through. */
+		function PackDeclRow(props) {
+			const { d, t } = props;
+			return (0, react.createElement)("div", {
+				className: `${NS$1}-row`,
+				style: row
+			}, (0, react.createElement)("div", { style: {
+				display: "flex",
+				flexDirection: "column",
+				flex: 1,
+				minWidth: 0
+			} }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, d.name), (0, react.createElement)(FlagPills, {
+				d,
+				t
+			}), (0, react.createElement)(DescriptionHint, { text: d.description })), (0, react.createElement)(ValueRow, {
 				d,
 				t,
 				onSaved: props.onSaved
-			}))))));
+			}), (0, react.createElement)("div", { style: { marginTop: "4px" } }, (0, react.createElement)(ConstraintLine, {
+				d,
+				t
+			}))));
 		}
 		/** Per-pack flat view (pack-author / troubleshooting perspective). */
 		function PacksView(props) {
 			const { payload, t } = props;
-			return (0, react.createElement)("div", null, (0, react.createElement)("p", { style: muted }, t("packsReadOnly")), payload.packs.map((p) => (0, react.createElement)("div", {
+			return (0, react.createElement)("div", null, (0, react.createElement)("p", { style: muted }, t("packsEditNote")), payload.packs.map((p) => (0, react.createElement)("div", {
 				key: p.name,
 				style: card
-			}, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, p.name), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `v${p.version}`), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, p.scope === "workspace" ? t("scopeWorkspace") : t("scopeTopic")), p.paramDriftPolicy !== void 0 ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("driftPolicy")}: ${p.paramDriftPolicy}`) : null), (0, react.createElement)("div", { style: desc }, p.description), p.consumes.length > 0 ? (0, react.createElement)("div", { style: muted }, `${t("consumed")}: ${p.consumes.join(", ")}`) : null, (0, react.createElement)("div", { style: { marginTop: "6px" } }, p.params.length === 0 ? (0, react.createElement)("p", { style: muted }, t("empty")) : p.params.map((d) => (0, react.createElement)(PackParamItem, {
+			}, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, p.name), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `v${p.version}`), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, p.scope === "workspace" ? t("scopeWorkspace") : t("scopeTopic")), p.paramDriftPolicy !== void 0 ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, `${t("driftPolicy")}: ${p.paramDriftPolicy}`) : null), (0, react.createElement)("div", { style: desc }, p.description), p.consumes.length > 0 ? (0, react.createElement)("div", { style: muted }, `${t("consumed")}: ${p.consumes.join(", ")}`) : null, (0, react.createElement)("div", { style: { marginTop: "6px" } }, p.params.length === 0 ? (0, react.createElement)("p", { style: muted }, t("empty")) : p.params.map((d) => (0, react.createElement)(PackDeclRow, {
 				key: d.name,
 				d,
 				t,
-				onSaved: props.onSaved,
-				readOnly: true
+				onSaved: props.onSaved
 			}))))));
 		}
 		/** Config form: top-level keys as rows, oscillation.* folded under Advanced. */

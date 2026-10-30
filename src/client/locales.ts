@@ -42,7 +42,11 @@ export const en = {
   notEditable: 'No declared default — nothing to maintain here. Values come from the conversation (confirmation gate or extraction).',
   advanced: 'Advanced',
   objectBandNote: 'value is the generation target; the other keys are validation tolerance (read-only).',
-  packsReadOnly: 'Browse-only view — to edit a default, use the governing row in the Parameters view (it applies along the chain).',
+  packsEditNote: 'Edit where the value governs: rows marked [managed by ...] are shadowed declarations - they never take effect on the chain; edit the source row instead.',
+  bandValue: 'target {value}, tolerance band {min}-{max}',
+  factorValue: 'target {value}, tolerance x{down}-x{up}',
+  shadowedNote: 'Also declared by {packs} (governed by the source; per-pack spec details in the Packs view).',
+  shadowedByNote: 'managed by {pack} - never takes effect',
 }
 
 export const zh: Record<string, string> = {
@@ -85,7 +89,11 @@ export const zh: Record<string, string> = {
   notEditable: '没有声明默认值——这里没有可维护的现役值。它的值来自对话（确认门或素材抽取）。',
   advanced: '高级',
   objectBandNote: 'value 是生成目标；其余键是校验容差（只读）。',
-  packsReadOnly: '此视图仅供浏览——修改默认值请到「参数」视图的生效源行（改那里沿链生效）。',
+  packsEditNote: '在生效处编辑：标有「由 … 管理」的行是被遮蔽的声明——在链上永不生效，请改生效源行。',
+  bandValue: '目标 {value}（容差带 {min}–{max}）',
+  factorValue: '目标 {value}（容差 ×{down}–×{up}）',
+  shadowedNote: '其余声明：{packs}（由生效源管理；spec 详情见 Pack 视图）。',
+  shadowedByNote: '由 {pack} 管理——此处声明不生效',
 }
 
 export function translate(dict: Record<string, unknown>): Translate {
