@@ -17,11 +17,14 @@ async function packFixture(root: string, defaults: Record<string, unknown> = { l
     params[name] = { type: 'number', default: value, min: 1, max: 20, description: 'd' }
   }
   params.shares = { type: 'object', required: true, confirm: true, description: 'no default here' }
+  params.namePattern = { type: 'string', default: '^.+$', description: 'name shape regex' }
   await writeFile(join(dir, 'manifest.json'), JSON.stringify({
     name: 'wp', version: '1', description: 'd', consumes: [], languages: ['zh-CN'], params,
   }), 'utf8')
+  await writeFile(join(dir, 'rules', 'zh-CN.json'), JSON.stringify([
+    { id: 'wp/name-shape', severity: 'error', given: '$', field: 'name', kind: 'pattern', pattern: { param: 'namePattern' }, mustMatch: true, suggestion: 's' },
+  ]), 'utf8')
   await writeFile(join(dir, 'schema.json'), '{"type":"object"}', 'utf8')
-  await writeFile(join(dir, 'rules', 'zh-CN.json'), '[]', 'utf8')
   await writeFile(join(dir, 'prompts', 'zh-CN.md'), 'T {{materials}}', 'utf8')
   await writeFile(join(dir, 'templates', 'zh-CN.hbs'), 't', 'utf8')
   await writeFile(join(dir, 'samples', 'golden.json'), '{}', 'utf8')
@@ -107,6 +110,20 @@ describe('setPackParamDefault', () => {
     await expect(setPackParamDefault(deps, 'wp', 'limit', 5)).rejects.toThrow(/reloading packs failed/)
     expect(packs.get('wp')!.manifest.params!.limit!.default).toBe(3)
     await rm(join(root, 'broken-pack'), { recursive: true, force: true })
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('guards pattern-referenced params: garbage regex refused pre-disk, empty (disabled) allowed', async () => {
+    const { root, deps } = await writeDeps()
+    const manifestPath = join(root, 'wp', 'manifest.json')
+    const before = await readFile(manifestPath, 'utf8')
+    await expect(setPackParamDefault(deps, 'wp', 'namePattern', '([bad')).rejects.toThrow(/not a valid regex/)
+    // A non-string value cannot be a regex source either.
+    await expect(setPackParamDefault(deps, 'wp', 'namePattern', 7)).rejects.toThrow(/must be a string/)
+    expect(await readFile(manifestPath, 'utf8')).toBe(before)
+    await setPackParamDefault(deps, 'wp', 'namePattern', '')
+    const onDisk = JSON.parse(await readFile(manifestPath, 'utf8')) as { params: { namePattern: { default: string } } }
+    expect(onDisk.params.namePattern.default).toBe('')
     await rm(root, { recursive: true, force: true })
   })
 

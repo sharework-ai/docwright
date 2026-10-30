@@ -1,6 +1,6 @@
 {
   "name": "cosmic-func",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": {
     "zh": "COSMIC 功能过程设计（针对一个功能）：将功能分解为功能过程（发起者、接收者、触发事件），从绿色的 cosmic-req 产物细化而来（requires topic——每话题一条需求）。",
     "en": "COSMIC functional-process design for one function: decomposes the function into functional processes (originator, receiver, origination event) refined from a green cosmic-req artifact (requires topic — one requirement per topic)."
@@ -75,6 +75,38 @@
       "description": {
         "zh": "目标功能在上游 plan functions 数组中的 1 起始位置；无默认值——缺失时从列出的候选中选择",
         "en": "1-based position of the target function in the upstream plan functions array; no default — pick from the candidates listed when missing"
+      }
+    },
+    "processNameForbiddenPattern": {
+      "type": "string",
+      "default": "^(?:(?!进行|执行|异常处理|设计|校验|conduct|execute).)*$",
+      "description": {
+        "zh": "功能过程名称必须匹配的正则（rule func/process-name-forbidden）：默认排除设计与实现类字眼（进行/执行/异常处理/设计/校验/conduct/execute）——排除词写在 (?!…|…) 内，增删即可；置空字符串停用该检查。装载期与保存时都校验正则可编译",
+        "en": "Regex every process name must match (rule func/process-name-forbidden): the default excludes design/implementation words — edit the list inside (?!…|…); set it to the empty string to disable the check. Compile-checked at load and on save"
+      }
+    },
+    "processNameSuffixPattern": {
+      "type": "string",
+      "default": "^(?!.*(?:处理|过程|闭环|流程|管理|等等|待定|TBD|etc\\.)$).*$",
+      "description": {
+        "zh": "功能过程名称必须匹配的正则（rule func/process-name-suffix）：默认拒绝以泛化词（处理/过程/闭环/流程/管理）或未定稿标记（等等/待定/TBD/etc.）结尾——泛化词写在 (?:…|…) 内，增删即可；置空字符串停用该检查",
+        "en": "Regex every process name must match (rule func/process-name-suffix): the default rejects names ending with a generic word (处理/过程/闭环/流程/管理) or a placeholder marker (等等/待定/TBD/etc.) — edit the list inside (?:…|…); set it to the empty string to disable the check"
+      }
+    },
+    "processNameTechnicalPattern": {
+      "type": "string",
+      "default": "^(?:(?!计算|转化|转换|拆分|日志|解析|编码|缓存|临时|筛选|排序).)*$",
+      "description": {
+        "zh": "功能过程名称必须匹配的正则（rule func/process-name-technical，warning 级）：默认排除技术实现字眼（计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序）——那些属于 tech 阶段子过程；排除词写在 (?!…|…) 内；置空字符串停用该检查",
+        "en": "Regex every process name must match (rule func/process-name-technical, warning): the default excludes technical-implementation words that belong to tech-stage subprocesses — edit the list inside (?!…|…); set it to the empty string to disable the check"
+      }
+    },
+    "functionalUserPattern": {
+      "type": "string",
+      "default": "^(?:(?!数据库|文件存储).)*$",
+      "description": {
+        "zh": "发起者（originator）与接收者（receiver）必须匹配的正则（rules func/originator-forbidden、func/receiver-forbidden）：默认排除存储设施字眼（数据库/文件存储）——功能用户是业务角色，存储设施是实现载体；排除词写在 (?!…|…) 内；置空字符串停用该检查",
+        "en": "Regex the originator and the receiver must both match (rules func/originator-forbidden, func/receiver-forbidden): the default excludes storage-facility words — functional users are business roles, storage is an implementation vehicle; edit the list inside (?!…|…); set it to the empty string to disable the check"
       }
     }
   },

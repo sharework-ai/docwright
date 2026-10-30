@@ -210,13 +210,40 @@ function assertRule(raw: unknown, dir: string, i: number, params: Readonly<Recor
       }
       break
     case 'pattern':
-      if (typeof r.pattern !== 'string' || r.pattern.length === 0) throw new Error(`pack ${dir}: rules[${i}].pattern must be a non-empty string`)
-      if (typeof r.mustMatch !== 'boolean') throw new Error(`pack ${dir}: rules[${i}].pattern requires a boolean mustMatch`)
-      try {
-        void new RegExp(r.pattern)
-      } catch (error) {
-        throw new Error(`pack ${dir}: rules[${i}].pattern does not compile: ${(error as Error).message}`)
+      if (isParamRef(r.pattern)) {
+        const spec = params?.[r.pattern.param]
+        if (spec === undefined) {
+          throw new Error(`pack ${dir}: rules[${i}].pattern references undeclared param "${r.pattern.param}" (declared: ${params === undefined || Object.keys(params).length === 0 ? 'none' : Object.keys(params).join(', ')})`)
+        }
+        if (spec.type !== 'string') {
+          throw new Error(`pack ${dir}: rules[${i}].pattern references param "${r.pattern.param}" of type "${spec.type}"; pattern references require a string-typed param`)
+        }
+        if (spec.overridable === true) {
+          throw new Error(`pack ${dir}: rules[${i}].pattern references param "${r.pattern.param}" which is overridable; pattern-referenced params must not be overridable (an adjusted pattern always trips its own rule; fix: drop overridable)`)
+        }
+        if (spec.default === undefined && spec.required !== true) {
+          throw new Error(`pack ${dir}: rules[${i}].pattern references param "${r.pattern.param}" which has no default; pattern references require a param that is always present (give it a default or mark it required)`)
+        }
+        // A non-empty default must compile: a broken shipped pattern fails at
+        // load, and the same gate later rejects UI edits to garbage (the
+        // proposed manifest re-runs assertManifest). Empty default is legal —
+        // it means the check ships disabled (empty = no check).
+        if (typeof spec.default === 'string' && spec.default.length > 0) {
+          try {
+            void new RegExp(spec.default)
+          } catch (error) {
+            throw new Error(`pack ${dir}: rules[${i}].pattern references param "${r.pattern.param}" whose default does not compile: ${(error as Error).message}`)
+          }
+        }
+      } else {
+        if (typeof r.pattern !== 'string' || r.pattern.length === 0) throw new Error(`pack ${dir}: rules[${i}].pattern must be a non-empty string`)
+        try {
+          void new RegExp(r.pattern)
+        } catch (error) {
+          throw new Error(`pack ${dir}: rules[${i}].pattern does not compile: ${(error as Error).message}`)
+        }
       }
+      if (typeof r.mustMatch !== 'boolean') throw new Error(`pack ${dir}: rules[${i}].pattern requires a boolean mustMatch`)
       break
   }
   return r as unknown as DeclarativeRule

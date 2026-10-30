@@ -37,6 +37,21 @@ function getMovements(proc) {
 /** W101 keyword list: technical-implementation words that belong in designs, not in subprocess descriptions. */
 const DESC_KEYWORDS = ['计算', '转化', '转换', '拆分', '日志', '解析', '编码', '缓存', '临时', '筛选', '排序']
 
+/**
+ * Param-driven regex helpers (docs/designs/param-object-model.md): the
+ * manifest declares `movementSequencePattern` / `subprocessDescPattern`
+ * (string, default = the shipped check). Effective params are always
+ * complete (defaults guarantee it), so a missing param falls back to the
+ * shipped default only for standalone callers; an EMPTY string disables the
+ * check (unset = no check); an invalid regex throws — the rule crashes loud,
+ * never silently passes.
+ */
+function paramRegex(context, param, fallbackSource) {
+  const raw = context?.params?.[param]
+  const source = typeof raw === 'string' && raw !== '' ? raw : fallbackSource
+  if (typeof raw === 'string' && raw === '') return null
+  return new RegExp(source)
+}
 
 /** Tolerance band around desiredCfps, from the shared cfpTotal {downFactor, upFactor}; defaults tighten the old [0.9, 1.5] to [0.9, 1.2]. */
 // The tech stage never totals below the planned estimate (2026-10-14 real-session
@@ -102,22 +117,25 @@ export const rules = [
     // The audit-safe movement patterns: ERX (query), EW (persist), EX
     // (forward/interact). One check subsumes the former E101/E102/E103/E105/
     // E107/E108/E109 and A101 rules — sequence legality implies all of them.
+    // The allowed shapes are the movementSequencePattern param (default
+    // ^(ERX|EW|EX)$); an empty param disables the check.
     id: 'tech/movement-pattern',
     severity: 'error',
-    suggestion: '每个功能过程的数据移动序列必须是 ERX、EW、EX 三种模式之一（E 开头、W 或 X 收尾，平均每个过程约 2.5 个数据移动）：ERX=输入-读取-输出（查询类），EW=输入-写入（落库类），EX=输入-输出（转发交互类）；其他序列（如 EWRX、ERWX、连续 RR）评审时容易被核减，请按三种模式重新组织子过程。',
-    check(artifact) {
-      const PATTERNS = ['ERX', 'EW', 'EX']
+    suggestion: '每个功能过程的数据移动序列必须匹配生效参数 movementSequencePattern（默认 ^(ERX|EW|EX)$，即 ERX=查询、EW=落库、EX=转发交互三种评审安全模式；置空该参数可停用本检查）：其他序列（如 EWRX、ERWX、连续 RR）评审时容易被核减，请按允许的模式重新组织子过程。',
+    check(artifact, context) {
+      const re = paramRegex(context, 'movementSequencePattern', '^(ERX|EW|EX)$')
+      if (re === null) return []
       const issues = []
       for (const [index, proc] of getProcesses(artifact).entries()) {
         const seq = getMovements(proc)
           .map(mv => (isObject(mv) && typeof mv.dataMovementType === 'string' ? mv.dataMovementType : '?'))
           .join('')
-        if (!PATTERNS.includes(seq)) {
+        if (!re.test(seq)) {
           issues.push({
             jsonPath: `$.processes[${index}].subProcesses`,
             message: say(artifact,
-              `功能过程 "${String(isObject(proc) ? proc.name : index + 1)}" 的数据移动序列为 ${seq}，不在 ERX、EW、EX 三种合法模式内（ERX=查询，EW=写入，EX=转发交互）`,
-              `Process "${String(isObject(proc) ? proc.name : index + 1)}" has movement sequence ${seq}, which is none of the allowed patterns ERX, EW, EX (ERX=query, EW=write, EX=forward)`),
+              `功能过程 "${String(isObject(proc) ? proc.name : index + 1)}" 的数据移动序列为 ${seq}，不匹配生效参数 movementSequencePattern（默认只允许 ERX=查询、EW=写入、EX=转发交互）`,
+              `Process "${String(isObject(proc) ? proc.name : index + 1)}" has movement sequence ${seq}, which does not match the effective param movementSequencePattern (by default only ERX=query, EW=write, EX=forward)`),
             snapshot: `sequence=${seq}`,
           })
         }
@@ -156,24 +174,27 @@ export const rules = [
     },
   },
   {
-    // W101 migrated: technical words in subprocess descriptions.
+    // W101 migrated: technical words in subprocess descriptions, via the
+    // subprocessDescPattern param (default: the tempered-dot complement of
+    // the old DESC_KEYWORDS list); an empty param disables the check.
     id: 'tech/subprocess-desc-keywords',
     severity: 'warning',
-    suggestion: '子过程描述含技术实现字眼（计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序）：描述应写清什么数据在功能用户与系统之间移动，实现方式留给详细设计。',
-    check(artifact) {
+    suggestion: '子过程描述未通过生效参数 subprocessDescPattern（默认排除计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序等技术实现字眼；置空该参数可停用本检查）：描述应写清什么数据在功能用户与系统之间移动，实现方式留给详细设计。',
+    check(artifact, context) {
+      const re = paramRegex(context, 'subprocessDescPattern', `^(?:(?!${DESC_KEYWORDS.join('|')}).)*$`)
+      if (re === null) return []
       const issues = []
       for (const [index, proc] of getProcesses(artifact).entries()) {
         const name = isObject(proc) ? String(proc.name) : `#${index + 1}`
         for (const [i, mv] of getMovements(proc).entries()) {
           const desc = isObject(mv) && typeof mv.description === 'string' ? mv.description : ''
-          const hit = DESC_KEYWORDS.find(k => desc.includes(k))
-          if (hit !== undefined) {
+          if (!re.test(desc)) {
             issues.push({
               jsonPath: `$.processes[${index}].subProcesses[${i}].description`,
               message: say(artifact,
-                `功能过程 "${name}" 第 ${i + 1} 个子过程描述建议不包含"${hit}"`,
-                `Subprocess ${i + 1} of process "${name}" should not contain the technical word "${hit}"`),
-              snapshot: hit,
+                `功能过程 "${name}" 第 ${i + 1} 个子过程描述未通过生效参数 subprocessDescPattern（默认排除技术实现字眼）`,
+                `Subprocess ${i + 1} of process "${name}" does not match the effective param subprocessDescPattern (by default it excludes technical-implementation words)`),
+              snapshot: desc,
             })
           }
         }

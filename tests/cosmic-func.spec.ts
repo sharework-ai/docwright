@@ -78,7 +78,7 @@ describe('cosmic-func pack shape', () => {
     const { func } = await packs()
     expect(func.manifest.consumes).toEqual(['cosmic-req'])
     expect(func.manifest.languages).toEqual(['zh-CN', 'en-US'])
-    expect(Object.keys(func.manifest.params ?? {}).sort()).toEqual(['cfpMax', 'cfpMin', 'cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'targetIndex', 'topicNo', 'topicNoPattern'])
+    expect(Object.keys(func.manifest.params ?? {}).sort()).toEqual(['cfpMax', 'cfpMin', 'cfpPerFunc', 'cfpPerSubProc', 'cfpTotal', 'functionalUserPattern', 'processNameForbiddenPattern', 'processNameSuffixPattern', 'processNameTechnicalPattern', 'targetIndex', 'topicNo', 'topicNoPattern'])
     expect(func.functionRules.map(r => r.id)).toEqual([
       'func/originator-receiver-distinct',
       'func/process-name-unique',
@@ -119,8 +119,8 @@ describe('cosmic-func mutation tests (guardrail-is-real)', () => {
     const { func, req } = await packs()
     const draft = mutate(func.goldenSample, d => { (d.processes as Array<{ name: string }>)[0]!.name = '校验收藏资格' })
     const issues = validateOf(func, 'zh-CN', draft, reqContext(req))
-    expect(issueRuleIds(issues)).toContain('func/process-name-forbidden-keywords')
-    expect(issues.find(i => i.ruleId === 'func/process-name-forbidden-keywords')?.severity).toBe('error')
+    expect(issueRuleIds(issues)).toContain('func/process-name-forbidden')
+    expect(issues.find(i => i.ruleId === 'func/process-name-forbidden')?.severity).toBe('error')
   })
 
   it('process-name-suffix: a generic suffix is flagged as info', async () => {
@@ -135,8 +135,8 @@ describe('cosmic-func mutation tests (guardrail-is-real)', () => {
     const { func, req } = await packs()
     const draft = mutate(func.goldenSample, d => { (d.processes as Array<{ name: string }>)[0]!.name = '解析收藏数据' })
     const issues = validateOf(func, 'zh-CN', draft, reqContext(req))
-    expect(issueRuleIds(issues)).toContain('func/process-name-warning-keywords')
-    expect(issues.find(i => i.ruleId === 'func/process-name-warning-keywords')?.severity).toBe('warning')
+    expect(issueRuleIds(issues)).toContain('func/process-name-technical')
+    expect(issues.find(i => i.ruleId === 'func/process-name-technical')?.severity).toBe('warning')
   })
 
   it('originator-receiver-distinct: an identical originator and receiver is caught', async () => {
@@ -149,12 +149,12 @@ describe('cosmic-func mutation tests (guardrail-is-real)', () => {
     const { func, req } = await packs()
     const originator = mutate(func.goldenSample, d => { (d.processes as Array<{ originator: string }>)[0]!.originator = '收藏数据库' })
     const originatorIssues = validateOf(func, 'zh-CN', originator, reqContext(req))
-    expect(issueRuleIds(originatorIssues)).toContain('func/originator-forbidden-keywords')
-    expect(originatorIssues.find(i => i.ruleId === 'func/originator-forbidden-keywords')?.severity).toBe('error')
+    expect(issueRuleIds(originatorIssues)).toContain('func/originator-forbidden')
+    expect(originatorIssues.find(i => i.ruleId === 'func/originator-forbidden')?.severity).toBe('error')
     const receiver = mutate(func.goldenSample, d => { (d.processes as Array<{ receiver: string }>)[0]!.receiver = '文件存储服务' })
     const receiverIssues = validateOf(func, 'zh-CN', receiver, reqContext(req))
-    expect(issueRuleIds(receiverIssues)).toContain('func/receiver-forbidden-keywords')
-    expect(receiverIssues.find(i => i.ruleId === 'func/receiver-forbidden-keywords')?.severity).toBe('error')
+    expect(issueRuleIds(receiverIssues)).toContain('func/receiver-forbidden')
+    expect(receiverIssues.find(i => i.ruleId === 'func/receiver-forbidden')?.severity).toBe('error')
   })
 
   it('process-name-unique: a duplicated process name is caught', async () => {

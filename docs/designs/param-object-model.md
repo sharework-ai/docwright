@@ -20,7 +20,7 @@
 | `default` | 与 `type` 匹配 | 缺省值（现役值） | 非 required 时必须匹配 type；number 型须落在 [min,max]；enum 型必须是枚举成员 |
 | `required` | boolean | 声明契约性（见下） | 仅 boolean |
 | `confirm` | boolean | 立门属性：未经理确认不得以该值执行 | 仅 boolean |
-| `overridable` | boolean | prompt 中渲染"素材内容可调整此参数"提示；**不放松任何校验** | 仅 boolean；**必须同时 `confirm: true`**（可调基线必过确认门）；被声明式规则数值边界引用（ParamRef）即报错（硬边界参数不可调） |
+| `overridable` | boolean | prompt 中渲染"素材内容可调整此参数"提示；**不放松任何校验** | 仅 boolean；**必须同时 `confirm: true`**（可调基线必过确认门）；被声明式规则引用（ParamRef：数值边界或 pattern 正则源）即报错（硬边界参数不可调） |
 | `extractable` | boolean | 可由 `doc_extract_params` 从素材抽取（模型提 `{value, quote}`，引擎机检引文 ⊆ 素材） | 仅 boolean；**必须同时 `confirm: true`**（抽取值的自证通道是确认表引文列，寻址参数永不立门故不可抽取） |
 | `min` / `max` | number 型专用 | 值域闭区间 | min ≤ max，须为有限数；object/string 型声明即报错 |
 | `enum` | 非 string/number 外禁用 | 取值白名单 | 非空数组、成员类型匹配、default 必须是成员 |
@@ -130,6 +130,8 @@
 3. 同链重复调用 plan 会重立 cfpTotal 门（显式 params 每次都门控）——"会话内已确认记忆"是潜在 UI 便利点，当前契约无此状态。
 4. 派生参数 topicNo 不可关闭，且会被动出现在 prompt 的参数块中（语义无作用，噪音可忽略）。
 5. ~~确认表的 `source` 枚举不含出处维度~~ **已收敛（extract-params，2026-10-28）**：`source` 增 `extracted` 档，抽取值以机检引文（`quote` ⊆ 素材）自证出处，未找到是一等结果并前置拦截。仍无出处的是显式传参——显式 params 是正门（对话转译的意图通道），表中 `explicit` 行语义即"调用方（用户侧）给的值"，无需机制自证。
+**Pattern 引用（正则参数）**：声明式 `pattern` 规则的 `pattern` 可为 ParamRef（string 型参数），装载期约束与数值边界同款——被引参数必须 string 型、有 default 或 required、**不可 `overridable`**；非空 default 必须可编译（装载期与保存通道双重强制，写坏的正则进不了盘）。**检查语义一律为：参数置空（空字符串）= 不检查；设置了 = 字段值必须匹配该正则**（正则一个即够，不分语言——两份语言规则文件引用同一参数，仅 suggestion 分语言）。函数规则（functions.js）以 `context.params` 读同一契约（cosmic-tech 的 movementSequencePattern / subprocessDescPattern）。引用默认值即"现行检查"，在参数维护界面可直接改。
+
 6. `overridable` 的许可只进内层生成/修复 prompt（一句话提示），内层模型对参数的"调整"只物化在产物内容里——回执 `params` 与规则数值边界仍用调用级解析值，"声称的值"与"产物体现的值"可静默分叉。**基线可见性已由 `overridable ⇒ confirm` 装载期不变量收敛**（可调参数基线必过确认门）；**残留 = as-run 值记录**（见 §9 开放方向）。且被规则用作数值边界的参数不可 `overridable`（装载期强制——调整必撞规则，许可与校验不得扭结）。
 
 ## 9. 开放方向（原缓解提案已实施）

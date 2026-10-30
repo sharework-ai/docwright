@@ -1,12 +1,13 @@
 [
   {
-    "id": "func/process-name-forbidden-keywords",
+    "id": "func/process-name-forbidden",
     "severity": "error",
     "given": "$.processes[*]",
     "field": "name",
-    "kind": "forbiddenKeywords",
-    "keywords": ["进行", "执行", "异常处理", "设计", "校验", "conduct", "execute"],
-    "suggestion": "功能过程名称含设计/实现类字眼（进行、执行、异常处理、设计、校验、conduct、execute）：过程名应写业务对象+业务动作（如\"收藏商品\"），把校验与异常分支写进 process description，而不是体现在名称上。"
+    "kind": "pattern",
+    "pattern": { "param": "processNameForbiddenPattern" },
+    "mustMatch": true,
+    "suggestion": "功能过程名称未通过命名正则（生效参数 processNameForbiddenPattern，默认排除进行/执行/异常处理/设计/校验/conduct/execute 等设计与实现字眼；置空该参数可停用本检查）：过程名应写业务对象+业务动作（如\"收藏商品\"），把校验与异常分支写进 process description，而不是体现在名称上。"
   },
   {
     "id": "func/process-name-suffix",
@@ -14,35 +15,38 @@
     "given": "$.processes[*]",
     "field": "name",
     "kind": "pattern",
-    "pattern": "(处理|过程|闭环|流程|管理|等等|待定|TBD|etc\\.)$",
-    "mustMatch": false,
-    "suggestion": "功能过程名称以泛化词（处理/过程/闭环/流程/管理）或未定稿标记（等等/待定/TBD/etc.）结尾：改为具体的业务对象+动作命名，如\"收藏商品\"而非\"收藏管理\"。"
+    "pattern": { "param": "processNameSuffixPattern" },
+    "mustMatch": true,
+    "suggestion": "功能过程名称未通过命名正则（生效参数 processNameSuffixPattern，默认拒绝以泛化词（处理/过程/闭环/流程/管理）或未定稿标记（等等/待定/TBD/etc.）结尾；置空该参数可停用本检查）：改为具体的业务对象+动作命名，如\"收藏商品\"而非\"收藏管理\"。"
   },
   {
-    "id": "func/process-name-warning-keywords",
+    "id": "func/process-name-technical",
     "severity": "warning",
     "given": "$.processes[*]",
     "field": "name",
-    "kind": "forbiddenKeywords",
-    "keywords": ["计算", "转化", "转换", "拆分", "日志", "解析", "编码", "缓存", "临时", "筛选", "排序"],
-    "suggestion": "功能过程名称含技术实现字眼（计算/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序）：这些属于技术设计（tech 阶段子过程），过程名保持业务视角。"
+    "kind": "pattern",
+    "pattern": { "param": "processNameTechnicalPattern" },
+    "mustMatch": true,
+    "suggestion": "功能过程名称未通过命名正则（生效参数 processNameTechnicalPattern，默认排除计算/转化/转换/拆分/日志/解析/编码/缓存/临时/筛选/排序等技术实现字眼；置空该参数可停用本检查）：这些属于技术设计（tech 阶段子过程），过程名保持业务视角。"
   },
   {
-    "id": "func/originator-forbidden-keywords",
+    "id": "func/originator-forbidden",
     "severity": "error",
     "given": "$.processes[*]",
     "field": "originator",
-    "kind": "forbiddenKeywords",
-    "keywords": ["数据库", "文件存储"],
-    "suggestion": "发起者（originator）含存储设施字眼（数据库/文件存储）：功能用户是人、外部系统或设备等业务角色，存储设施是实现载体，不能发起功能过程；改写为真实的业务发起者。"
+    "kind": "pattern",
+    "pattern": { "param": "functionalUserPattern" },
+    "mustMatch": true,
+    "suggestion": "发起者（originator）未通过功能用户正则（生效参数 functionalUserPattern，默认排除数据库/文件存储等存储设施字眼；置空该参数可停用本检查）：功能用户是人、外部系统或设备等业务角色，存储设施是实现载体，不能发起功能过程；改写为真实的业务发起者。"
   },
   {
-    "id": "func/receiver-forbidden-keywords",
+    "id": "func/receiver-forbidden",
     "severity": "error",
     "given": "$.processes[*]",
     "field": "receiver",
-    "kind": "forbiddenKeywords",
-    "keywords": ["数据库", "文件存储"],
-    "suggestion": "接收者（receiver）含存储设施字眼（数据库/文件存储）：功能用户是人、外部系统或设备等业务角色，存储设施是实现载体，不能接收功能过程的结果；改写为真实的业务接收者。"
+    "kind": "pattern",
+    "pattern": { "param": "functionalUserPattern" },
+    "mustMatch": true,
+    "suggestion": "接收者（receiver）未通过功能用户正则（生效参数 functionalUserPattern，默认排除数据库/文件存储等存储设施字眼；置空该参数可停用本检查）：功能用户是人、外部系统或设备等业务角色，存储设施是实现载体，不能接收功能过程的结果；改写为真实的业务接收者。"
   }
 ]
