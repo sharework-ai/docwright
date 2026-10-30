@@ -107,7 +107,6 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			invalidNumber: "Not a valid number.",
 			notEditable: "No declared default — nothing to maintain here. Values come from the conversation (confirmation gate or extraction).",
 			advanced: "Advanced",
-			objectBandNote: "value is the generation target; the other keys are validation tolerance (read-only).",
 			packsEditNote: "Edit where the value governs: rows marked [managed by ...] are shadowed declarations - they never take effect on the chain; edit the source row instead.",
 			bandValue: "target {value}, tolerance band {min}-{max}",
 			factorValue: "target {value}, tolerance x{down}-x{up}",
@@ -153,7 +152,6 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			invalidNumber: "不是合法数字。",
 			notEditable: "没有声明默认值——这里没有可维护的现役值。它的值来自对话（确认门或素材抽取）。",
 			advanced: "高级",
-			objectBandNote: "value 是生成目标；其余键是校验容差（只读）。",
 			packsEditNote: "在生效处编辑：标有「由 … 管理」的行是被遮蔽的声明——在链上永不生效，请改生效源行。",
 			bandValue: "目标 {value}（容差带 {min}–{max}）",
 			factorValue: "目标 {value}（容差 ×{down}–×{up}）",
@@ -173,11 +171,31 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 		* shared-param groups (the aggregation with effective-source resolution),
 		* per-pack flat view, and the plugin Config form. Controls map from the
 		* ParamSpec type (number → numeric input, enum → select, boolean → switch,
-		* object → JSON-per-value with endpoints read-only); every row carries a
-		* hover tooltip with the author's description. Writes go through the
+		* object → JSON-per-value with endpoints read-only); every parameter shows
+		* its author's description inline beneath the name. Writes go through the
 		* plugin's own routes (src/http.ts), never the conversation.
+		*
+		* Typography follows the host conversation body, not ad-hoc sizes: one
+		* family and size for all running text (`--dsw-font-family` +
+		* `--dsh-content-font-size`, 24px+delta line height, so the user's font-size
+		* preference applies here too); hierarchy comes from weight and the host's
+		* label grays (`--dsw-alias-label-secondary`), never from font size. Only
+		* identifiers and values (param names, enum members, JSON) sit in the host
+		* code face (`--dsh-font-family-code`).
 		*/
 		const NS$1 = "docwright-params";
+		/** The conversation body's family and size — the one measure for all running
+		* text in this section. */
+		const baseText = {
+			fontFamily: "var(--dsw-font-family, inherit)",
+			fontSize: "var(--dsh-content-font-size, 14px)",
+			lineHeight: "calc(24px + var(--dsh-content-font-delta, 0px))"
+		};
+		/** Host code face for identifiers and values only (names, enums, JSON). */
+		const codeFont = "var(--dsh-font-family-code, ui-monospace, SFMono-Regular, Menlo, monospace)";
+		/** The host's first muted gray (real theme token; the old --dsw-alias-text-*
+		* names never existed upstream and always fell through to full-strength). */
+		const secondary = "var(--dsw-alias-label-secondary, inherit)";
 		const row = {
 			display: "flex",
 			alignItems: "center",
@@ -193,38 +211,28 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 		};
 		const nameStyle = {
 			fontWeight: 600,
-			fontFamily: "var(--dsw-font-mono, monospace)"
+			fontFamily: codeFont
 		};
 		const desc = {
-			color: "var(--dsw-alias-text-secondary, inherit)",
-			marginTop: "2px",
+			color: secondary,
 			whiteSpace: "pre-wrap",
 			wordBreak: "break-word"
 		};
-		const valueStyle = { fontFamily: "var(--dsw-font-mono, monospace)" };
-		const muted = { color: "var(--dsw-alias-text-secondary, inherit)" };
+		const valueStyle = { fontFamily: codeFont };
+		const muted = { color: secondary };
 		const group = {
-			border: "0.5px solid var(--dsw-alias-border-l4, var(--dsw-alias-settings-card-stroke, transparent))",
+			border: "0.5px solid var(--dsw-alias-border-l4, transparent)",
 			borderRadius: "var(--dsw-radius-xl, 20px)",
-			background: "var(--dsw-alias-bg-layer-2, var(--dsw-alias-settings-card-fill, transparent))",
+			background: "var(--dsw-alias-bg-layer-2, transparent)",
 			padding: "12px 16px",
 			marginBottom: "12px"
 		};
 		const card = { ...group };
-		const hint = {
-			cursor: "help",
-			color: "var(--dsw-alias-text-secondary, inherit)",
-			border: "1px solid currentColor",
-			borderRadius: "50%",
-			width: "15px",
-			height: "15px",
-			fontSize: "10px",
-			lineHeight: "13px",
-			display: "inline-flex",
+		const sourceLine = {
+			display: "flex",
 			alignItems: "center",
-			justifyContent: "center",
-			flexShrink: 0,
-			userSelect: "none"
+			gap: "8px",
+			marginTop: "4px"
 		};
 		const inputStyle = { width: "160px" };
 		const actions = {
@@ -233,18 +241,16 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			alignItems: "center",
 			marginTop: "8px"
 		};
-		/** The "?" affordance with the author's description on hover. */
-		function DescriptionHint(props) {
-			return (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Tooltip, {
-				label: props.text,
-				side: "bottom",
-				maxWidth: 360,
-				children: (0, react.createElement)("span", {
-					className: `${NS$1}-hint`,
-					style: hint,
-					"aria-label": props.text
-				}, "?")
-			});
+		/** The author's description, inline beneath the parameter name — the primary
+		* explanation stays in view instead of hiding behind a hover. */
+		function DescriptionLine(props) {
+			return (0, react.createElement)("div", {
+				className: `${NS$1}-desc`,
+				style: {
+					...desc,
+					marginTop: "2px"
+				}
+			}, props.text);
 		}
 		/** Fill a {key}-templated locale string. */
 		function fill(template, vars) {
@@ -284,14 +290,15 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				flexWrap: "wrap"
 			} }, flags.map((f) => (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, { key: f }, f)));
 		}
-		/** Constraint summary under the value: range, choices, and the Mind-the-gap note for object bands. */
+		/** Constraint summary under the value: declared range and choices. Object
+		* bands carry no note — the human projection ("target 60, band 30-90")
+		* already says what value and endpoints mean, uniformly for every band. */
 		function ConstraintLine(props) {
 			const { d, t } = props;
 			const bits = [];
 			if (d.enumValues !== void 0) bits.push(`${t("choices")}: ${d.enumValues.join(" / ")}`);
 			if (d.min !== void 0) bits.push(`${t("min")} ${d.min}`);
 			if (d.max !== void 0) bits.push(`${t("max")} ${d.max}`);
-			if (d.type === "object") bits.push(t("objectBandNote"));
 			return bits.length === 0 ? null : (0, react.createElement)("div", { style: muted }, bits.join(" · "));
 		}
 		/** Validate one proposed default against the declaration (client-side mirror of the server gate). */
@@ -323,7 +330,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			const { d, t } = props;
 			if (d.role === "shadowed") return (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: {
 				...valueStyle,
-				color: "var(--dsw-alias-text-secondary, inherit)",
+				color: secondary,
 				textDecoration: "line-through"
 			} }, displayDefault(d, t)), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, fill(t("shadowedByNote"), { pack: d.shadowedBy ?? "" })));
 			return (0, react.createElement)(EditSeat, {
@@ -404,35 +411,30 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				variant: "ghost",
 				disabled: busy,
 				onClick: () => setEditing(false)
-			}, t("cancel")), error !== void 0 ? (0, react.createElement)("span", { style: { color: "var(--dsw-alias-text-critical, crimson)" } }, error) : null));
+			}, t("cancel")), error !== void 0 ? (0, react.createElement)("span", { style: { color: "var(--dsw-alias-state-error-primary, crimson)" } }, error) : null));
 		}
 		/**
-		* One aggregated parameter group = ONE card: header carries the name and
-		* every group-level invariant (flags, hover description, Mind-the-gap
-		* note), one governing row carries the effective value and the edit seat,
-		* and the shadowed declarations collapse into a single sentence — their
-		* values never take effect (the receipt base outranks them), so rendering
-		* them per-card repeated the same text N times and showed misleading
-		* never-applied numbers.
+		* One aggregated parameter group = ONE card, top to bottom: name + flags,
+		* the author's description in the muted gray, the effective source on its
+		* own line (what governs is a fact of its own — not a prefix of the value
+		* row), the effective value and its edit seat on the next, then declared
+		* constraints. The shadowed declarations collapse into a single sentence —
+		* their values never take effect (the receipt base outranks them), so
+		* rendering them per-card repeated the same text N times and showed
+		* misleading never-applied numbers.
 		*/
 		function ParamGroupCard(props) {
 			const { name, declarations, t } = props;
 			const governing = declarations.find((d) => d.role === "source") ?? declarations[0];
 			const shadowed = declarations.filter((d) => d !== governing);
-			const governingPack = (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, governing.pack);
 			return (0, react.createElement)("div", { style: group }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, name), (0, react.createElement)(FlagPills, {
 				d: governing,
 				t
-			}), (0, react.createElement)(DescriptionHint, { text: governing.description })), (0, react.createElement)("div", { style: {
-				display: "flex",
-				alignItems: "center",
-				gap: "8px",
-				marginTop: "4px"
-			} }, (0, react.createElement)("span", { style: muted }, `${t("sources")}:`), governingPack, (0, react.createElement)(ValueRow, {
+			})), (0, react.createElement)(DescriptionLine, { text: governing.description }), (0, react.createElement)("div", { style: sourceLine }, (0, react.createElement)("span", { style: muted }, `${t("sources")}:`), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, governing.pack)), (0, react.createElement)(ValueRow, {
 				d: governing,
 				t,
 				onSaved: props.onSaved
-			})), (0, react.createElement)("div", { style: { marginTop: "4px" } }, (0, react.createElement)(ConstraintLine, {
+			}), (0, react.createElement)("div", { style: { marginTop: "2px" } }, (0, react.createElement)(ConstraintLine, {
 				d: governing,
 				t
 			})), shadowed.length > 0 ? (0, react.createElement)("div", { style: {
@@ -466,11 +468,11 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			} }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, d.name), (0, react.createElement)(FlagPills, {
 				d,
 				t
-			}), (0, react.createElement)(DescriptionHint, { text: d.description })), (0, react.createElement)(ValueRow, {
+			})), (0, react.createElement)(DescriptionLine, { text: d.description }), (0, react.createElement)(ValueRow, {
 				d,
 				t,
 				onSaved: props.onSaved
-			}), (0, react.createElement)("div", { style: { marginTop: "4px" } }, (0, react.createElement)(ConstraintLine, {
+			}), (0, react.createElement)("div", { style: { marginTop: "2px" } }, (0, react.createElement)(ConstraintLine, {
 				d,
 				t
 			}))));
@@ -551,7 +553,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 					flexDirection: "column",
 					flex: 1,
 					minWidth: 0
-				} }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, e.key), e.description !== void 0 ? (0, react.createElement)(DescriptionHint, { text: e.description }) : null, (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, e.origin === "configured" ? t("configured") : e.value === void 0 ? t("unset") : t("inherited"))), control, e.origin === "default" && e.default !== void 0 && String(e.default) !== String(e.value ?? "") ? (0, react.createElement)("div", { style: muted }, `${t("inherited")}: ${String(e.default)}`) : null));
+				} }, (0, react.createElement)("div", { style: rowHead }, (0, react.createElement)("span", { style: nameStyle }, e.key), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Pill, {}, e.origin === "configured" ? t("configured") : e.value === void 0 ? t("unset") : t("inherited"))), e.description !== void 0 ? (0, react.createElement)(DescriptionLine, { text: e.description }) : null, control, e.origin === "default" && e.default !== void 0 && String(e.default) !== String(e.value ?? "") ? (0, react.createElement)("div", { style: muted }, `${t("inherited")}: ${String(e.default)}`) : null));
 			};
 			const saveAll = async () => {
 				const patch = {};
@@ -590,7 +592,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 				size: "sm",
 				disabled: !dirty || busy,
 				onClick: () => void saveAll()
-			}, busy ? t("saving") : t("saveConfig")), done && !dirty ? (0, react.createElement)("span", { style: muted }, t("saved")) : null, error !== void 0 ? (0, react.createElement)("span", { style: { color: "var(--dsw-alias-text-critical, crimson)" } }, error) : null));
+			}, busy ? t("saving") : t("saveConfig")), done && !dirty ? (0, react.createElement)("span", { style: muted }, t("saved")) : null, error !== void 0 ? (0, react.createElement)("span", { style: { color: "var(--dsw-alias-state-error-primary, crimson)" } }, error) : null));
 		}
 		/** The section: one fetch, three views. */
 		function ParamsSection(props) {
@@ -607,11 +609,14 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			(0, react.useEffect)(() => {
 				refresh();
 			}, [refresh]);
-			if (error !== void 0) return (0, react.createElement)("div", null, (0, react.createElement)("p", { style: { color: "var(--dsw-alias-text-critical, crimson)" } }, t("loadFailed")), (0, react.createElement)("p", { style: muted }, error), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+			if (error !== void 0) return (0, react.createElement)("div", { style: baseText }, (0, react.createElement)("p", { style: { color: "var(--dsw-alias-state-error-primary, crimson)" } }, t("loadFailed")), (0, react.createElement)("p", { style: muted }, error), (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 				size: "sm",
 				onClick: refresh
 			}, t("retry")));
-			if (payload === void 0) return (0, react.createElement)("p", { style: muted }, t("loading"));
+			if (payload === void 0) return (0, react.createElement)("p", { style: {
+				...baseText,
+				...muted
+			} }, t("loading"));
 			const tabs = [
 				{
 					value: "groups",
@@ -632,7 +637,17 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 					panelId: `${NS$1}-config-panel`
 				}
 			];
-			return (0, react.createElement)("div", { className: `${NS$1}-section` }, (0, react.createElement)("h3", { style: { margin: "0 0 4px" } }, t("title")), (0, react.createElement)("p", { style: muted }, t("intro")), (0, react.createElement)("div", { style: { margin: "8px 0 12px" } }, (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.SegmentedTabs, {
+			return (0, react.createElement)("div", {
+				className: `${NS$1}-section`,
+				style: baseText
+			}, (0, react.createElement)("h3", { style: {
+				margin: "0 0 4px",
+				...baseText,
+				fontWeight: 600
+			} }, t("title")), (0, react.createElement)("p", { style: {
+				...muted,
+				margin: "0 0 8px"
+			} }, t("intro")), (0, react.createElement)("div", { style: { margin: "8px 0 12px" } }, (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.SegmentedTabs, {
 				items: [...tabs],
 				value: view,
 				onChange: (v) => setView(v),
@@ -680,8 +695,7 @@ window.__ModuleLoader__.load({ id: "@sharework-ai/dsh-docwright", factory: (requ
 			"Input",
 			"Pill",
 			"SegmentedTabs",
-			"Switch",
-			"Tooltip"
+			"Switch"
 		];
 		function missingPrimitives(mod) {
 			return REQUIRED_PRIMITIVES.filter((name) => mod[name] === void 0);
