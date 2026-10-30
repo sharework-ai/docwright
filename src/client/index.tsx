@@ -18,6 +18,8 @@
  */
 import { createElement as h } from 'react'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
+import { resolveLocalized } from '../description.ts'
+import type { LocalizedText } from '../description.ts'
 import { ParamsSection } from './ParamsSection.tsx'
 
 const NS = 'docwright-params'
@@ -35,6 +37,9 @@ export function missingPrimitives(mod: Record<string, unknown>): string[] {
 interface LocaleService {
   getSnapshot(): { active: string }
   subscribe(callback: () => void): () => void
+  /** Present on 0.2.x hosts: resolves LocalizedText along the active
+   * language's fallback chain (en as the terminal fallback). */
+  resolveText?(text: unknown): string
 }
 
 interface SlotsService {
@@ -71,6 +76,13 @@ function mountSection(ctx: ClientContext): void {
     lang = ctx.locale.getSnapshot().active === 'zh' ? 'zh' : 'en'
   })
   const label = () => (lang === 'zh' ? 'Docwright 参数' : 'Docwright params')
+  // Locale resolution for author content (pack/param/Config descriptions):
+  // the host's resolveText along its fallback chain when the host provides
+  // it; the same semantics (requested locale, then en) locally otherwise.
+  const resolveText = (value: unknown): string => {
+    if (typeof ctx.locale.resolveText === 'function') return ctx.locale.resolveText(value)
+    return resolveLocalized(value as LocalizedText | undefined, lang)
+  }
 
   // Seat 1: the Settings dialog tab (declared by ui-settings-plugins on the
   // 0.1.7 line; "one page inside the Plugins settings section").
@@ -82,7 +94,7 @@ function mountSection(ctx: ClientContext): void {
       label,
       locale: NS,
       inject: () => ({ lang }),
-    }, () => h(ParamsSection, { lang }))
+    }, () => h(ParamsSection, { lang, resolveText }))
     ctx.effect(() => () => {
       if (typeof off === 'function') (off as () => void)()
     }, 'docwright: settings tab')
@@ -99,7 +111,7 @@ function mountSection(ctx: ClientContext): void {
       key: PACKAGE_NAME,
       locale: NS,
       inject: () => ({ lang }),
-    }, (owner: { view?: string } = {}) => (owner.view === 'summary' ? null : h(ParamsSection, { lang })))
+    }, (owner: { view?: string } = {}) => (owner.view === 'summary' ? null : h(ParamsSection, { lang, resolveText })))
     ctx.effect(() => () => {
       if (typeof off === 'function') (off as () => void)()
     }, 'docwright: bundle config card')

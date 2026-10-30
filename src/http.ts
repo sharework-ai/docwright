@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { CodedError, errorEnvelope } from './coded-error.ts'
 
 /**
  * HTTP surface for the params maintenance UI (docs/designs/param-management-ui.md).
@@ -50,18 +51,20 @@ function sameOrigin(request: IncomingMessage): boolean {
 const MAX_BODY_BYTES = 64 * 1024
 
 /** Read and parse a JSON body, refusing oversized or malformed payloads. */
-async function readJsonBody(request: IncomingMessage): Promise<{ ok: true; body: unknown } | { ok: false; status: number; error: string }> {
+async function readJsonBody(request: IncomingMessage): Promise<{ ok: true; body: unknown } | { ok: false; status: number; error: CodedError }> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of request) {
     size += (chunk as Buffer).length
-    if (size > MAX_BODY_BYTES) return { ok: false, status: 413, error: `request body exceeds ${MAX_BODY_BYTES} bytes` }
+    if (size > MAX_BODY_BYTES) {
+      return { ok: false, status: 413, error: new CodedError('bodyTooLarge', `request body exceeds ${MAX_BODY_BYTES} bytes`, { params: { max: MAX_BODY_BYTES } }) }
+    }
     chunks.push(chunk as Buffer)
   }
   try {
     return { ok: true, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) }
   } catch (error) {
-    return { ok: false, status: 400, error: `request body is not valid JSON: ${(error as Error).message}` }
+    return { ok: false, status: 400, error: new CodedError('invalidJsonBody', `request body is not valid JSON: ${(error as Error).message}`, { detail: (error as Error).message }) }
   }
 }
 
@@ -107,7 +110,7 @@ export function mountParamsRoutes(
     handler: (request, response) => {
       const rejected = hostRejection(deps.connection?.(), request)
       if (rejected !== undefined) {
-        sendJson(response, rejected, { error: `request rejected by the host gate (status ${rejected})` })
+        sendJson(response, rejected, errorEnvelope(new CodedError('gateRejected', `request rejected by the host gate (status ${rejected})`, { params: { status: rejected } })))
         return
       }
       sendJson(response, 200, deps.payload())
@@ -122,26 +125,29 @@ export function mountParamsRoutes(
       handler: async (request, response) => {
         const rejected = hostRejection(deps.connection?.(), request)
         if (rejected !== undefined) {
-          sendJson(response, rejected, { error: `request rejected by the host gate (status ${rejected})` })
+          sendJson(response, rejected, errorEnvelope(new CodedError('gateRejected', `request rejected by the host gate (status ${rejected})`, { params: { status: rejected } })))
           return
         }
         // Same-origin for every mutating request (the read route needs none —
         // no side effects to forge).
         if (request.method !== 'POST' || !sameOrigin(request)) {
-          sendJson(response, 403, { error: 'cross-site write refused: Origin does not match the deployment host' })
+          sendJson(response, 403, errorEnvelope(new CodedError('crossSiteWrite', 'cross-site write refused: Origin does not match the deployment host')))
           return
         }
         const body = await readJsonBody(request)
         if (!body.ok) {
-          sendJson(response, body.status, { error: body.error })
+          sendJson(response, body.status, errorEnvelope(body.error))
           return
         }
         try {
           const result = await handler(body.body, request)
           sendJson(response, result.status, result.payload)
         } catch (error) {
-          // Error contract: what happened, why, what to do next (problem + cause + fix).
-          sendJson(response, 422, { error: (error as Error).message })
+          // Error contract: `{ error, code, params?, detail? }` — the English
+          // sentence stays the log face; `code`+`params` key the browser's
+          // locale catalog (what happened / why / what to do, in the user's
+          // language); unknown codes degrade to the raw message.
+          sendJson(response, 422, errorEnvelope(error))
         }
       },
     })
@@ -149,7 +155,7 @@ export function mountParamsRoutes(
   const disposeConfig = post('/api/docwright/config', async body => {
     const patch = (body as { patch?: unknown }).patch
     if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
-      throw new Error('body must be {"patch": {...}} with an object of Config keys; nothing was written')
+      throw new CodedError('invalidPatchBody', 'body must be {"patch": {...}} with an object of Config keys; nothing was written')
     }
     await deps.writes!.updateConfig(patch as Record<string, unknown>)
     return { status: 200, payload: { ok: true } }
@@ -157,10 +163,10 @@ export function mountParamsRoutes(
   const disposeParam = post('/api/docwright/pack-param', async body => {
     const { pack, param, value } = body as { pack?: unknown; param?: unknown; value?: unknown }
     if (typeof pack !== 'string' || pack.length === 0 || typeof param !== 'string' || param.length === 0) {
-      throw new Error('body must be {"pack", "param", "value"} with non-empty pack and param names; nothing was written')
+      throw new CodedError('invalidParamBody', 'body must be {"pack", "param", "value"} with non-empty pack and param names; nothing was written')
     }
     if (value === undefined) {
-      throw new Error('body.value is required (the new default; pass null to state that explicitly is not supported — defaults are edited, not removed, from the UI)')
+      throw new CodedError('valueRequired', 'body.value is required (the new default; pass null to state that explicitly is not supported — defaults are edited, not removed, from the UI)')
     }
     await deps.writes!.setPackParamDefault(pack, param, value)
     return { status: 200, payload: { ok: true } }

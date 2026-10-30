@@ -1,5 +1,6 @@
 import type { Issue, Severity } from './issue.ts'
 import type { Json } from './receipt.ts'
+import type { LocalizedText } from './description.ts'
 
 /**
  * Hybrid pack: declarative JSON rules for simple families plus a JS function
@@ -88,15 +89,16 @@ export interface ParamSpec {
   /** Numeric bounds (number-typed params only); the default must satisfy them. */
   readonly min?: number | undefined
   readonly max?: number | undefined
-  readonly description: string
+  /** Author content in the UI's说明 line; LocalizedText (en required on locale maps). */
+  readonly description: LocalizedText
 }
 
 /** Pack manifest (`manifest.json`); version gates breaking pack changes. */
 export interface PackManifest {
   readonly name: string
   readonly version: string
-  /** One line naming the document this pack generates; `doc_packs` shows it to the model. */
-  readonly description: string
+  /** One line naming the document this pack generates; `doc_packs` shows it to the model (projected to `en`). */
+  readonly description: LocalizedText
   /** Artifact type names this pack consumes (chained generation); root packs use []. */
   readonly consumes: readonly string[]
   /**

@@ -4,8 +4,11 @@
  * per-pack flat view, and the plugin Config form. Controls map from the
  * ParamSpec type (number → numeric input, enum → select, boolean → switch,
  * object → JSON-per-value with endpoints read-only); every parameter shows
- * its author's description inline beneath the name. Writes go through the
- * plugin's own routes (src/http.ts), never the conversation.
+ * its author's description inline beneath the name, resolved to the active
+ * locale by the host's `locale.resolveText` (LocalizedText from the RPC,
+ * en-fallback semantics of src/description.ts). Writes go through the
+ * plugin's own routes (src/http.ts), never the conversation; their error
+ * envelopes render through the locale catalog (locales.ts renderError).
  *
  * Typography follows the host conversation body, not ad-hoc sizes: one
  * family and size for all running text (`--dsw-font-family` +
@@ -18,9 +21,12 @@
 import { createElement as h, useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Input, Pill, SegmentedTabs, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import { fetchParams, saveConfigPatch, savePackParam } from './api.ts'
+import type { ApiError } from './api.ts'
 import type { ParamsPayload, UiConfigEntry, UiPackEntry, UiParamDeclaration } from './api.ts'
-import { en, translate, zh } from './locales.ts'
+import { en, fill, renderError, translate, zh } from './locales.ts'
 import type { Translate } from './locales.ts'
+import { resolveLocalized } from '../description.ts'
+import type { LocalizedText } from '../description.ts'
 
 const NS = 'docwright-params'
 
@@ -62,7 +68,14 @@ const group: CSSProperties = {
   background: 'var(--dsw-alias-bg-layer-2, transparent)',
   padding: '12px 16px', marginBottom: '12px',
 }
-const card: CSSProperties = { ...group }
+const card: CSSProperties = { ...group, overflow: 'hidden' }
+/** The pack card's full-width header band: a quiet blue wash that separates
+ * "which pack am I looking at" from the parameter rows below it. */
+const packHead: CSSProperties = {
+  display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap', minWidth: 0,
+  margin: '-12px -16px 10px', padding: '10px 16px',
+  background: 'color-mix(in srgb, var(--dsw-static-blue-500, rgb(59, 130, 246)) 7%, transparent)',
+}
 const sourceLine: CSSProperties = {
   display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px',
 }
@@ -74,14 +87,19 @@ const actions: CSSProperties = {
 }
 
 /** The author's description, inline beneath the parameter name — the primary
- * explanation stays in view instead of hiding behind a hover. */
-function DescriptionLine(props: { text: string }) {
-  return h('div', { className: `${NS}-desc`, style: { ...desc, marginTop: '2px' } }, props.text)
+ * explanation stays in view instead of hiding behind a hover. Locale
+ * resolution: the host's resolveText when available, its semantics locally
+ * otherwise (src/description.ts). */
+function DescriptionLine(props: { text: LocalizedText | undefined; resolveText: (value: unknown) => string }) {
+  return h('div', { className: `${NS}-desc`, style: { ...desc, marginTop: '2px' } }, props.resolveText(props.text ?? ''))
 }
 
-/** Fill a {key}-templated locale string. */
-function fill(template: string, vars: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`))
+/** One failing write/load as text + optional raw detail line. */
+function ErrorLine(props: { error: Error; lang: 'zh' | 'en'; muted?: boolean }) {
+  const rendered = renderError(props.error as { message: string; code?: string; params?: Readonly<Record<string, string | number>>; detail?: string }, props.lang)
+  return h('span', { style: { color: 'var(--dsw-alias-state-error-primary, crimson)', whiteSpace: 'pre-wrap' } },
+    rendered.text,
+    rendered.detail !== undefined ? h('span', { style: { ...muted, whiteSpace: 'pre-wrap' } }, `\n${rendered.detail}`) : null)
 }
 
 /**
@@ -154,23 +172,23 @@ function validateDraft(d: UiParamDeclaration, text: string): string | undefined 
  * struck-through and muted — it NEVER takes effect on the chain (the
  * receipt base outranks it) — with an explicit note naming the manager.
  */
-function ValueRow(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() => void) | undefined }) {
+function ValueRow(props: { d: UiParamDeclaration; t: Translate; lang: 'zh' | 'en'; onSaved?: (() => void) | undefined }) {
   const { d, t } = props
   if (d.role === 'shadowed') {
     return h('div', { style: rowHead },
       h('span', { style: { ...valueStyle, color: secondary, textDecoration: 'line-through' } satisfies CSSProperties }, displayDefault(d, t)),
       h(Pill, {}, fill(t('shadowedByNote'), { pack: d.shadowedBy ?? '' })))
   }
-  return h(EditSeat, { d, t, onSaved: props.onSaved })
+  return h(EditSeat, { d, t, lang: props.lang, onSaved: props.onSaved })
 }
 
 /** The staged-edit control for a source declaration. */
-function EditSeat(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() => void) | undefined }) {
+function EditSeat(props: { d: UiParamDeclaration; t: Translate; lang: 'zh' | 'en'; onSaved?: (() => void) | undefined }) {
   const { d, t } = props
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>(undefined)
+  const [error, setError] = useState<Error | undefined>(undefined)
   const start = () => {
     setDraft(d.type === 'object' ? JSON.stringify(d.default, null, 2) : String(d.default))
     setError(undefined)
@@ -179,7 +197,7 @@ function EditSeat(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() =>
   const save = async () => {
     const problem = validateDraft(d, draft)
     if (problem !== undefined) {
-      setError(problem === 'outOfRange' ? fill(t('rangeTemplate'), { min: String(d.min ?? ''), max: String(d.max ?? '') }) : t(problem))
+      setError(new Error(problem === 'outOfRange' ? fill(t('rangeTemplate'), { min: String(d.min ?? ''), max: String(d.max ?? '') }) : t(problem)))
       return
     }
     setBusy(true)
@@ -190,7 +208,7 @@ function EditSeat(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() =>
       setEditing(false)
       props.onSaved?.()
     } catch (saveError) {
-      setError((saveError as Error).message)
+      setError(saveError as Error)
     } finally {
       setBusy(false)
     }
@@ -205,13 +223,13 @@ function EditSeat(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() =>
           d.enumValues.map(v => h('option', { key: String(v), value: String(v) }, String(v))))
       : d.type === 'object'
         ? h('textarea', { value: draft, onChange: (e: { target: { value: string } }) => setDraft(e.target.value), rows: 4,
-            style: { ...inputStyle, width: '100%', maxWidth: '480px', fontFamily: 'var(--dsw-font-mono, monospace)' } satisfies CSSProperties })
+            style: { ...inputStyle, width: '100%', maxWidth: '480px', fontFamily: codeFont } satisfies CSSProperties })
         : h(Input, { value: draft, type: d.type === 'number' ? 'number' : 'text', step: 'any',
             onChange: (e: { target: { value: string } }) => setDraft(e.target.value), style: inputStyle }),
     h('div', { style: actions },
       h(Button, { size: 'sm', disabled: busy, onClick: () => void save() }, busy ? t('saving') : t('save')),
       h(Button, { size: 'sm', variant: 'ghost', disabled: busy, onClick: () => setEditing(false) }, t('cancel')),
-      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-state-error-primary, crimson)', } satisfies CSSProperties }, error) : null))
+      error !== undefined ? h(ErrorLine, { error, lang: props.lang }) : null))
 }
 
 /**
@@ -224,7 +242,7 @@ function EditSeat(props: { d: UiParamDeclaration; t: Translate; onSaved?: (() =>
  * rendering them per-card repeated the same text N times and showed
  * misleading never-applied numbers.
  */
-function ParamGroupCard(props: { name: string; declarations: readonly UiParamDeclaration[]; t: Translate; onSaved: () => void }) {
+function ParamGroupCard(props: { name: string; declarations: readonly UiParamDeclaration[]; t: Translate; lang: 'zh' | 'en'; resolveText: (value: unknown) => string; onSaved: () => void }) {
   const { name, declarations, t } = props
   const governing = declarations.find(d => d.role === 'source') ?? declarations[0]!
   const shadowed = declarations.filter(d => d !== governing)
@@ -232,11 +250,11 @@ function ParamGroupCard(props: { name: string; declarations: readonly UiParamDec
     h('div', { style: rowHead },
       h('span', { style: nameStyle }, name),
       h(FlagPills, { d: governing, t })),
-    h(DescriptionLine, { text: governing.description }),
+    h(DescriptionLine, { text: governing.description, resolveText: props.resolveText }),
     h('div', { style: sourceLine },
       h('span', { style: muted }, `${t('sources')}:`),
       h(Pill, {}, governing.pack)),
-    h(ValueRow, { d: governing, t, onSaved: props.onSaved }),
+    h(ValueRow, { d: governing, t, lang: props.lang, onSaved: props.onSaved }),
     h('div', { style: { marginTop: '2px' } },
       h(ConstraintLine, { d: governing, t })),
     shadowed.length > 0
@@ -246,53 +264,55 @@ function ParamGroupCard(props: { name: string; declarations: readonly UiParamDec
 }
 
 /** Aggregated parameter view: one card per parameter name. */
-function GroupsView(props: { payload: ParamsPayload; t: Translate; onSaved: () => void }) {
+function GroupsView(props: { payload: ParamsPayload; t: Translate; lang: 'zh' | 'en'; resolveText: (value: unknown) => string; onSaved: () => void }) {
   const { payload, t } = props
   if (payload.groups.length === 0) return h('p', { style: muted }, t('empty'))
-  return h('div', null, payload.groups.map(g => h(ParamGroupCard, { key: g.name, name: g.name, declarations: g.declarations, t, onSaved: props.onSaved })))
+  return h('div', null, payload.groups.map(g => h(ParamGroupCard, { key: g.name, name: g.name, declarations: g.declarations, t, lang: props.lang, resolveText: props.resolveText, onSaved: props.onSaved })))
 }
 
 /** One declaration row inside a pack's card. Source rows carry the edit seat; shadowed rows strike their never-applied value through. */
-function PackDeclRow(props: { d: UiParamDeclaration; t: Translate; onSaved: () => void }) {
+function PackDeclRow(props: { d: UiParamDeclaration; t: Translate; lang: 'zh' | 'en'; resolveText: (value: unknown) => string; onSaved: () => void }) {
   const { d, t } = props
   return h('div', { className: `${NS}-row`, style: row },
     h('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 } satisfies CSSProperties },
       h('div', { style: rowHead },
         h('span', { style: nameStyle }, d.name),
         h(FlagPills, { d, t })),
-      h(DescriptionLine, { text: d.description }),
-      h(ValueRow, { d, t, onSaved: props.onSaved }),
+      h(DescriptionLine, { text: d.description, resolveText: props.resolveText }),
+      h(ValueRow, { d, t, lang: props.lang, onSaved: props.onSaved }),
       h('div', { style: { marginTop: '2px' } },
         h(ConstraintLine, { d, t }))))
 }
 
-/** Per-pack flat view (pack-author / troubleshooting perspective). */
-function PacksView(props: { payload: ParamsPayload; t: Translate; onSaved: () => void }) {
+/** Per-pack flat view (pack-author / troubleshooting perspective). Each card
+ * opens with a full-width blue-wash header band — pack identity reads as a
+ * section of its own, visually distinct from the param rows it contains. */
+function PacksView(props: { payload: ParamsPayload; t: Translate; lang: 'zh' | 'en'; resolveText: (value: unknown) => string; onSaved: () => void }) {
   const { payload, t } = props
   return h('div', null,
     h('p', { style: muted }, t('packsEditNote')),
     payload.packs.map((p: UiPackEntry) => h('div', { key: p.name, style: card },
-    h('div', { style: rowHead },
-      h('span', { style: nameStyle }, p.name),
-      h(Pill, {}, `v${p.version}`),
-      h(Pill, {}, p.scope === 'workspace' ? t('scopeWorkspace') : t('scopeTopic')),
-      p.paramDriftPolicy !== undefined ? h(Pill, {}, `${t('driftPolicy')}: ${p.paramDriftPolicy}`) : null),
-    h('div', { style: desc }, p.description),
-    p.consumes.length > 0 ? h('div', { style: muted }, `${t('consumed')}: ${p.consumes.join(', ')}`) : null,
-    h('div', { style: { marginTop: '6px' } },
-      p.params.length === 0
-        ? h('p', { style: muted }, t('empty'))
-        : p.params.map(d => h(PackDeclRow, { key: d.name, d, t, onSaved: props.onSaved }))))))
+      h('div', { style: packHead },
+        h('span', { style: nameStyle }, p.name),
+        h(Pill, {}, `v${p.version}`),
+        h(Pill, {}, p.scope === 'workspace' ? t('scopeWorkspace') : t('scopeTopic')),
+        p.paramDriftPolicy !== undefined ? h(Pill, {}, `${t('driftPolicy')}: ${p.paramDriftPolicy}`) : null),
+      h('div', { style: { ...desc, marginBottom: '4px' } satisfies CSSProperties }, props.resolveText(p.description)),
+      p.consumes.length > 0 ? h('div', { style: muted }, `${t('consumed')}: ${p.consumes.join(', ')}`) : null,
+      h('div', { style: { marginTop: '6px' } },
+        p.params.length === 0
+          ? h('p', { style: muted }, t('empty'))
+          : p.params.map(d => h(PackDeclRow, { key: d.name, d, t, lang: props.lang, resolveText: props.resolveText, onSaved: props.onSaved }))))))
 }
 
 /** Config form: top-level keys as rows, oscillation.* folded under Advanced. */
-function ConfigView(props: { payload: ParamsPayload; t: Translate; onSaved: () => void }) {
+function ConfigView(props: { payload: ParamsPayload; t: Translate; lang: 'zh' | 'en'; resolveText: (value: unknown) => string; onSaved: () => void }) {
   const { payload, t } = props
   const entries = payload.config
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [switches, setSwitches] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>(undefined)
+  const [error, setError] = useState<Error | undefined>(undefined)
   const [done, setDone] = useState(false)
   const toplevel = entries.filter(e => !e.key.includes('.') && e.type !== 'object')
   const advanced = entries.filter(e => e.key.startsWith('oscillation.') && e.type !== 'object')
@@ -327,7 +347,7 @@ function ConfigView(props: { payload: ParamsPayload; t: Translate; onSaved: () =
         h('div', { style: rowHead },
           h('span', { style: nameStyle }, e.key),
           h(Pill, {}, e.origin === 'configured' ? t('configured') : e.value === undefined ? t('unset') : t('inherited'))),
-        e.description !== undefined ? h(DescriptionLine, { text: e.description }) : null,
+        e.description !== undefined ? h(DescriptionLine, { text: e.description, resolveText: props.resolveText }) : null,
         control,
         e.origin === 'default' && e.default !== undefined && String(e.default) !== String(e.value ?? '')
           ? h('div', { style: muted }, `${t('inherited')}: ${String(e.default)}`)
@@ -357,7 +377,7 @@ function ConfigView(props: { payload: ParamsPayload; t: Translate; onSaved: () =
       setSwitches({})
       props.onSaved()
     } catch (saveError) {
-      setError((saveError as Error).message)
+      setError(saveError as Error)
     } finally {
       setBusy(false)
     }
@@ -374,26 +394,28 @@ function ConfigView(props: { payload: ParamsPayload; t: Translate; onSaved: () =
     h('div', { style: actions },
       h(Button, { size: 'sm', disabled: !dirty || busy, onClick: () => void saveAll() }, busy ? t('saving') : t('saveConfig')),
       done && !dirty ? h('span', { style: muted }, t('saved')) : null,
-      error !== undefined ? h('span', { style: { color: 'var(--dsw-alias-state-error-primary, crimson)', } satisfies CSSProperties }, error) : null))
+      error !== undefined ? h(ErrorLine, { error, lang: props.lang }) : null))
 }
 
 /** The section: one fetch, three views. */
-export function ParamsSection(props: { lang: string }) {
-  const t = useMemo<Translate>(() => translate(props.lang === 'zh' ? zh : en), [props.lang])
+export function ParamsSection(props: { lang: string; resolveText: (value: unknown) => string }) {
+  const lang = props.lang === 'zh' ? 'zh' : 'en'
+  const t = useMemo<Translate>(() => translate(lang === 'zh' ? zh : en), [lang])
   const [payload, setPayload] = useState<ParamsPayload | undefined>(undefined)
-  const [error, setError] = useState<string | undefined>(undefined)
+  const [error, setError] = useState<Error | undefined>(undefined)
   const [view, setView] = useState<'groups' | 'packs' | 'config'>('groups')
   const refresh = useCallback(() => {
     fetchParams().then(p => {
       setPayload(p)
       setError(undefined)
-    }).catch((e: Error) => setError(e.message))
+    }).catch((e: Error) => setError(e))
   }, [])
   useEffect(() => { refresh() }, [refresh])
   if (error !== undefined) {
     return h('div', { style: baseText },
-      h('p', { style: { color: 'var(--dsw-alias-state-error-primary, crimson)' } }, t('loadFailed')),
-      h('p', { style: muted }, error),
+      h('p', { style: { color: 'var(--dsw-alias-state-error-primary, crimson)', whiteSpace: 'pre-wrap' } },
+        renderError(error as ApiError, lang).text),
+      h('p', { style: muted }, error.message),
       h(Button, { size: 'sm', onClick: refresh }, t('retry')))
   }
   if (payload === undefined) return h('p', { style: { ...baseText, ...muted } }, t('loading'))
@@ -407,7 +429,7 @@ export function ParamsSection(props: { lang: string }) {
     h('p', { style: { ...muted, margin: '0 0 8px' } }, t('intro')),
     h('div', { style: { margin: '8px 0 12px' } },
       h(SegmentedTabs, { items: [...tabs], value: view, onChange: v => setView(v as 'groups' | 'packs' | 'config'), label: t('title') })),
-    view === 'groups' ? h(GroupsView, { payload, t, onSaved: refresh }) : null,
-    view === 'packs' ? h(PacksView, { payload, t, onSaved: refresh }) : null,
-    view === 'config' ? h(ConfigView, { payload, t, onSaved: refresh }) : null)
+    view === 'groups' ? h(GroupsView, { payload, t, lang, resolveText: props.resolveText, onSaved: refresh }) : null,
+    view === 'packs' ? h(PacksView, { payload, t, lang, resolveText: props.resolveText, onSaved: refresh }) : null,
+    view === 'config' ? h(ConfigView, { payload, t, lang, resolveText: props.resolveText, onSaved: refresh }) : null)
 }

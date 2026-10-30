@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { CodedError } from '../src/coded-error.ts'
 import { Config } from '../src/config.ts'
 import type { ConnectionLike, WebServerLike } from '../src/http.ts'
 import { mountParamsRoutes } from '../src/http.ts'
@@ -108,7 +109,9 @@ describe('buildConfigCatalog', () => {
     const entries = buildConfigCatalog(Config as unknown as SchemaNode, { workspaceRoot: '/w', maxIterations: 2, provider: 'p', model: 'm', confirmPolicy: 'strict' })
     const maxIterations = entries.find(e => e.key === 'maxIterations')!
     expect(maxIterations).toMatchObject({ type: 'number', value: 2, default: 5, origin: 'configured' })
-    expect(maxIterations.description).toContain('Repair-loop round cap')
+    // Schema descriptions travel as LocalizedText; the en entry is the canonical text.
+    expect(maxIterations.description && typeof maxIterations.description === 'object' && maxIterations.description.en).toContain('Repair-loop round cap')
+    expect(maxIterations.description && typeof maxIterations.description === 'object' && maxIterations.description.zh).toContain('修复循环的轮数上限')
     const confirmPolicy = entries.find(e => e.key === 'confirmPolicy')!
     expect(confirmPolicy.choices).toEqual(['none', 'standard', 'strict'])
     expect(confirmPolicy).toMatchObject({ value: 'strict', default: 'standard', origin: 'configured' })
@@ -124,7 +127,7 @@ describe('buildConfigCatalog', () => {
     expect(mode.origin).toBe('default')
     const header = entries.find(e => e.key === 'oscillation')!
     expect(header.type).toBe('object')
-    expect(header.description).toContain('convergence tuning')
+    expect(header.description && typeof header.description === 'object' && header.description.en).toContain('convergence tuning')
     expect(entries.some(e => e.key === 'oscillation.defaultScore.error')).toBe(true)
   })
 
@@ -343,6 +346,8 @@ describe('POST write routes', () => {
     const gated = fakeRes()
     await config.handler(req('POST', 'https://h', 'h', '{"patch":{}}'), gated.typed as never)
     expect(gated.res.statusCode).toBe(403)
+    expect(JSON.parse(gated.res.body).code).toBe('gateRejected')
+    expect(JSON.parse(gated.res.body).params).toEqual({ status: 403 })
     expect(called).toBe(0)
     const { webServer: ws2, routes: r2 } = fakeServer()
     mountParamsRoutes(ws2, { payload: () => ({}), writes: { updateConfig: () => { called += 1; return Promise.resolve() }, setPackParamDefault: () => Promise.resolve() } })
@@ -353,13 +358,33 @@ describe('POST write routes', () => {
     const crossSite = fakeRes()
     await c2.handler(req('POST', 'https://evil', 'h', '{"patch":{}}'), crossSite.typed as never)
     expect(crossSite.res.statusCode).toBe(403)
+    expect(JSON.parse(crossSite.res.body).code).toBe('crossSiteWrite')
     const badJson = fakeRes()
     await c2.handler(req('POST', 'https://h', 'h', '{oops'), badJson.typed as never)
     expect(badJson.res.statusCode).toBe(400)
+    expect(JSON.parse(badJson.res.body).code).toBe('invalidJsonBody')
     const malformedOrigin = fakeRes()
     await c2.handler(req('POST', 'http://[', 'h', '{"patch":{}}'), malformedOrigin.typed as never)
     expect(malformedOrigin.res.statusCode).toBe(403)
     expect(called).toBe(0)
+  })
+
+  it('carries the write channel\'s coded errors through the 422 envelope', async () => {
+    const { webServer, routes } = fakeServer()
+    mountParamsRoutes(webServer, {
+      payload: () => ({}),
+      writes: {
+        updateConfig: () => Promise.resolve(),
+        setPackParamDefault: () => Promise.reject(new CodedError('unknownPack', 'unknown pack "ghost" (available: wp); nothing was written', { params: { pack: 'ghost', available: 'wp' } })),
+      },
+    })
+    const param = routes.find(r => r.path === '/api/docwright/pack-param')!
+    const res = fakeRes()
+    await param.handler(req('POST', 'https://h', 'h', JSON.stringify({ pack: 'ghost', param: 'limit', value: 3 })), res.typed as never)
+    expect(res.res.statusCode).toBe(422)
+    const envelope = JSON.parse(res.res.body) as { error: string; code: string; params: Record<string, string> }
+    expect(envelope.code).toBe('unknownPack')
+    expect(envelope.params).toEqual({ pack: 'ghost', available: 'wp' })
   })
 
   it('fails closed at 403 when the host gate itself throws', async () => {

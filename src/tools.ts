@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { resolveLocalized } from './description.ts'
 import { DEFAULT_CONFIRM_POLICY, DEFAULT_UPSTREAM_VERSION_POLICY, type Config, type ConfirmPolicy, type UpstreamVersionPolicy } from './config.ts'
 import { generateDocument, getDocService, parseUpstreamArtifacts, summarizeArtifact, writeAtomic } from './doc-service.ts'
 import { buildExtractionFile, extractionFilePath, extractableParams, processProposals, readExtractionFile, verifyExtraction, writeExtractionFile } from './extract.ts'
@@ -224,13 +225,15 @@ export function defineDocPacksTool(deps: ToolDeps) {
       return [...deps.packs.values()].map(p => ({
         name: p.manifest.name,
         version: p.manifest.version,
-        description: p.manifest.description,
+        // Model face projects `en` regardless of UI locale: prompt material
+        // must be stable across surfaces (description.ts).
+        description: resolveLocalized(p.manifest.description, 'en'),
         languages: [...p.manifest.languages],
         consumes: [...p.manifest.consumes],
         params: Object.entries(p.manifest.params ?? {}).map(([name, spec]) => ({
           name,
           type: spec.type,
-          description: spec.description,
+          description: resolveLocalized(spec.description, 'en'),
           ...(spec.default !== undefined ? { default: spec.default } : {}),
           required: spec.required === true,
           confirm: spec.confirm === true,

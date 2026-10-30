@@ -2,13 +2,33 @@
  * docwright params UI — host RPC client. Same-origin fetches against the
  * plugin's exact routes (src/http.ts); the host gate (login + Host/Origin
  * fence) applies to every call, so no extra auth handling lives here.
+ *
+ * Error envelope: `{ error, code?, params?, detail? }` (src/coded-error.ts).
+ * The raw English sentence stays on `message`; `code`+`params` key the
+ * locale catalog in locales.ts so the UI renders the same problem+cause+fix
+ * in the user's language; unknown codes degrade to the raw message.
  */
+import type { LocalizedText } from '../description.ts'
+
+export class ApiError extends Error {
+  readonly code?: string
+  readonly params?: Readonly<Record<string, string | number>>
+  readonly detail?: string
+
+  constructor(message: string, coded: { code?: string; params?: Readonly<Record<string, string | number>>; detail?: string } = {}) {
+    super(message)
+    this.name = 'ApiError'
+    if (coded.code !== undefined) this.code = coded.code
+    if (coded.params !== undefined) this.params = coded.params
+    if (coded.detail !== undefined) this.detail = coded.detail
+  }
+}
 
 export interface UiParamDeclaration {
   pack: string
   name: string
   type: string
-  description: string
+  description: LocalizedText
   default: unknown
   required: boolean
   confirm: boolean
@@ -24,7 +44,7 @@ export interface UiParamDeclaration {
 export interface UiPackEntry {
   name: string
   version: string
-  description: string
+  description: LocalizedText
   scope: 'workspace' | 'topic'
   consumes: readonly string[]
   paramDriftPolicy?: string
@@ -40,7 +60,7 @@ export interface UiParamGroup {
 export interface UiConfigEntry {
   key: string
   type: string
-  description?: string
+  description?: LocalizedText
   value?: unknown
   default?: unknown
   origin: 'default' | 'configured'
@@ -58,11 +78,16 @@ async function parse<T>(response: Response): Promise<T> {
   try {
     body = await response.json()
   } catch {
-    throw new Error(`docwright: the server answered HTTP ${response.status} with a non-JSON body; is the docwright plugin loaded?`)
+    throw new ApiError(`docwright: the server answered HTTP ${response.status} with a non-JSON body; is the docwright plugin loaded?`)
   }
   if (!response.ok) {
-    const detail = (body as { error?: unknown }).error
-    throw new Error(typeof detail === 'string' && detail.length > 0 ? detail : `docwright request failed with HTTP ${response.status}`)
+    const envelope = body as { error?: unknown; code?: unknown; params?: unknown; detail?: unknown }
+    const message = typeof envelope.error === 'string' && envelope.error.length > 0 ? envelope.error : `docwright request failed with HTTP ${response.status}`
+    const coded: { code?: string; params?: Readonly<Record<string, string | number>>; detail?: string } = {}
+    if (typeof envelope.code === 'string') coded.code = envelope.code
+    if (typeof envelope.params === 'object' && envelope.params !== null) coded.params = envelope.params as Readonly<Record<string, string | number>>
+    if (typeof envelope.detail === 'string') coded.detail = envelope.detail
+    throw new ApiError(message, coded)
   }
   return body as T
 }
