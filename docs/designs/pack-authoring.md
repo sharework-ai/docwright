@@ -26,13 +26,15 @@ Status: PROPOSAL（2026-10-30 定稿，待实施）
 pack 的写入位置与文档 workspace 是两个世界——authoring 必须显式选 lane，插件自身不架桥：
 
 - **仓库 lane（内置/场景 pack）**：authoring 在 docwright 仓库 checkout（git worktree 纪律）进行，由仓库内的开发会话执行——写 `packs/<name>/` 就是普通仓库写入，无越权问题。六层验证梯子只有这条 lane 能全跑（变异测试、确定性闭环、host-smoke 都长在仓库测试套件里）；cosmic 六 pack 即此形态，合入走 `feat/<slug>` + `--no-ff`。
-- **packsDir lane（用户定制 pack）**：`config.packsDir` 是唯一无需动仓库的安装点（DX-H3 同名覆盖语义）。布置建议：**放在 dsh 会话工作区内**（如 `<workspace>/packs/`）——会话 agent 的常规文件工具可直接写，零提权；放在工作区外——写入需经宿主文件工具的越权审批（宿主能力，形态以宿主为准），或不经 agent 由用户手工放置。验证下限用 `pack:check`（任意目录可跑）+ 装载门，变异测试与闭环测试在该 lane 为约定契约。
+- **packsDir lane（用户定制 pack）**：`config.packsDir` 是唯一无需动仓库的安装点（DX-H3 同名覆盖语义）。**约定目录名 `<workspace>/.docwright/packs/`**（点前缀目录不入素材扫描与常规文档视图，`.docwright` 命名空间与插件对齐）——cordis.yml 的 packsDir 用绝对路径指向它。放在 dsh 会话工作区内：会话 agent 的常规文件工具可直接写，零提权；放在工作区外——写入需经宿主文件工具的越权审批（宿主能力，形态以宿主为准），或不经 agent 由用户手工放置。packsDir 进工作区属**用户显式选择的信任放宽**（模型可写面覆盖 pack 源）：配置是用户写的，装载仍在 apply 期、重载后生效，插件未因此新增任何写通道。验证下限用 `pack:check`（任意目录可跑）+ 装载门，变异测试与闭环测试在该 lane 为约定契约。
 - **插件不建提权写通道（否决原则）**：pack 安装是配置变更，不是文档产物——packsDir 属 cordis.yml 部署配置（信任域 A），doc_generate 的 workspace 路径包含是另一个信任域 B（mvp §3.8）；authoring 不得在 A/B 之间架桥，否则"素材不能静默改配置"的防线被模型可写面绕开。未来若要"会话内一键安装"，只能是宿主权限系统下的显式用户操作 + 装载门全量校验。
 - **生效在 apply 期**：pack 装载是 apply-time（decision #9）——写入完成后需插件重载（宿主重启/重载）才可见。这天然隔离"造"与"用"：authoring 会话产出的 pack 不会在本会话内立即被 doc_generate 使用。
 
 技能 playbook 在阶段 9（入册）按 lane 分叉指引：仓库 lane 给 git worktree + 测试套件路径；packsDir lane 先问 packsDir 位置——不在工作区内则请用户放置文件或显式批准越权写入。
 
-技能 body 的骨架。每阶段有目标、产出与硬契约；cosmic-* 系列作为贯穿实例（文末分解总表）。
+## Authoring 流程（九阶段）
+
+技能 body 的骨架。每阶段有目标、产出与硬契约；cosmic-* 系列作为贯穿实例（文末分解总表）。阶段分性：**0-2 与 4-5 是设计阶段**（领域分析与产物/规格决策），**3、6、7 是开发阶段**（产出可执行资产——规则 JS、参数声明、prompt/模板、golden 样本；函数规则开发是 Node 原生 JS 编程，见阶段 3），**8-9 是验收阶段**。设计与开发交替迭代（规格评审常打回开发），验收不可跳过——从设计直接跳到验收必然红在装载门或 golden。
 
 ### 阶段 0 — 场景盘点（know the domain）
 
@@ -42,7 +44,7 @@ pack 的写入位置与文档 workspace 是两个世界——authoring 必须显
 ### 阶段 1 — 产物规划（plan the artifacts）
 
 - 目标：把场景拆成文档产物清单。每产物回答三件事：docType 名、粒度（整需求一份 vs 按上游条目扇出）、与谁发生引用关系。
-- 判据一（粒度）：产物数量随工作对象线性增长 → 扇出粒度（req/func/tech 随 plan 的 functions 1:N:N:N）；全局唯一 → 整需求/整项目一份（context、plan）。
+- 判据一（粒度）：产物数量随工作对象线性增长 → 扇出粒度——上游产物的一个数组条目对应一份下游产物（cosmic 中 req/func/tech 随 plan 的 functions 1:N:N:N；同形态遍布非研发文档：一份合同拆逐条款审查单、一套需求拆逐条追溯行）；全局唯一 → 整事项/整项目一份（项目上下文、总体规划）。
 - 判据二（可复用性）：跨工作事项反复使用的产物（项目架构、组织词典）→ 独立 pack、workspace 级、`reuse: true`——**可复用的输出是独立 pack，不是素材**（已否决原则的正面表述：产物可校验、可锚定、可 seal，素材不可）。一次性消费的背景知识才是素材。
 - cosmic 对位：原 cosmic-claude 四阶段拆成六 pack，正是沿这两轴分解——context（项目级、可复用）从 plan 的隐性输入升格为链头；sync（知识回流动作）从"重新生成 context"独立出来。
 
@@ -61,6 +63,8 @@ pack 的写入位置与文档 workspace 是两个世界——authoring 必须显
 - 硬契约：每条规则必须带 `suggestion` 且写成修复指令而非问题描述（修复回路质量的决定因素）；每条规则必须可变异——造不出"故意损坏样本"的规则无法证明护栏真实（mvp §4.4）。
 - 参数化：数值边界与正则源可引用 pack 参数（`{ "param": "..." }`）——规则阈值是领域约定还是部署偏好，authoring 时就要判定（func/tech 检查规则正则参数化先例：默认等价原检查、置空停用）。
 - 跨产物规则：扇出锚点对账（req 三点对齐 index/funcId/desiredCfps）是函数规则 + context.upstream 的标准用法；上游缺失一律响亮报错，不静默跳过。
+- **开发形态（Node 原生，零新环境）**：函数规则就是 `rules/functions.js`——Node `import()` 直载的普通 ESM JavaScript，无构建步骤、无 TypeScript、无 npm 依赖、无 import 语句（自包含辅助函数内置在文件里）；引擎按内容 sha256 快照进回执，规则必须是**纯函数**（输出只依赖 artifact 与 context，禁 I/O、禁时钟/随机/环境变量），保证"模型可见 ⟺ 日志可重建"。作者不需要引入任何 docwright 之外的工具链——写 JS、跑 `pack:check`、（仓库 lane）跑 vitest，全部是 Node。
+- **打分制（统一推荐模式，默认即推荐）**：收敛评分是三层策略（pack score > 内置严重度评分 > 指纹兜底），**内置默认就是统一扣分制**：`100 − 10×error − 3×warning − 1×info`（clamp 0-100；权重经 config `oscillation.defaultScore` 可调）。pack **不导出 score 即自动获得**这套模式——内置六 pack 全部未导出，即默认模式足以承载领域收敛检测。仅当领域权重确有差异（某类 warning 在该领域近乎致命）才从 functions.js 导出自定义 `score(artifact, issues) => 0-100`；score 只驱动提前终止，**绿的定义永远是 0 error**，导出崩溃或越界即响亮报错（引擎包装）。authoring 默认决策：先不导出，跑真实生成观察到收敛不灵敏再考虑。
 
 ### 阶段 4 — 输入输出分类（素材 / 上游 / 产物 / 可复用）
 
@@ -93,13 +97,15 @@ pack 的写入位置与文档 workspace 是两个世界——authoring 必须显
 ### 阶段 8 — 验证梯子（六层，由贱到贵）
 
 1. **装载门**：`loadPacks` 对新目录全绿（manifest/rules/prompt/语言覆盖全部 fail-loud 断言通过）。写完即验，零成本。
-2. **golden 全绿**：samples/golden.json 是手工打造的合规样本，须同时过 schema 与全部规则、双语各验一次。
+2. **golden 全绿**：samples/golden.json 是手工打造的合规样本，须同时过 schema 与全部规则、双语各验一次。required 且无 default 的参数（如 cfpTotal）在 golden 验证时无值可用——可选资产 `samples/golden.params.json`（专供 golden 验证的参数表）提供，缺失时按声明 default 验证；该文件只服务验证，不参与生成。
 3. **变异测试**：每条规则族至少一种"故意损坏"变异，断言 checker 全部抓住（内置 pack 由测试套件强制，外部 pack 为约定契约）。
 4. **确定性闭环**：scripted LlmPort（损坏 JSON 按脚本注入）走 doc_generate 修复回路，断言收敛、回执字段、终止语义。
 5. **宿主冒烟**：`pnpm run smoke:host`——pack 进 tarball → 真实 dsh 宿主 boot → 工具注册断言（无模型调用）。
-6. **真实 e2e**：e2e-real-llm 脚本或 dsh web 真实会话（headless browse 实测方法见 AGENTS.md）——验证模型在真实 prompt 下能否收敛、确认门/复用/扇出契约是否按设计工作。
+6. **真实 e2e**：e2e-real-llm 脚本或 dsh web 真实会话——验证模型在真实 prompt 下能否收敛、确认门/复用/扇出契约是否按设计工作。
 
 第 1-2 层由 `pack:check` 运行器承载（见实施切分 S1）：`pnpm run pack:check -- <dir>` 对目标目录跑装载门 + schema 编译 + 逐语言 golden 全绿，复用 `loadPacks` 与 `getDocService`，零第二套校验逻辑。authoring 会话中每完成一个资产就跑一次，红即修，不积压到最后。
+
+**guide 自包含要求**：验证方法（含 `pack:check` 用法与真实 e2e 的可复现步骤——CLI profile 装载 packsDir、dsh web 重启生效、确认门/复用的观察点）必须全文并入技能 guide。仓库侧文件（AGENTS.md、docs/testing/*）在插件被安装到 dsh 后不可达、不可引用——guide 是已安装形态下作者的唯一随包知识源（`guides/` 随 npm 分发）。仓库 README/AGENTS 引用 guide 反向成立（仓库有包没有的才进仓库文档）。
 
 ### 阶段 9 — 入册
 
@@ -147,6 +153,10 @@ pack 的写入位置与文档 workspace 是两个世界——authoring 必须显
 ### 已否决：把 playbook 展开进工具描述
 
 - 否决原则：工具描述是常驻上下文，authoring 内容对非 authoring 会话是纯 token 负担；skill 是拉式按需加载，正是为此设计的分发形态。工具描述只留一句邀请。
+
+### 已否决：用"说明性内置 pack"承载 authoring/测试知识
+
+- 否决原则：**pack 是一类文档的生成契约，不是说明文档的容器**——用一个假 pack 装"如何写 pack"的说明是类别错误，还会污染 doc_packs 的能力发现面（模型把说明书当可生成文档类型）。说明知识的正确载体是技能 guide（随包分发、已安装环境可见、拉式按需加载），仓库文档只是人类面的补充。
 
 ### 已否决：authoring 专用引擎工具（dsh 会话内的 doc_pack_create/doc_pack_check 等）
 
