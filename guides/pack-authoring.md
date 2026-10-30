@@ -55,8 +55,14 @@ it — verify with `pack:check` instead.
 Run the checker after every asset you complete — never batch to the end:
 
 ```sh
-pnpm run pack:check -- <dir>                # from a docwright repository checkout
-pnpm run pack:check -- <dir> --with packs   # your pack consumes packs that live in another root (e.g. the built-in packs/)
+pnpm run pack:check -- <packs-root>                # from a docwright repository checkout
+pnpm run pack:check -- <packs-root> --with packs   # your pack consumes packs that live in another root (e.g. the built-in packs/)
+```
+
+`<packs-root>` is the directory whose SUBDIRECTORIES are packs (e.g. `<workspace>/.docwright/packs/`) — pointing it at one individual pack directory fails confusingly. If the session environment has no pnpm/corepack on PATH, invoke the runner directly (same thing the npm script does):
+
+```sh
+node --import tsx/esm /path/to/docwright/scripts/pack-check.ts <packs-root>
 ```
 
 It runs the real loader gate (manifest, param invariants, regex compilability,
@@ -130,6 +136,12 @@ param-driven checks.
   budget violation, uniqueness conflicts); `warning` = quality flaw (verbose
   descriptions, caution words); `info` = style advice. Be frugal: one
   parameterized rule can subsume a family of ad-hoc rules.
+- **Severity is rule-level, not issue-level**: the engine stamps every issue
+  a function rule returns with the rule's declared severity — a per-issue
+  severity field is ignored. A "configurable strictness" policy (e.g. a
+  `coveragePolicy` param where strict = error, tolerant = warning) is
+  therefore TWO rules: one per severity, each reading the param and skipping
+  (returning `[]`) when the policy selects the other one.
 - **Every rule carries a `suggestion` written as a fix instruction**, not a
   problem description — it feeds the repair loop's prompt.
 - Every rule must be mutation-testable: if you cannot construct a broken
@@ -172,8 +184,13 @@ out-of-range score fails loud.
   must tolerate absence) or explicit assumption registration.
 - Artifacts: `scope: "topic"` (default; lands under `<topic>/output/`) vs
   `"workspace"` (project-level directory, ignores topic). `requiresTopic:
-  true` pins one-work-item-per-topic. `artifactPrefix` hands per-fan-out-item
-  naming to the engine (`<PREFIX>-<topicNo>-<NN>`).
+  true` pins one-work-item-per-topic. `artifactPrefix` hands naming to the
+  engine (`<PREFIX>-<topicNo>` for whole-scope, `<PREFIX>-<topicNo>-<NN>` for
+  fan-out items) — **but only when `topicNo` resolves**: the chain head must
+  declare `topicNoPattern` (required + default, the numbering convention
+  comes from project reference materials) and downstream packs re-declare it
+  (no default) to inherit. A prefix without a `topicNoPattern` contract
+  silently degrades to timestamp names — declare both or neither.
 - Reuse: defaults follow scope (workspace true / topic false). Declaring
   `reuse: true` on a topic pack requires every input class to be anchor-
   verifiable (materials manifest, upstream hashes, param drift policy).
@@ -184,11 +201,25 @@ out-of-range score fails loud.
 Pack boundary = artifact boundary, not business-stage boundary. Each pack
 closes its own loop (generate → validate → repair).
 
-- Chain: `consumes` declares the DAG. Fan-out is 1:N:N:N — one upstream
-  array, downstream packs produce one artifact per entry, anchored by index
-  and copied identity fields (cosmic: `targetIndex` + `funcId` +
-  `desiredCfps`). Merge/back-flow actions are their own pack consuming two
-  upstreams.
+- Chain: `consumes` declares the DAG. Merge/back-flow actions are their own
+  pack consuming two upstreams. Two fan-out addressing modes exist — pick
+  one per scenario:
+  - **Engine fan-out (mode A)**: the upstream planning array is named
+    `functions` with a `funcId` per entry (the engine's `planCandidates`
+    is hard-wired to that shape). You get `targetIndex` addressing,
+    `<PREFIX>-<topicNo>-<NN>` engine naming, and a `doc_chain_status`
+    coverage matrix. Right when your domain vocabulary matches (or tolerates)
+    the `functions`/`funcId` shape.
+  - **Param addressing (mode B)**: the planning array uses your domain
+    vocabulary (e.g. `epics[]` + `code`). The downstream pack declares a
+    required-no-default addressing param (e.g. `epicCode`) and the caller
+    addresses each item with a deterministic `artifactName`
+    (`<pack>-<code>`); reuse stays idempotent via the explicit-name
+    comparison. Note: `doc_chain_status` reports `declares no functions[]`
+    for mode-B chains — coverage accounting then lives in your
+    cross-artifact rules (reconcile every upstream entry in the downstream
+    artifact), not in the chain tool.
+  Whichever mode: anchor by index or identity, never by prose similarity.
 - Check what exists first: `doc_packs` may already cover the document type;
   org-specific tuning of an existing type = same-name packsDir override, not
   a fork. Chain-level shared params (numbering conventions, tree depth) are
@@ -235,10 +266,18 @@ shape; no validation semantics.
 
 1. **`pack:check -- <dir>`** (layers 1-2): loader gate + per-language golden
    green + health sheet. Run after every asset, fix reds immediately.
-2. **Mutation tests** (repo lane): for every rule family, corrupt the golden
-   sample deliberately, assert the checker catches it. In the repository this
-   is enforced by the vitest suite — follow `tests/rules.spec.ts` patterns
-   (one corruption per family; corrupt → validate → expect the rule id).
+2. **Mutation tests**: for every rule family, corrupt the golden
+   sample deliberately, assert the checker catches it — one corruption per
+   family, corrupt → validate → expect the rule id. On
+   the packsDir lane, write a small throwaway script next to the packs
+   (e.g. `<workspace>/.docwright/mutate-test.mts`) and run it from the
+   docwright checkout: import `loadPacks` from `src/pack-loader.ts` and
+   `DocService` from `src/doc-service.ts`, clone each golden, apply one
+   corruption per rule family, call `service.validate(cloned, params,
+   { upstream: [consumedGolden] })`, and assert the expected rule id appears.
+   Mind two engine facts: function-rule issues carry the RULE's declared
+   severity, and cross-artifact rules fail loud without upstream — mutate
+   through the same entry point real validation uses.
 3. **Deterministic loop test** (repo lane): scripted LLM seam feeds broken
    JSON through `doc_generate`; assert the repair loop converges, the receipt
    fields (hashes, params, rounds) are correct, termination reasons are right.

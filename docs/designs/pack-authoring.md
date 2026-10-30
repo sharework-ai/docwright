@@ -1,6 +1,6 @@
 # 设计：pack 工坊 —— docwright 的 pack authoring 能力
 
-Status: S1 IMPLEMENTED（2026-10-30：技能 docwright-pack-authoring + doc_packs 邀请 + pack:check 运行器 + guides/ 随包分发 + golden.params.json 约定；459 tests + 覆盖门 + host-smoke 技能断言 PASS）；S2 PENDING（product-management 实证 pack 待立项）
+Status: S1 IMPLEMENTED（2026-10-30：技能 docwright-pack-authoring + doc_packs 邀请 + pack:check 运行器 + guides/ 随包分发 + golden.params.json 约定；459 tests + 覆盖门 + host-smoke 技能断言 PASS）；S2 IMPLEMENTED（2026-10-30 驱动测试完成：pm 场景 packsDir lane 全流程首航 PASS——发现链路自燃、2 pack 全绿、真实生成 e2e 全链通、观察 O1-O7 回修 guide；实证记录与协议见 pm-scenario.md 与本文"驱动测试协议"节）
 关联: docwright-mvp.md §4-§5（pack 契约与职责边界）、params-and-chain-contract.md 与 param-object-model.md（参数属性全集）、cosmic-context.md（场景链头与作用域）、scenario-chains.md（多场景发现，其触发条件即本设计 S2）、AGENTS.md（测试政策与真实会话实测方法）
 
 ## 问题
@@ -161,6 +161,18 @@ pack 的写入位置与文档 workspace 是两个世界——authoring 必须显
 ### 已否决：authoring 专用引擎工具（dsh 会话内的 doc_pack_create/doc_pack_check 等）
 
 - 否决原则：装配就是写六个文件，模型的文件工具已覆盖；pack 的创建/校验发生在仓库 checkout（packs/ 或 packsDir），不在文档工作区，dsh 会话工具天然错位。引擎对 pack 的唯一事实是装载门；验证类需求由仓库侧 `pack:check` 运行器承载（S1）——它直接调用 `loadPacks`/`getDocService`，与装载门同源，不构成第二套校验面。被否决的是任何复制 pack 契约知识的独立校验实现。
+
+## 驱动测试协议（S2，可复用脚本）
+
+被测对象是技能本身：驱动者只依据场景意图出提示词，authoring 由真实 dsh web 会话模型按技能执行；驱动者扮演用户（答确认、阶段边界跑 `pack:check`、装载点重启宿主）。产出落 packsDir lane `<workspace>/.docwright/packs/`。会话驱动方法（headless browser、composer 坑）见 AGENTS.md；宿主侧一次性准备：web profile 的 docwright config 声明 `packsDir` 指向该约定目录并重启。
+
+**复用提示词（按轮使用；每轮开新会话，同轮内追问）**：
+
+- **R1 意图（观察点：doc_packs → 技能邀请 → 加载技能的发现链路是否自燃）**：
+  「我需要一类新的文档生成能力：需求分析与跟踪场景——输入一批需求（一份需求文档），经过分析与规划，最终产出概要设计文档，并且要能跟踪每条需求是否被设计覆盖。现有 pack 里没有这类文档。参考原型在 ~/projects/lab/product-management（可以读它的 README、src/schemas 和 grm 样例了解这个场景长什么样）。请帮我把这个场景做成 docwright 的 pack。」
+- **R2+ 交互纪律**：驱动者不代写资产、不预授分解结论；只做——确认参数/拆答阶段问题、代跑 `pnpm run pack:check -- <workspace>/.docwright/packs --with packs`（在 docwright checkout 下）并原样回贴输出、pack 全绿后代重启宿主（`dsh-web.sh restart`）、指出会话明显偏离 guide 的行为（引用 guide 原文，不代做）。
+- **观察点清单（每轮对照记录进 pm-scenario.md）**：发现链路自燃性；九阶段推进是否被 guide 充分指引（缺步骤/缺示例/缺判据处即缺口）；pack:check 输出能否被会话自主读懂并修复；lane 选择与写入路径是否符合 write-path 节；参数设计是否自发过确认门；验证梯子是否被跳步。
+- **终局验收**：pack 家族 pack:check 全绿 + 真实模型经 doc_generate 收敛绿产物；观察记录非空且 guide 已回修（技能被证明可优化且已优化）。
 
 ## 开放问题
 

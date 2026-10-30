@@ -16,6 +16,7 @@ interface CapturedSkill {
   name: string
   description: string
   whenToUse: string
+  source: string
   content: string
   resourceBase: { kind: string; path: string }
 }
@@ -51,6 +52,10 @@ describe('pack-authoring skill (docs/designs/pack-authoring.md)', () => {
     expect(captured[0]).toMatchObject({
       name: AUTHORING_SKILL_NAME,
       whenToUse: expect.stringContaining('no installed pack'),
+      // The host's skill tool validates `source` at LOAD time (validateDefinition)
+      // even though register() skips it — a missing source only exploded when the
+      // model first loaded the skill (real-session finding, 2026-10-30).
+      source: 'bundled',
       resourceBase: { kind: 'directory', path: guidesRoot },
     })
     expect(captured[0]!.description).toContain('Author a new docwright document pack')

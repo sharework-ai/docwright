@@ -20,6 +20,8 @@ export interface SkillRegistrarLike {
     name: string
     description: string
     whenToUse: string
+    /** Origin bucket (prompt-visible metadata); 'bundled' = ships with the package. */
+    source: string
     content: string
     resourceBase: { kind: 'directory'; path: string }
   }): unknown
@@ -63,6 +65,11 @@ export function registerAuthoringSkill(skillsCtx: SkillsHostContext, guidesRoot:
     name: AUTHORING_SKILL_NAME,
     description: AUTHORING_SKILL_DESCRIPTION,
     whenToUse: AUTHORING_SKILL_WHEN_TO_USE,
+    // Origin bucket is prompt-visible metadata: the skill ships inside the
+    // docwright package. Required at LOAD time by the host's skill tool
+    // (validateDefinition) even though register() does not enforce it —
+    // omitting it surfaces only when the model first loads the skill.
+    source: 'bundled',
     content: guide,
     resourceBase: { kind: 'directory', path: guidesRoot },
   })
